@@ -98,6 +98,7 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 		y, x    = stack.Back(1), stack.Back(0)
 		current = evm.StateDB.GetState(contract.Address(), common.BigToHash(x))
 	)
+	evm.sstoreStats.IncTotal(1)
 	// The legacy gas metering only takes into consideration the current state
 	// Legacy rules should be applied if we are in Petersburg (removal of EIP-1283)
 	// OR Constantinople is not active
@@ -109,11 +110,14 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 		// 3. From a non-zero to a non-zero                         (CHANGE)
 		switch {
 		case current == (common.Hash{}) && y.Sign() != 0: // 0 => non 0
+			evm.sstoreStats.IncInit(1)
 			return params.SstoreSetGas, nil
 		case current != (common.Hash{}) && y.Sign() == 0: // non 0 => 0
+			evm.sstoreStats.IncClear(1)
 			evm.StateDB.AddRefund(params.SstoreRefundGas)
 			return params.SstoreClearGas, nil
 		default: // non 0 => non 0 (or 0 => 0)
+			evm.sstoreStats.IncModify(1)
 			return params.SstoreResetGas, nil
 		}
 	}
@@ -176,6 +180,7 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 //       2.2.2.1. If original value is 0, add SSTORE_INIT_REFUND to refund counter.
 //       2.2.2.2. Otherwise, add SSTORE_CLEAN_REFUND gas to refund counter.
 func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	evm.sstoreStats.IncTotal(1)
 	// If we fail the minimum gas availability invariant, fail (0)
 	if contract.Gas <= params.SstoreSentryGasEIP2200 {
 		return 0, errors.New("not enough gas for reentrancy sentry")
@@ -193,24 +198,37 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	original := evm.StateDB.GetCommittedState(contract.Address(), common.BigToHash(x))
 	if original == current {
 		if original == (common.Hash{}) { // create slot (2.1.1)
+			evm.sstoreStats.IncInit(1)
 			return params.SstoreInitGasEIP2200, nil
 		}
 		if value == (common.Hash{}) { // delete slot (2.1.2b)
+			evm.sstoreStats.IncClear(1)
 			evm.StateDB.AddRefund(params.SstoreClearRefundEIP2200)
+		} else {
+			evm.sstoreStats.IncModify(1)
 		}
 		return params.SstoreCleanGasEIP2200, nil // write existing slot (2.1.2)
 	}
 	if original != (common.Hash{}) {
 		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
+			evm.sstoreStats.DecClear(1)
+			if original != value {
+				evm.sstoreStats.IncModify(1)
+			}
 			evm.StateDB.SubRefund(params.SstoreClearRefundEIP2200)
 		} else if value == (common.Hash{}) { // delete slot (2.2.1.2)
+			evm.sstoreStats.IncClear(1)
 			evm.StateDB.AddRefund(params.SstoreClearRefundEIP2200)
 		}
 	}
 	if original == value {
 		if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
+			evm.sstoreStats.DecInit(1)
 			evm.StateDB.AddRefund(params.SstoreInitRefundEIP2200)
 		} else { // reset to original existing slot (2.2.2.2)
+			if current != (common.Hash{}) {
+				evm.sstoreStats.DecModify(1)
+			}
 			evm.StateDB.AddRefund(params.SstoreCleanRefundEIP2200)
 		}
 	}

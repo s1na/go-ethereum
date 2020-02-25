@@ -514,7 +514,7 @@ func (api *RetestethAPI) mineBlock() error {
 				statedb.Prepare(tx.Hash(), common.Hash{}, txCount)
 				snap := statedb.Snapshot()
 
-				receipt, err := core.ApplyTransaction(
+				receipt, _, err := core.ApplyTransaction(
 					api.chainConfig,
 					api.blockchain,
 					&api.author,

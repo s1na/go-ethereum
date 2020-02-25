@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/stats"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -128,6 +129,9 @@ type EVM struct {
 	// available gas is calculated in gasCall* according to the 63/64 rule and later
 	// applied in opCall*.
 	callGasTemp uint64
+
+	// SStore stats
+	sstoreStats *stats.SStoreStats
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
@@ -140,6 +144,7 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 		chainConfig:  chainConfig,
 		chainRules:   chainConfig.Rules(ctx.BlockNumber),
 		interpreters: make([]Interpreter, 0, 1),
+		sstoreStats:  stats.NewSStoreStats(),
 	}
 
 	if chainConfig.IsEWASM(ctx.BlockNumber) {
@@ -164,6 +169,10 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 	evm.interpreter = evm.interpreters[0]
 
 	return evm
+}
+
+func (evm *EVM) SStoreStats() *stats.SStoreStats {
+	return evm.sstoreStats
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and

@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 type TChunk struct {
@@ -114,6 +117,12 @@ func TestChunkifyNum(t *testing.T) {
 			if !bytes.Equal(chunk.code, expectedCode) {
 				t.Errorf("%v: invalid chunk code: expected %s, got %s", t.Name(), expectedChunk.code, hex.EncodeToString(chunk.code))
 			}
+			db := trie.NewDatabase(memorydb.New())
+			codeRoot, err := Merkleize(chunks, db)
+			if err != nil {
+				t.Error(err)
+			}
+			fmt.Printf("codeRoot: %v\n", codeRoot)
 		}
 	}
 }

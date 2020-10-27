@@ -1,9 +1,12 @@
 package codetrie
 
 import (
+	"encoding/binary"
 	"math"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 type Chunk struct {
@@ -13,6 +16,25 @@ type Chunk struct {
 
 func NewChunk() *Chunk {
 	return &Chunk{fio: 0, code: nil}
+}
+
+func (c *Chunk) Serialize() []byte {
+	return append([]byte{byte(c.fio)}, c.code...)
+}
+
+func Merkleize(chunks []*Chunk, db *trie.Database) (common.Hash, error) {
+	t, err := trie.NewSecure(common.Hash{}, db)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	for i, chunk := range chunks {
+		key := encodeChunkKey(uint16(i))
+		val := chunk.Serialize()
+		t.Update(key, val)
+	}
+
+	return t.Hash(), nil
 }
 
 func Chunkify(code []byte, chunkSize uint) []*Chunk {
@@ -60,4 +82,10 @@ func setFIO(chunks []*Chunk) {
 
 func getPushSize(opcode vm.OpCode) int {
 	return (int(opcode) - 0x60) + 1
+}
+
+func encodeChunkKey(idx uint16) []byte {
+	b := make([]byte, 2)
+	binary.BigEndian.PutUint16(b[0:], idx)
+	return b
 }

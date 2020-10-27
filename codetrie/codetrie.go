@@ -22,7 +22,12 @@ func (c *Chunk) Serialize() []byte {
 	return append([]byte{byte(c.fio)}, c.code...)
 }
 
-func Merkleize(chunks []*Chunk, db *trie.Database) (common.Hash, error) {
+func Merkleize(code []byte, chunkSize uint, db *trie.Database) (common.Hash, error) {
+	chunks := Chunkify(code, chunkSize)
+	return MerkleizeChunks(chunks, db)
+}
+
+func MerkleizeChunks(chunks []*Chunk, db *trie.Database) (common.Hash, error) {
 	t, err := trie.NewSecure(common.Hash{}, db)
 	if err != nil {
 		return common.Hash{}, err

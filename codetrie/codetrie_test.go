@@ -118,7 +118,7 @@ func TestChunkifyNum(t *testing.T) {
 				t.Errorf("%v: invalid chunk code: expected %s, got %s", t.Name(), expectedChunk.code, hex.EncodeToString(chunk.code))
 			}
 			db := trie.NewDatabase(memorydb.New())
-			codeRoot, err := Merkleize(chunks, db)
+			codeRoot, err := MerkleizeChunks(chunks, db)
 			if err != nil {
 				t.Error(err)
 			}

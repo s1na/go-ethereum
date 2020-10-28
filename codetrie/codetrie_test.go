@@ -102,27 +102,42 @@ func TestChunkifyNum(t *testing.T) {
 		}
 		chunks := Chunkify(code, 32)
 		if len(chunks) != len(c.Chunks) {
-			t.Errorf("%v: invalid number of chunks: expected %d, got %d", t.Name(), len(c.Chunks), len(chunks))
+			t.Errorf("%v: invalid number of chunks: expected %d, got %d\n", t.Name(), len(c.Chunks), len(chunks))
 		}
 		for i, chunk := range chunks {
 			expectedChunk := c.Chunks[i]
-			fmt.Println(i, chunk)
 			if chunk.fio != expectedChunk.fio {
-				t.Errorf("%v: invalid chunk FIO: expected %d, got %d", t.Name(), expectedChunk.fio, chunk.fio)
+				t.Errorf("%v: invalid chunk FIO: expected %d, got %d\n", t.Name(), expectedChunk.fio, chunk.fio)
 			}
 			expectedCode, err := hex.DecodeString(expectedChunk.code)
 			if err != nil {
 				t.Error(err)
 			}
 			if !bytes.Equal(chunk.code, expectedCode) {
-				t.Errorf("%v: invalid chunk code: expected %s, got %s", t.Name(), expectedChunk.code, hex.EncodeToString(chunk.code))
+				t.Errorf("%v: invalid chunk code: expected %s, got %s\n", t.Name(), expectedChunk.code, hex.EncodeToString(chunk.code))
 			}
-			db := trie.NewDatabase(memorydb.New())
-			codeRoot, err := MerkleizeChunks(chunks, db)
+		}
+
+		db := trie.NewDatabase(memorydb.New())
+		codeTrie, err := MerkleizeChunks(chunks, db)
+		if err != nil {
+			t.Error(err)
+		}
+		fmt.Printf("codeRoot: %v\n", codeTrie.Hash())
+		// Check leaf values
+		for i := 0; i < len(chunks); i++ {
+			val, err := codeTrie.TryGet([]byte{0, byte(i)})
 			if err != nil {
 				t.Error(err)
 			}
-			fmt.Printf("codeRoot: %v\n", codeRoot)
+			expectedCode, err := hex.DecodeString(c.Chunks[i].code)
+			if err != nil {
+				t.Error(err)
+			}
+			expectedVal := append([]byte{c.Chunks[i].fio}, expectedCode...)
+			if !bytes.Equal(val, expectedVal) {
+				t.Errorf("%v: invalid trie leaf value: expected %v, got %v\n", t.Name(), expectedVal, val)
+			}
 		}
 	}
 }

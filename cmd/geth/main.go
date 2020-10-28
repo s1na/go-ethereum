@@ -248,6 +248,7 @@ func init() {
 		retestethCommand,
 		// See cmd/utils/flags_legacy.go
 		utils.ShowDeprecated,
+		merkleizeCodeCommand,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 

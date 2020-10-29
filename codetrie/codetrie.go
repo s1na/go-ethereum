@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -20,6 +21,11 @@ func NewChunk() *Chunk {
 
 func (c *Chunk) Serialize() []byte {
 	return append([]byte{byte(c.fio)}, c.code...)
+}
+
+func MerkleizeInMemory(code []byte, chunkSize uint) (*trie.SecureTrie, error) {
+	db := trie.NewDatabase(memorydb.New())
+	return Merkleize(code, chunkSize, db)
 }
 
 func Merkleize(code []byte, chunkSize uint, db *trie.Database) (*trie.SecureTrie, error) {

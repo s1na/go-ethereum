@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/codetrie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -27,9 +28,12 @@ func MerkleizeCode(codeGetter CodeGetter, it AccountIterator) error {
 		}
 
 		code, err := codeGetter.ContractCode(common.BytesToHash(codeHash))
-		fmt.Printf("Code: %v\n", code)
+		if err != nil {
+			return err
+		}
+
+		_, err = codetrie.MerkleizeInMemory(code, 32)
 		accounts++
-		break
 	}
 
 	log.Info("Merkleized code", "accounts", accounts, "elapsed", time.Since(start))

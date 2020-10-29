@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	//"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/event"
@@ -641,19 +641,19 @@ func merkleizeCode(ctx *cli.Context) error {
 		return fmt.Errorf("no blocks present")
 	}
 	root := block.Root()
-	_, err := snapTree.AccountIterator(root, common.Hash{})
+	it, err := snapTree.AccountIterator(root, common.Hash{})
 	if err != nil {
 		return fmt.Errorf("Could not create iterator for root %x: %v", root, err)
 	}
 	fmt.Printf("Block root is: %v\n", root)
-	/*generatedRoot := snapshot.GenerateTrieRoot(it)
+	err = snapshot.MerkleizeCode(it)
+	if err != nil {
+		return fmt.Errorf("Merkleizing contracts failed: %v", err)
+	}
 	if err := it.Error(); err != nil {
 		fmt.Printf("Iterator error: %v\n", it.Error())
 	}
-	if root != generatedRoot {
-		return fmt.Errorf("Wrong hash generated, expected %x, got %x", root, generatedRoot[:])
-	}
-	log.Info("Generation done", "root", generatedRoot)*/
+	log.Info("Merkleization transition done")
 	return nil
 }
 

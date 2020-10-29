@@ -646,7 +646,7 @@ func merkleizeCode(ctx *cli.Context) error {
 		return fmt.Errorf("Could not create iterator for root %x: %v", root, err)
 	}
 	fmt.Printf("Block root is: %v\n", root)
-	err = snapshot.MerkleizeCode(it)
+	err = snapshot.MerkleizeCode(chain, it)
 	if err != nil {
 		return fmt.Errorf("Merkleizing contracts failed: %v", err)
 	}

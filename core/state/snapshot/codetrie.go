@@ -1,7 +1,6 @@
 package snapshot
 
 import (
-	"fmt"
 	"github.com/ethereum/go-ethereum/codetrie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"

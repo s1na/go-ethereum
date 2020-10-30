@@ -1,8 +1,8 @@
-package snapshot
+package codetrie
 
 import (
-	"github.com/ethereum/go-ethereum/codetrie"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"time"
@@ -13,7 +13,7 @@ type CodeGetter interface {
 }
 
 // Transition procedure for merkleizing all contract code
-func MerkleizeCode(codeGetter CodeGetter, it AccountIterator) error {
+func Transition(codeGetter CodeGetter, it snapshot.AccountIterator) error {
 	start := time.Now()
 	accounts := 0
 	for it.Next() {
@@ -31,7 +31,7 @@ func MerkleizeCode(codeGetter CodeGetter, it AccountIterator) error {
 			return err
 		}
 
-		_, err = codetrie.MerkleizeInMemory(code, 32)
+		_, err = MerkleizeInMemory(code, 32)
 		accounts++
 	}
 
@@ -41,7 +41,7 @@ func MerkleizeCode(codeGetter CodeGetter, it AccountIterator) error {
 }
 
 func codeHashFromRLP(data []byte) ([]byte, error) {
-	var account Account
+	var account snapshot.Account
 	if err := rlp.DecodeBytes(data, &account); err != nil {
 		return []byte{}, err
 	}

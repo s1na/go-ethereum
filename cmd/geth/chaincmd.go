@@ -27,12 +27,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/codetrie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/event"
@@ -646,7 +646,7 @@ func merkleizeCode(ctx *cli.Context) error {
 		return fmt.Errorf("Could not create iterator for root %x: %v", root, err)
 	}
 	fmt.Printf("Block root is: %v\n", root)
-	err = snapshot.MerkleizeCode(chain, it)
+	err = codetrie.Transition(chain, it)
 	if err != nil {
 		return fmt.Errorf("Merkleizing contracts failed: %v", err)
 	}

@@ -1,11 +1,13 @@
 package codetrie
 
 import (
+	"sync"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
-	"time"
 )
 
 type CodeGetter interface {
@@ -14,7 +16,17 @@ type CodeGetter interface {
 
 // Transition procedure for merkleizing all contract code
 func Transition(codeGetter CodeGetter, it snapshot.AccountIterator) error {
+	var wg sync.WaitGroup
+
 	start := time.Now()
+
+	jobs := make(chan []byte)
+	results := make(chan common.Hash)
+	for w := 1; w < 16; w++ {
+		wg.Add(1)
+		go worker(jobs, results, &wg)
+	}
+
 	accounts := 0
 	for it.Next() {
 		slimData := it.Account()
@@ -31,13 +43,32 @@ func Transition(codeGetter CodeGetter, it snapshot.AccountIterator) error {
 			return err
 		}
 
-		_, err = MerkleizeInMemory(code, 32)
+		jobs <- code
 		accounts++
 	}
+	close(jobs)
 
+	for r := range results {
+		log.Info("CodeRoot: %v\n", r)
+	}
+
+	wg.Wait()
 	log.Info("Merkleized code", "accounts", accounts, "elapsed", time.Since(start))
 
 	return nil
+}
+
+func worker(jobs <-chan []byte, results chan<- common.Hash, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	for j := range jobs {
+		root, err := MerkleizeInMemory(j, 32)
+		if err != nil {
+			log.Warn("Error in merkleizing code: %v\n", err)
+		} else {
+			results <- root
+		}
+	}
 }
 
 func codeHashFromRLP(data []byte) ([]byte, error) {

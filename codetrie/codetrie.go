@@ -32,16 +32,16 @@ func (c *Chunk) Serialize() []byte {
 	return append([]byte{byte(c.fio)}, c.code...)
 }
 
-func MerkleizeInMemory(code []byte, chunkSize uint) (*trie.SecureTrie, error) {
+func MerkleizeInMemory(code []byte, chunkSize uint) (common.Hash, error) {
 	db := trie.NewDatabase(memorydb.New())
 	return Merkleize(code, chunkSize, db)
 }
 
-func Merkleize(code []byte, chunkSize uint, db *trie.Database) (*trie.SecureTrie, error) {
+func Merkleize(code []byte, chunkSize uint, db *trie.Database) (common.Hash, error) {
 	chunks := Chunkify(code, chunkSize)
 	trie, err := merkleizeChunks(chunks, db)
 	if err != nil {
-		return nil, err
+		return common.Hash{}, err
 	}
 
 	// Insert metadata
@@ -51,7 +51,7 @@ func Merkleize(code []byte, chunkSize uint, db *trie.Database) (*trie.SecureTrie
 	codeHash := crypto.Keccak256(code)
 	trie.Update(codeHashKey, codeHash)
 
-	return trie, nil
+	return trie.Hash(), nil
 }
 
 func merkleizeChunks(chunks []*Chunk, db *trie.Database) (*trie.SecureTrie, error) {

@@ -121,25 +121,9 @@ func TestChunkifyNum(t *testing.T) {
 			}
 		}
 
-		codeTrie, err := MerkleizeInMemory(code, 32)
+		root, err := MerkleizeInMemory(code, 32)
 		if err != nil {
 			t.Error(err)
-		}
-
-		// Check leaf values
-		for i := 0; i < len(chunks); i++ {
-			val, err := codeTrie.TryGet([]byte{0, byte(i)})
-			if err != nil {
-				t.Error(err)
-			}
-			expectedCode, err := hex.DecodeString(c.Chunks[i].code)
-			if err != nil {
-				t.Error(err)
-			}
-			expectedVal := append([]byte{c.Chunks[i].fio}, expectedCode...)
-			if !bytes.Equal(val, expectedVal) {
-				t.Errorf("%v: invalid trie leaf value: expected %v, got %v\n", t.Name(), expectedVal, val)
-			}
 		}
 
 		expectedRoot, err := hex.DecodeString(c.CodeRoot)
@@ -147,10 +131,8 @@ func TestChunkifyNum(t *testing.T) {
 			t.Error(err)
 		}
 
-		root := codeTrie.Hash()
 		if !bytes.Equal(root.Bytes(), expectedRoot) {
 			t.Errorf("%v: invalid code root: expected %s, got %s\n", t.Name(), c.CodeRoot, root.Hex())
 		}
-
 	}
 }

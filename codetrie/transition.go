@@ -1,6 +1,7 @@
 package codetrie
 
 import (
+	"encoding/hex"
 	"sync"
 	"time"
 
@@ -17,6 +18,9 @@ type CodeGetter interface {
 func Transition(codeGetter CodeGetter, it snapshot.AccountIterator) error {
 	start := time.Now()
 	accounts := 0
+	duplicates := 0
+
+	index := make(map[string]common.Hash)
 
 	for it.Next() {
 		slimData := it.Account()
@@ -27,17 +31,23 @@ func Transition(codeGetter CodeGetter, it snapshot.AccountIterator) error {
 		if len(codeHash) == 0 {
 			continue
 		}
+		codeHashStr := hex.EncodeToString(codeHash)
+		if _, exists := index[codeHashStr]; exists {
+			duplicates++
+			continue
+		}
 
 		code, err := codeGetter.ContractCode(common.BytesToHash(codeHash))
 		if err != nil {
 			return err
 		}
 
-		_, err = MerkleizeInMemory(code, 32)
+		root, err := MerkleizeInMemory(code, 32)
+		index[hex.EncodeToString(codeHash)] = root
 		accounts++
 	}
 
-	log.Info("Merkleized code", "accounts", accounts, "elapsed", time.Since(start))
+	log.Info("Merkleized code", "accounts", accounts, "duplicates", duplicates, "elapsed", time.Since(start))
 	return nil
 }
 

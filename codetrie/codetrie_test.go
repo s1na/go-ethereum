@@ -5,9 +5,6 @@ import (
 	"encoding/hex"
 	"strings"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 type TChunk struct {
@@ -31,7 +28,7 @@ func TestChunkifyNum(t *testing.T) {
 					code: "6000",
 				},
 			},
-			CodeRoot: "ef9e4cfd85407737a19b6ebe65d8c0c5a408df123b893c86243e1f2f8b2e6571",
+			CodeRoot: "aca110bb93e644288e180ceec9440cc5032088f7673ad0c37e68fb554589c87a",
 		},
 		{
 			Input: strings.Repeat("6000", 15) + "00", // Len: 31
@@ -41,7 +38,7 @@ func TestChunkifyNum(t *testing.T) {
 					code: strings.Repeat("6000", 15) + "00",
 				},
 			},
-			CodeRoot: "e50ddf4f72c77fb3a0619e2b6a15de2b7f92e6cb7624393d70d8252ca9b93a9e",
+			CodeRoot: "e77493ce728713f7ff736e9f85631ef03ff7960bace0f64e5f1a9cf312e1e46e",
 		},
 		{
 			Input: strings.Repeat("6000", 16), // Len: 32
@@ -51,10 +48,10 @@ func TestChunkifyNum(t *testing.T) {
 					code: strings.Repeat("6000", 16),
 				},
 			},
-			CodeRoot: "47a9bbdca825072b48978a7749c4a7b7080ddbda2e62ea9cd2d977d5adb0c7b8",
+			CodeRoot: "0a862d30de7d88dfa44b9036f677ca7d3d41f93ce8846ca3170d1f4a418a0b10",
 		},
 		{
-			Input: strings.Repeat("6000", 17), // Len: 32
+			Input: strings.Repeat("6000", 17), // Len: 34
 			Chunks: []TChunk{
 				{
 					fio:  0,
@@ -65,10 +62,10 @@ func TestChunkifyNum(t *testing.T) {
 					code: "6000",
 				},
 			},
-			CodeRoot: "e9c2c5da20557171a4109b4375e4156ae5b388b5b5ca61c737e7f054e7547aec",
+			CodeRoot: "9f81e0ad1ebba8023d8ee6fc881a33a5a3e7540ef18363facba8211ad268c396",
 		},
 		{
-			Input: strings.Repeat("58", 31) + "605b" + strings.Repeat("58", 30),
+			Input: strings.Repeat("58", 31) + "605b" + strings.Repeat("58", 30), // Len: 63
 			Chunks: []TChunk{
 				{
 					fio:  0,
@@ -79,10 +76,10 @@ func TestChunkifyNum(t *testing.T) {
 					code: "5b" + strings.Repeat("58", 30),
 				},
 			},
-			CodeRoot: "542d88bcafbd8a9a20ff945717ec2553f00afbfede842c38b262e5fd75f5914b",
+			CodeRoot: "3cd6b50e5242f2ab73b05b28740e36a8d14501aa1d3118d084df6803ef71fa9f",
 		},
 		{
-			Input: strings.Repeat("58", 31) + "7f" + strings.Repeat("5b", 32) + strings.Repeat("58", 30),
+			Input: strings.Repeat("58", 31) + "7f" + strings.Repeat("5b", 32) + strings.Repeat("58", 30), // Len: 94
 			Chunks: []TChunk{
 				{
 					fio:  0,
@@ -97,7 +94,7 @@ func TestChunkifyNum(t *testing.T) {
 					code: strings.Repeat("58", 30),
 				},
 			},
-			CodeRoot: "6e1ea988b9f21050644a147c8d69f0e9f78cd07e9966a69b21eada06ce9aec8d",
+			CodeRoot: "3f814a80d8a465c466c961ae077b9e659451e1ce6b1164b8df314d3f454c664e",
 		},
 	}
 
@@ -124,20 +121,9 @@ func TestChunkifyNum(t *testing.T) {
 			}
 		}
 
-		db := trie.NewDatabase(memorydb.New())
-		codeTrie, err := MerkleizeChunks(chunks, db)
+		codeTrie, err := MerkleizeInMemory(code, 32)
 		if err != nil {
 			t.Error(err)
-		}
-
-		expectedRoot, err := hex.DecodeString(c.CodeRoot)
-		if err != nil {
-			t.Error(err)
-		}
-
-		root := codeTrie.Hash()
-		if !bytes.Equal(root.Bytes(), expectedRoot) {
-			t.Errorf("%v: invalid code root: expected %s, got %s\n", t.Name(), c.CodeRoot, root.Hex())
 		}
 
 		// Check leaf values
@@ -155,5 +141,16 @@ func TestChunkifyNum(t *testing.T) {
 				t.Errorf("%v: invalid trie leaf value: expected %v, got %v\n", t.Name(), expectedVal, val)
 			}
 		}
+
+		expectedRoot, err := hex.DecodeString(c.CodeRoot)
+		if err != nil {
+			t.Error(err)
+		}
+
+		root := codeTrie.Hash()
+		if !bytes.Equal(root.Bytes(), expectedRoot) {
+			t.Errorf("%v: invalid code root: expected %s, got %s\n", t.Name(), c.CodeRoot, root.Hex())
+		}
+
 	}
 }

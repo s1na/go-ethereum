@@ -6,8 +6,17 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/trie"
+)
+
+var (
+	versionKey    = []byte{0xff, 0xfd}
+	codeLengthKey = []byte{0xff, 0xfe}
+	codeHashKey   = []byte{0xff, 0xff}
+
+	versionValue = []byte{0x00}
 )
 
 type Chunk struct {
@@ -30,17 +39,29 @@ func MerkleizeInMemory(code []byte, chunkSize uint) (*trie.SecureTrie, error) {
 
 func Merkleize(code []byte, chunkSize uint, db *trie.Database) (*trie.SecureTrie, error) {
 	chunks := Chunkify(code, chunkSize)
-	return MerkleizeChunks(chunks, db)
+	trie, err := merkleizeChunks(chunks, db)
+	if err != nil {
+		return nil, err
+	}
+
+	// Insert metadata
+	trie.Update(versionKey, versionValue)
+	codeLen := BE(uint32(len(code)), 4)
+	trie.Update(codeLengthKey, codeLen)
+	codeHash := crypto.Keccak256(code)
+	trie.Update(codeHashKey, codeHash)
+
+	return trie, nil
 }
 
-func MerkleizeChunks(chunks []*Chunk, db *trie.Database) (*trie.SecureTrie, error) {
+func merkleizeChunks(chunks []*Chunk, db *trie.Database) (*trie.SecureTrie, error) {
 	t, err := trie.NewSecure(common.Hash{}, db)
 	if err != nil {
 		return nil, err
 	}
 
 	for i, chunk := range chunks {
-		key := encodeChunkKey(uint16(i))
+		key := BE(uint16(i), 2)
 		val := chunk.Serialize()
 		t.Update(key, val)
 	}
@@ -95,8 +116,18 @@ func getPushSize(opcode vm.OpCode) int {
 	return (int(opcode) - 0x60) + 1
 }
 
-func encodeChunkKey(idx uint16) []byte {
-	b := make([]byte, 2)
-	binary.BigEndian.PutUint16(b[0:], idx)
+func BE(val interface{}, length int) []byte {
+	var b []byte
+	switch val.(type) {
+	case uint16:
+		b = make([]byte, 2)
+		binary.BigEndian.PutUint16(b, val.(uint16))
+	case uint32:
+		b = make([]byte, 4)
+		binary.BigEndian.PutUint32(b, val.(uint32))
+	case uint64:
+		b = make([]byte, 8)
+		binary.BigEndian.PutUint64(b, val.(uint64))
+	}
 	return b
 }

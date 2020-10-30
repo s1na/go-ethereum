@@ -19,6 +19,10 @@ var (
 	versionValue = []byte{0x00}
 )
 
+type Trie interface {
+	Update(key, value []byte)
+}
+
 type Chunk struct {
 	fio  uint8 // firstInstructionOffset
 	code []byte
@@ -38,11 +42,17 @@ func MerkleizeInMemory(code []byte, chunkSize uint) (common.Hash, error) {
 }
 
 func Merkleize(code []byte, chunkSize uint, db *trie.Database) (common.Hash, error) {
-	chunks := Chunkify(code, chunkSize)
-	trie, err := merkleizeChunks(chunks, db)
+	trie, err := trie.NewSecure(common.Hash{}, db)
 	if err != nil {
 		return common.Hash{}, err
 	}
+	merkleize(code, chunkSize, trie)
+	return trie.Hash(), nil
+}
+
+func merkleize(code []byte, chunkSize uint, trie Trie) {
+	chunks := Chunkify(code, chunkSize)
+	merkleizeChunks(chunks, trie)
 
 	// Insert metadata
 	trie.Update(versionKey, versionValue)
@@ -50,23 +60,14 @@ func Merkleize(code []byte, chunkSize uint, db *trie.Database) (common.Hash, err
 	trie.Update(codeLengthKey, codeLen)
 	codeHash := crypto.Keccak256(code)
 	trie.Update(codeHashKey, codeHash)
-
-	return trie.Hash(), nil
 }
 
-func merkleizeChunks(chunks []*Chunk, db *trie.Database) (*trie.SecureTrie, error) {
-	t, err := trie.NewSecure(common.Hash{}, db)
-	if err != nil {
-		return nil, err
-	}
-
+func merkleizeChunks(chunks []*Chunk, trie Trie) {
 	for i, chunk := range chunks {
 		key := BE(uint16(i), 2)
 		val := chunk.Serialize()
-		t.Update(key, val)
+		trie.Update(key, val)
 	}
-
-	return t, nil
 }
 
 func Chunkify(code []byte, chunkSize uint) []*Chunk {

@@ -88,9 +88,9 @@ func TransitionConcurrent(codeGetter CodeGetter, it snapshot.AccountIterator) er
 	for {
 		select {
 		case r := <-results:
-			log.Info("CodeRoot: %v\n", r)
+			log.Info("Received merkleization result", "root", r)
 		case err := <-errCh:
-			log.Warn("Error: %v\n", err)
+			log.Warn("Merkleization task failed", "error", err)
 			over = true
 			break
 		case <-done:
@@ -121,7 +121,7 @@ func worker(jobs <-chan []byte, results chan<- common.Hash, done chan<- bool, wg
 	for j := range jobs {
 		root, err := MerkleizeInMemory(j, 32)
 		if err != nil {
-			log.Warn("Error in merkleizing code: %v\n", err)
+			log.Warn("Transition worker failed to merkleize", "error", err)
 		} else {
 			results <- root
 		}

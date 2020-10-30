@@ -14,8 +14,35 @@ type CodeGetter interface {
 	ContractCode(common.Hash) ([]byte, error)
 }
 
-// Transition procedure for merkleizing all contract code
 func Transition(codeGetter CodeGetter, it snapshot.AccountIterator) error {
+	start := time.Now()
+	accounts := 0
+
+	for it.Next() {
+		slimData := it.Account()
+		codeHash, err := codeHashFromRLP(slimData)
+		if err != nil {
+			return err
+		}
+		if len(codeHash) == 0 {
+			continue
+		}
+
+		code, err := codeGetter.ContractCode(common.BytesToHash(codeHash))
+		if err != nil {
+			return err
+		}
+
+		_, err = MerkleizeInMemory(code, 32)
+		accounts++
+	}
+
+	log.Info("Merkleized code", "accounts", accounts, "elapsed", time.Since(start))
+	return nil
+}
+
+// Transition procedure for merkleizing all contract code
+func TransitionConcurrent(codeGetter CodeGetter, it snapshot.AccountIterator) error {
 	var wg sync.WaitGroup
 
 	start := time.Now()

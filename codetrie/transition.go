@@ -22,35 +22,65 @@ func Transition(codeGetter CodeGetter, it snapshot.AccountIterator) error {
 
 	jobs := make(chan []byte)
 	results := make(chan common.Hash)
-	for w := 1; w < 16; w++ {
+	done := make(chan bool)
+	errCh := make(chan error)
+
+	numWorkers := 16
+	for w := 1; w < numWorkers; w++ {
 		wg.Add(1)
-		go worker(jobs, results, &wg)
+		go worker(jobs, results, done, &wg)
 	}
 
 	accounts := 0
-	for it.Next() {
-		slimData := it.Account()
-		codeHash, err := codeHashFromRLP(slimData)
-		if err != nil {
-			return err
-		}
-		if len(codeHash) == 0 {
-			continue
-		}
+	go func() {
+		for it.Next() {
+			slimData := it.Account()
+			codeHash, err := codeHashFromRLP(slimData)
+			if err != nil {
+				errCh <- err
+				break
+			}
+			if len(codeHash) == 0 {
+				continue
+			}
 
-		code, err := codeGetter.ContractCode(common.BytesToHash(codeHash))
-		if err != nil {
-			return err
-		}
+			code, err := codeGetter.ContractCode(common.BytesToHash(codeHash))
+			if err != nil {
+				errCh <- err
+				break
+			}
 
-		jobs <- code
-		accounts++
+			jobs <- code
+			accounts++
+		}
+		close(jobs)
+	}()
+
+	doneWorkers := 0
+	over := false
+	for {
+		select {
+		case r := <-results:
+			log.Info("CodeRoot: %v\n", r)
+		case err := <-errCh:
+			log.Warn("Error: %v\n", err)
+			over = true
+			break
+		case <-done:
+			doneWorkers++
+			if doneWorkers == numWorkers {
+				over = true
+				break
+			}
+		}
+		if over {
+			break
+		}
 	}
-	close(jobs)
-
-	for r := range results {
+	/*for r := range results {
 		log.Info("CodeRoot: %v\n", r)
-	}
+	}*/
+	close(results)
 
 	wg.Wait()
 	log.Info("Merkleized code", "accounts", accounts, "elapsed", time.Since(start))
@@ -58,7 +88,7 @@ func Transition(codeGetter CodeGetter, it snapshot.AccountIterator) error {
 	return nil
 }
 
-func worker(jobs <-chan []byte, results chan<- common.Hash, wg *sync.WaitGroup) {
+func worker(jobs <-chan []byte, results chan<- common.Hash, done chan<- bool, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for j := range jobs {
@@ -69,6 +99,8 @@ func worker(jobs <-chan []byte, results chan<- common.Hash, wg *sync.WaitGroup) 
 			results <- root
 		}
 	}
+
+	done <- true
 }
 
 func codeHashFromRLP(data []byte) ([]byte, error) {

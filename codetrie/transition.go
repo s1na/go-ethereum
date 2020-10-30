@@ -1,7 +1,6 @@
 package codetrie
 
 import (
-	"encoding/hex"
 	"sync"
 	"time"
 
@@ -31,7 +30,7 @@ func Transition(codeGetter CodeGetter, it snapshot.AccountIterator) error {
 		if len(codeHash) == 0 {
 			continue
 		}
-		codeHashStr := hex.EncodeToString(codeHash)
+		codeHashStr := string(codeHash)
 		if _, exists := index[codeHashStr]; exists {
 			duplicates++
 			continue
@@ -43,7 +42,7 @@ func Transition(codeGetter CodeGetter, it snapshot.AccountIterator) error {
 		}
 
 		root, err := MerkleizeInMemory(code, 32)
-		index[hex.EncodeToString(codeHash)] = root
+		index[codeHashStr] = root
 		accounts++
 	}
 

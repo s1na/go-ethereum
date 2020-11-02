@@ -50,21 +50,21 @@ func Transition(codeGetter CodeGetter, it snapshot.AccountIterator) error {
 	return nil
 }
 
-// Transition procedure for merkleizing all contract code
+// Merkleizes multiple contracts concurrently
 func TransitionConcurrent(codeGetter CodeGetter, it snapshot.AccountIterator) error {
 	var wg sync.WaitGroup
 
 	start := time.Now()
 
-	jobs := make(chan []byte)
+	jobs := make(chan common.Hash)
 	results := make(chan common.Hash)
-	done := make(chan bool)
 	errCh := make(chan error)
+	waitCh := make(chan struct{})
 
 	numWorkers := 16
 	for w := 1; w < numWorkers; w++ {
 		wg.Add(1)
-		go worker(jobs, results, done, &wg)
+		go worker(codeGetter, jobs, results, errCh, &wg)
 	}
 
 	accounts := 0
@@ -80,37 +80,31 @@ func TransitionConcurrent(codeGetter CodeGetter, it snapshot.AccountIterator) er
 				continue
 			}
 
-			code, err := codeGetter.ContractCode(common.BytesToHash(codeHash))
-			if err != nil {
-				errCh <- err
-				break
-			}
-
-			jobs <- code
+			jobs <- common.BytesToHash(codeHash)
 			accounts++
 		}
 		close(jobs)
 	}()
 
-	doneWorkers := 0
-	over := false
+	// Wait for workers to be done and
+	// send a signal by closing a channel.
+	// This is being done as a work-around for
+	// using WG in the select statement below.
+	go func() {
+		wg.Wait()
+		close(waitCh)
+	}()
+
+ResultLoop:
 	for {
 		select {
 		case r := <-results:
 			log.Info("Received merkleization result", "root", r)
 		case err := <-errCh:
 			log.Warn("Merkleization task failed", "error", err)
-			over = true
-			break
-		case <-done:
-			doneWorkers++
-			if doneWorkers == numWorkers {
-				over = true
-				break
-			}
-		}
-		if over {
-			break
+			break ResultLoop
+		case <-waitCh:
+			break ResultLoop
 		}
 	}
 	/*for r := range results {
@@ -118,25 +112,29 @@ func TransitionConcurrent(codeGetter CodeGetter, it snapshot.AccountIterator) er
 	}*/
 	close(results)
 
-	wg.Wait()
 	log.Info("Merkleized code", "accounts", accounts, "elapsed", time.Since(start))
 
 	return nil
 }
 
-func worker(jobs <-chan []byte, results chan<- common.Hash, done chan<- bool, wg *sync.WaitGroup) {
+func worker(codeGetter CodeGetter, jobs <-chan common.Hash, results chan<- common.Hash, errCh chan<- error, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for j := range jobs {
-		root, err := MerkleizeInMemory(j, 32)
+		code, err := codeGetter.ContractCode(j)
 		if err != nil {
-			log.Warn("Transition worker failed to merkleize", "error", err)
+			errCh <- err
+			break
+		}
+
+		root, err := MerkleizeInMemory(code, 32)
+		if err != nil {
+			errCh <- err
+			break
 		} else {
 			results <- root
 		}
 	}
-
-	done <- true
 }
 
 func codeHashFromRLP(data []byte) ([]byte, error) {

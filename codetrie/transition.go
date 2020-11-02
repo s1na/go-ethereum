@@ -82,15 +82,6 @@ func TransitionConcurrent(codeGetter CodeGetter, it snapshot.AccountIterator) er
 				continue
 			}
 
-			//codeHashStr := string(codeHash)
-			// The use of an unsafe map here should be fine.
-			// Only another goroutine is writing and the worst case
-			// is we'll perform an extra merkleization.
-			/*if _, exists := index[codeHashStr]; exists {
-				// TODO: Store codeRoot in the account
-				continue
-			}*/
-
 			jobs <- common.BytesToHash(codeHash)
 			accounts++
 		}
@@ -135,8 +126,10 @@ func worker(codeGetter CodeGetter, index *sync.Map, jobs <-chan common.Hash, res
 	for j := range jobs {
 		codeHashStr := string(j.Bytes())
 		// Short circuit if code has been merkleized
-		if r, ok := index.Load(codeHashStr); ok {
+		r, inIndex := index.Load(codeHashStr)
+		if inIndex {
 			results <- r.(common.Hash)
+			continue
 		}
 
 		code, err := codeGetter.ContractCode(j)
@@ -150,7 +143,9 @@ func worker(codeGetter CodeGetter, index *sync.Map, jobs <-chan common.Hash, res
 			errCh <- err
 			break
 		} else {
-			index.Store(codeHashStr, root)
+			if !inIndex {
+				index.Store(codeHashStr, root)
+			}
 			results <- root
 		}
 	}

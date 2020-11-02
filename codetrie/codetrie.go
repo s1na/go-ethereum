@@ -13,10 +13,9 @@ import (
 
 var (
 	versionKey    = []byte{0xff, 0xfd}
+	versionValue  = []byte{0x00}
 	codeLengthKey = []byte{0xff, 0xfe}
 	codeHashKey   = []byte{0xff, 0xff}
-
-	versionValue = []byte{0x00}
 )
 
 type Trie interface {
@@ -42,10 +41,16 @@ func MerkleizeInMemory(code []byte, chunkSize uint) (common.Hash, error) {
 }
 
 func Merkleize(code []byte, chunkSize uint, db *trie.Database) (common.Hash, error) {
-	trie, err := trie.NewSecure(common.Hash{}, db)
+	trie, err := trie.New(common.Hash{}, db)
 	if err != nil {
 		return common.Hash{}, err
 	}
+	merkleize(code, chunkSize, trie)
+	return trie.Hash(), nil
+}
+
+func MerkleizeStack(code []byte, chunkSize uint) (common.Hash, error) {
+	trie := trie.NewStackTrie(memorydb.New())
 	merkleize(code, chunkSize, trie)
 	return trie.Hash(), nil
 }
@@ -55,10 +60,11 @@ func merkleize(code []byte, chunkSize uint, trie Trie) {
 	merkleizeChunks(chunks, trie)
 
 	// Insert metadata
-	trie.Update(versionKey, versionValue)
 	codeLen := BE(uint32(len(code)), 4)
-	trie.Update(codeLengthKey, codeLen)
 	codeHash := crypto.Keccak256(code)
+
+	trie.Update(versionKey, versionValue)
+	trie.Update(codeLengthKey, codeLen)
 	trie.Update(codeHashKey, codeHash)
 }
 

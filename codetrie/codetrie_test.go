@@ -28,7 +28,7 @@ func TestChunkifyNum(t *testing.T) {
 					code: "6000",
 				},
 			},
-			CodeRoot: "aca110bb93e644288e180ceec9440cc5032088f7673ad0c37e68fb554589c87a",
+			CodeRoot: "fe1d3dcb57f6b06c53aaf7c6d33ae49f132472983798526b61e5a999fb37032d",
 		},
 		{
 			Input: strings.Repeat("6000", 15) + "00", // Len: 31
@@ -38,7 +38,7 @@ func TestChunkifyNum(t *testing.T) {
 					code: strings.Repeat("6000", 15) + "00",
 				},
 			},
-			CodeRoot: "e77493ce728713f7ff736e9f85631ef03ff7960bace0f64e5f1a9cf312e1e46e",
+			CodeRoot: "79556343025dfe010078374be02ca81d2e2e37070bff7cf90870c779a4de579a",
 		},
 		{
 			Input: strings.Repeat("6000", 16), // Len: 32
@@ -48,7 +48,7 @@ func TestChunkifyNum(t *testing.T) {
 					code: strings.Repeat("6000", 16),
 				},
 			},
-			CodeRoot: "0a862d30de7d88dfa44b9036f677ca7d3d41f93ce8846ca3170d1f4a418a0b10",
+			CodeRoot: "272a60435c819342d5e6003ea022d5777237f4a061e6cfa7887defc134939ca6",
 		},
 		{
 			Input: strings.Repeat("6000", 17), // Len: 34
@@ -62,7 +62,7 @@ func TestChunkifyNum(t *testing.T) {
 					code: "6000",
 				},
 			},
-			CodeRoot: "9f81e0ad1ebba8023d8ee6fc881a33a5a3e7540ef18363facba8211ad268c396",
+			CodeRoot: "87aa5ecc9c22f1342f3ce7fd534ed2cdad6c3b9cdf03616704c190aaa4d9cc4e",
 		},
 		{
 			Input: strings.Repeat("58", 31) + "605b" + strings.Repeat("58", 30), // Len: 63
@@ -76,7 +76,7 @@ func TestChunkifyNum(t *testing.T) {
 					code: "5b" + strings.Repeat("58", 30),
 				},
 			},
-			CodeRoot: "3cd6b50e5242f2ab73b05b28740e36a8d14501aa1d3118d084df6803ef71fa9f",
+			CodeRoot: "a81b84e49034e54c8da52cc0c99423741ecae9bbfdedb159dfeef93be203b3cb",
 		},
 		{
 			Input: strings.Repeat("58", 31) + "7f" + strings.Repeat("5b", 32) + strings.Repeat("58", 30), // Len: 94
@@ -94,7 +94,7 @@ func TestChunkifyNum(t *testing.T) {
 					code: strings.Repeat("58", 30),
 				},
 			},
-			CodeRoot: "3f814a80d8a465c466c961ae077b9e659451e1ce6b1164b8df314d3f454c664e",
+			CodeRoot: "792f6e1cff9922e35e32b8db08807e9f8af007267565d6cadb4edec84c1fc300",
 		},
 	}
 
@@ -121,18 +121,26 @@ func TestChunkifyNum(t *testing.T) {
 			}
 		}
 
-		root, err := MerkleizeInMemory(code, 32)
-		if err != nil {
-			t.Error(err)
-		}
-
 		expectedRoot, err := hex.DecodeString(c.CodeRoot)
 		if err != nil {
 			t.Error(err)
 		}
 
+		root, err := MerkleizeInMemory(code, 32)
+		if err != nil {
+			t.Error(err)
+		}
 		if !bytes.Equal(root.Bytes(), expectedRoot) {
 			t.Errorf("%v: invalid code root: expected %s, got %s\n", t.Name(), c.CodeRoot, root.Hex())
+		}
+
+		// Test StackTrie impl
+		stackRoot, err := MerkleizeStack(code, 32)
+		if err != nil {
+			t.Error(err)
+		}
+		if !bytes.Equal(stackRoot.Bytes(), expectedRoot) {
+			t.Errorf("%v: invalid code root for MerkleizeStack: expected %s, got %s\n", t.Name(), c.CodeRoot, stackRoot.Hex())
 		}
 	}
 }

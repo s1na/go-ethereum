@@ -61,10 +61,12 @@ func TransitionConcurrent(codeGetter CodeGetter, it snapshot.AccountIterator) er
 	errCh := make(chan error)
 	waitCh := make(chan struct{})
 
+	var index sync.Map
+
 	numWorkers := 16
 	for w := 1; w < numWorkers; w++ {
 		wg.Add(1)
-		go worker(codeGetter, jobs, results, errCh, &wg)
+		go worker(codeGetter, &index, jobs, results, errCh, &wg)
 	}
 
 	accounts := 0
@@ -79,6 +81,15 @@ func TransitionConcurrent(codeGetter CodeGetter, it snapshot.AccountIterator) er
 			if len(codeHash) == 0 {
 				continue
 			}
+
+			//codeHashStr := string(codeHash)
+			// The use of an unsafe map here should be fine.
+			// Only another goroutine is writing and the worst case
+			// is we'll perform an extra merkleization.
+			/*if _, exists := index[codeHashStr]; exists {
+				// TODO: Store codeRoot in the account
+				continue
+			}*/
 
 			jobs <- common.BytesToHash(codeHash)
 			accounts++
@@ -98,8 +109,9 @@ func TransitionConcurrent(codeGetter CodeGetter, it snapshot.AccountIterator) er
 ResultLoop:
 	for {
 		select {
-		case r := <-results:
-			log.Info("Received merkleization result", "root", r)
+		case <-results:
+			// TODO: process resulting codeRoot
+			//log.Info("Received merkleization result", "root", r)
 		case err := <-errCh:
 			log.Warn("Merkleization task failed", "error", err)
 			break ResultLoop
@@ -117,10 +129,16 @@ ResultLoop:
 	return nil
 }
 
-func worker(codeGetter CodeGetter, jobs <-chan common.Hash, results chan<- common.Hash, errCh chan<- error, wg *sync.WaitGroup) {
+func worker(codeGetter CodeGetter, index *sync.Map, jobs <-chan common.Hash, results chan<- common.Hash, errCh chan<- error, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for j := range jobs {
+		codeHashStr := string(j.Bytes())
+		// Short circuit if code has been merkleized
+		if r, ok := index.Load(codeHashStr); ok {
+			results <- r.(common.Hash)
+		}
+
 		code, err := codeGetter.ContractCode(j)
 		if err != nil {
 			errCh <- err
@@ -132,6 +150,7 @@ func worker(codeGetter CodeGetter, jobs <-chan common.Hash, results chan<- commo
 			errCh <- err
 			break
 		} else {
+			index.Store(codeHashStr, root)
 			results <- root
 		}
 	}

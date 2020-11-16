@@ -3,8 +3,12 @@ package codetrie
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
+	"io/ioutil"
 	"strings"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
 type TChunk struct {
@@ -143,4 +147,51 @@ func TestChunkifyNum(t *testing.T) {
 			t.Errorf("%v: invalid code root for MerkleizeStack: expected %s, got %s\n", t.Name(), c.CodeRoot, stackRoot.Hex())
 		}
 	}
+}
+
+func BenchmarkChunkify(b *testing.B) {
+	code := getSampleContract(b)
+	b.Logf("CodeLen: %v\n", len(code))
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		Chunkify(code, 32)
+	}
+}
+func BenchmarkOverhead(b *testing.B) {
+	code := getSampleContract(b)
+	b.Logf("CodeLen: %v\n", len(code))
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		MerkleizeStack(code, 32)
+	}
+}
+
+func BenchmarkNewMemoryDb(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		memorydb.New()
+	}
+}
+
+func getSampleContract(b *testing.B) []byte {
+	f, err := ioutil.ReadFile("../contracts.json")
+	if err != nil {
+		b.Errorf("%v: failed reading contracts file. Got error: %v\n", b.Name(), err)
+	}
+	type Schema struct {
+		Contracts []string
+	}
+	var data Schema
+	if err := json.Unmarshal(f, &data); err != nil {
+		b.Errorf("%v: failed unmarshalling json: %v\n", b.Name(), err)
+	}
+
+	codeHex := data.Contracts[0]
+	code, err := hex.DecodeString(codeHex)
+	if err != nil {
+		b.Errorf("%v: failed decoding code hex: %v\n", b.Name(), err)
+	}
+
+	return code
 }

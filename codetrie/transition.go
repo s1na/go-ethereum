@@ -1,6 +1,8 @@
 package codetrie
 
 import (
+	"encoding/csv"
+	"os"
 	"sync"
 	"time"
 
@@ -157,4 +159,60 @@ func codeHashFromRLP(data []byte) ([]byte, error) {
 		return []byte{}, err
 	}
 	return account.CodeHash, nil
+}
+
+func BenchMerkleizationOverhead(codeGetter CodeGetter, it snapshot.AccountIterator) error {
+	start := time.Now()
+	accounts := 0
+	duplicates := 0
+
+	index := make(map[string]common.Hash)
+
+	type OverheadStat struct {
+		codeLen  int
+		overhead time.Duration
+	}
+	data := make([]OverheadStat, 0, 0)
+
+	for it.Next() {
+		slimData := it.Account()
+		codeHash, err := codeHashFromRLP(slimData)
+		if err != nil {
+			return err
+		}
+		if len(codeHash) == 0 {
+			continue
+		}
+		codeHashStr := string(codeHash)
+		if _, exists := index[codeHashStr]; exists {
+			duplicates++
+			continue
+		}
+
+		code, err := codeGetter.ContractCode(common.BytesToHash(codeHash))
+		if err != nil {
+			return err
+		}
+
+		benchStart := time.Now()
+		root, err := MerkleizeInMemory(code, 32)
+		data = append(data, OverheadStat{codeLen: len(code), overhead: time.Since(benchStart)})
+		index[codeHashStr] = root
+		accounts++
+	}
+
+	log.Info("Merkleized code", "accounts", accounts, "duplicates", duplicates, "elapsed", time.Since(start))
+	cw := csv.NewWriter(os.Stdout)
+	for _, item := range data {
+		if err := cw.Write([]string{string(item.codeLen), string(item.overhead)}); err != nil {
+			log.Warn("error csv", err)
+		}
+	}
+	cw.Flush()
+
+	if err := cw.Error(); err != nil {
+		log.Warn("after csv error", err)
+	}
+
+	return nil
 }

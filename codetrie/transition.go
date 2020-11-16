@@ -3,6 +3,7 @@ package codetrie
 import (
 	"encoding/csv"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -195,7 +196,7 @@ func BenchMerkleizationOverhead(codeGetter CodeGetter, it snapshot.AccountIterat
 		}
 
 		benchStart := time.Now()
-		root, err := MerkleizeInMemory(code, 32)
+		root, err := MerkleizeStack(code, 32)
 		data = append(data, OverheadStat{codeLen: len(code), overhead: time.Since(benchStart)})
 		index[codeHashStr] = root
 		accounts++
@@ -204,7 +205,7 @@ func BenchMerkleizationOverhead(codeGetter CodeGetter, it snapshot.AccountIterat
 	log.Info("Merkleized code", "accounts", accounts, "duplicates", duplicates, "elapsed", time.Since(start))
 	cw := csv.NewWriter(os.Stdout)
 	for _, item := range data {
-		if err := cw.Write([]string{string(item.codeLen), string(item.overhead)}); err != nil {
+		if err := cw.Write([]string{strconv.Itoa(item.codeLen), strconv.FormatInt(item.overhead.Nanoseconds(), 10)}); err != nil {
 			log.Warn("error csv", err)
 		}
 	}

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
@@ -171,6 +172,20 @@ func BenchmarkOverhead(b *testing.B) {
 func BenchmarkNewMemoryDb(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		memorydb.New()
+	}
+}
+
+func BenchmarkNoop(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+	}
+}
+
+func BenchmarkKeccak(b *testing.B) {
+	data := "7624778dedc75f8b322b9fa1632a610d40b85e106c7d9bf0e743a9ce291b9c6f"
+	input, _ := hex.DecodeString(data)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		crypto.Keccak256Hash(input)
 	}
 }
 

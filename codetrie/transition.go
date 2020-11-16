@@ -2,6 +2,7 @@ package codetrie
 
 import (
 	"encoding/csv"
+	"encoding/hex"
 	"encoding/json"
 	"io/ioutil"
 	"os"
@@ -176,7 +177,7 @@ func BenchMerkleizationOverhead(codeGetter CodeGetter, it snapshot.AccountIterat
 		overhead time.Duration
 	}
 	data := make([]OverheadStat, 0, 0)
-	contracts := make([][]byte, 0, 0)
+	contracts := make([]string, 0, 0)
 
 	for it.Next() {
 		slimData := it.Account()
@@ -198,7 +199,7 @@ func BenchMerkleizationOverhead(codeGetter CodeGetter, it snapshot.AccountIterat
 			return err
 		}
 
-		contracts = append(contracts, code)
+		contracts = append(contracts, hex.EncodeToString(code))
 
 		benchStart := time.Now()
 		root, err := MerkleizeStack(code, 32)
@@ -221,7 +222,7 @@ func BenchMerkleizationOverhead(codeGetter CodeGetter, it snapshot.AccountIterat
 
 	// Write contract codes to json file
 	type Schema struct {
-		Contracts [][]byte
+		Contracts []string
 	}
 	schema := Schema{Contracts: contracts}
 	jdata, err := json.Marshal(schema)

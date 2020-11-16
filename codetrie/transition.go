@@ -2,6 +2,8 @@ package codetrie
 
 import (
 	"encoding/csv"
+	"encoding/json"
+	"io/ioutil"
 	"os"
 	"strconv"
 	"sync"
@@ -174,6 +176,7 @@ func BenchMerkleizationOverhead(codeGetter CodeGetter, it snapshot.AccountIterat
 		overhead time.Duration
 	}
 	data := make([]OverheadStat, 0, 0)
+	contracts := make([][]byte, 0, 0)
 
 	for it.Next() {
 		slimData := it.Account()
@@ -195,6 +198,8 @@ func BenchMerkleizationOverhead(codeGetter CodeGetter, it snapshot.AccountIterat
 			return err
 		}
 
+		contracts = append(contracts, code)
+
 		benchStart := time.Now()
 		root, err := MerkleizeStack(code, 32)
 		data = append(data, OverheadStat{codeLen: len(code), overhead: time.Since(benchStart)})
@@ -210,10 +215,20 @@ func BenchMerkleizationOverhead(codeGetter CodeGetter, it snapshot.AccountIterat
 		}
 	}
 	cw.Flush()
-
 	if err := cw.Error(); err != nil {
 		log.Warn("after csv error", err)
 	}
+
+	// Write contract codes to json file
+	type Schema struct {
+		Contracts [][]byte
+	}
+	schema := Schema{Contracts: contracts}
+	jdata, err := json.Marshal(schema)
+	if err != nil {
+		log.Warn("err encoding json", err)
+	}
+	ioutil.WriteFile("contracts.json", jdata, 0644)
 
 	return nil
 }

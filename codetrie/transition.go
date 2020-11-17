@@ -1,12 +1,10 @@
 package codetrie
 
 import (
-	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
 	"io/ioutil"
-	"os"
-	"strconv"
+	"sort"
 	"sync"
 	"time"
 
@@ -172,12 +170,13 @@ func BenchMerkleizationOverhead(codeGetter CodeGetter, it snapshot.AccountIterat
 
 	index := make(map[string]common.Hash)
 
-	type OverheadStat struct {
-		codeLen  int
+	type ContractStat struct {
+		CodeLen  int
+		Code     string
+		Duration int64 // overhead in ns
 		overhead time.Duration
 	}
-	data := make([]OverheadStat, 0, 0)
-	contracts := make([]string, 0, 0)
+	stats := make([]ContractStat, 0, 0)
 
 	for it.Next() {
 		slimData := it.Account()
@@ -199,17 +198,16 @@ func BenchMerkleizationOverhead(codeGetter CodeGetter, it snapshot.AccountIterat
 			return err
 		}
 
-		contracts = append(contracts, hex.EncodeToString(code))
-
 		benchStart := time.Now()
 		root, err := MerkleizeStack(code, 32)
-		data = append(data, OverheadStat{codeLen: len(code), overhead: time.Since(benchStart)})
+		overhead := time.Since(benchStart)
+		stats = append(stats, ContractStat{CodeLen: len(code), Code: hex.EncodeToString(code), Duration: overhead.Nanoseconds(), overhead: overhead})
 		index[codeHashStr] = root
 		accounts++
 	}
 
 	log.Info("Merkleized code", "accounts", accounts, "duplicates", duplicates, "elapsed", time.Since(start))
-	cw := csv.NewWriter(os.Stdout)
+	/*cw := csv.NewWriter(os.Stdout)
 	for _, item := range data {
 		if err := cw.Write([]string{strconv.Itoa(item.codeLen), strconv.FormatInt(item.overhead.Nanoseconds(), 10)}); err != nil {
 			log.Warn("error csv", err)
@@ -218,14 +216,18 @@ func BenchMerkleizationOverhead(codeGetter CodeGetter, it snapshot.AccountIterat
 	cw.Flush()
 	if err := cw.Error(); err != nil {
 		log.Warn("after csv error", err)
-	}
+	}*/
 
 	// Write contract codes to json file
 	type Schema struct {
-		Contracts []string
+		Stats []ContractStat
 	}
-	schema := Schema{Contracts: contracts}
-	jdata, err := json.Marshal(schema)
+	sort.Slice(stats, func(a, b int) bool {
+		return stats[a].Duration < stats[b].Duration
+	})
+
+	data := Schema{Stats: stats}
+	jdata, err := json.Marshal(data)
 	if err != nil {
 		log.Warn("err encoding json", err)
 	}

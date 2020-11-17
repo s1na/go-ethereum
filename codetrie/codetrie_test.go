@@ -159,6 +159,7 @@ func BenchmarkChunkify(b *testing.B) {
 		Chunkify(code, 32)
 	}
 }
+
 func BenchmarkOverhead(b *testing.B) {
 	code := getSampleContract(b)
 	b.Logf("CodeLen: %v\n", len(code))

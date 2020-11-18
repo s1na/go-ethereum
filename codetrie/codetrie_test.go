@@ -191,19 +191,24 @@ func BenchmarkKeccak(b *testing.B) {
 }
 
 func getSampleContract(b *testing.B) []byte {
+	type ContractStat struct {
+		CodeLen  int
+		Code     string
+		Duration int64
+	}
+	type Schema struct {
+		Stats []ContractStat
+	}
 	f, err := ioutil.ReadFile("../contracts.json")
 	if err != nil {
 		b.Errorf("%v: failed reading contracts file. Got error: %v\n", b.Name(), err)
-	}
-	type Schema struct {
-		Contracts []string
 	}
 	var data Schema
 	if err := json.Unmarshal(f, &data); err != nil {
 		b.Errorf("%v: failed unmarshalling json: %v\n", b.Name(), err)
 	}
 
-	codeHex := data.Contracts[0]
+	codeHex := data.Stats[0].Code
 	code, err := hex.DecodeString(codeHex)
 	if err != nil {
 		b.Errorf("%v: failed decoding code hex: %v\n", b.Name(), err)

@@ -24,7 +24,7 @@ type Schema struct {
 }
 
 func main() {
-	f, err := ioutil.ReadFile("../../contracts-sample.json")
+	f, err := ioutil.ReadFile("./contracts.json")
 	if err != nil {
 		log.Fatalf("Failed reading contracts file. Got error: %v\n", err)
 	}
@@ -58,11 +58,11 @@ func main() {
 
 	cw := csv.NewWriter(os.Stdout)
 	for _, item := range res {
-		durationSum := 0
+		durationSum := int64(0)
 		for i := 0; i < runs; i++ {
 			durationSum += item.durations[i]
 		}
-		duration := durationSum / runs
+		duration := durationSum / int64(runs)
 		if err := cw.Write([]string{strconv.Itoa(item.codeLen), strconv.FormatInt(duration, 10)}); err != nil {
 			log.Fatalf("error csv: %v\n", err)
 		}

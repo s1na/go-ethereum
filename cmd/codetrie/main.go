@@ -35,13 +35,14 @@ func main() {
 	}
 
 	type Record struct {
-		codeLen  int
-		duration int64
+		codeLen   int
+		durations []int64
 	}
-	res := make([]Record, 0, 0)
+	res := make([]Record, len(data.Stats))
 
-	for i := 0; i < 1; i++ {
-		for _, c := range data.Stats {
+	runs := 10
+	for i := 0; i < runs; i++ {
+		for j, c := range data.Stats {
 			codeHex := c.Code
 			code, err := hex.DecodeString(codeHex)
 			if err != nil {
@@ -50,13 +51,19 @@ func main() {
 			s := time.Now()
 			codetrie.MerkleizeStack(code, 32)
 			d := time.Since(s)
-			res = append(res, Record{codeLen: c.CodeLen, duration: d.Nanoseconds()})
+			res[j].codeLen = c.CodeLen
+			res[j].durations = append(res[j].durations, d.Nanoseconds())
 		}
 	}
 
 	cw := csv.NewWriter(os.Stdout)
 	for _, item := range res {
-		if err := cw.Write([]string{strconv.Itoa(item.codeLen), strconv.FormatInt(item.duration, 10)}); err != nil {
+		durationSum := 0
+		for i := 0; i < runs; i++ {
+			durationSum += item.durations[i]
+		}
+		duration := durationSum / runs
+		if err := cw.Write([]string{strconv.Itoa(item.codeLen), strconv.FormatInt(duration, 10)}); err != nil {
 			log.Fatalf("error csv: %v\n", err)
 		}
 	}

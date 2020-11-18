@@ -223,11 +223,11 @@ func BenchMerkleizationOverhead(codeGetter CodeGetter, it snapshot.AccountIterat
 		Stats []ContractStat
 	}
 	sort.Slice(stats, func(a, b int) bool {
-		return stats[a].Duration < stats[b].Duration
+		return stats[a].Duration > stats[b].Duration
 	})
 
 	data := Schema{Stats: stats}
-	jdata, err := json.Marshal(data)
+	jdata, err := json.MarshalIndent(data, " ", " ")
 	if err != nil {
 		log.Warn("err encoding json", err)
 	}

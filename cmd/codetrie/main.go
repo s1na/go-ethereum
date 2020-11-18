@@ -1,0 +1,67 @@
+package main
+
+import (
+	"encoding/csv"
+	"encoding/hex"
+	"encoding/json"
+	"io/ioutil"
+	"log"
+	"os"
+	"strconv"
+	"time"
+
+	"github.com/ethereum/go-ethereum/codetrie"
+)
+
+type ContractStat struct {
+	CodeLen  int
+	Code     string
+	Duration int64
+}
+
+type Schema struct {
+	Stats []ContractStat
+}
+
+func main() {
+	f, err := ioutil.ReadFile("../../contracts-sample.json")
+	if err != nil {
+		log.Fatalf("Failed reading contracts file. Got error: %v\n", err)
+	}
+
+	var data Schema
+	if err := json.Unmarshal(f, &data); err != nil {
+		log.Fatalf("Failed unmarshalling json: %v\n", err)
+	}
+
+	type Record struct {
+		codeLen  int
+		duration int64
+	}
+	res := make([]Record, 0, 0)
+
+	for i := 0; i < 1; i++ {
+		for _, c := range data.Stats {
+			codeHex := c.Code
+			code, err := hex.DecodeString(codeHex)
+			if err != nil {
+				log.Fatalf("Failed decoding code hex: %v\n", err)
+			}
+			s := time.Now()
+			codetrie.MerkleizeStack(code, 32)
+			d := time.Since(s)
+			res = append(res, Record{codeLen: c.CodeLen, duration: d.Nanoseconds()})
+		}
+	}
+
+	cw := csv.NewWriter(os.Stdout)
+	for _, item := range res {
+		if err := cw.Write([]string{strconv.Itoa(item.codeLen), strconv.FormatInt(item.duration, 10)}); err != nil {
+			log.Fatalf("error csv: %v\n", err)
+		}
+	}
+	cw.Flush()
+	if err := cw.Error(); err != nil {
+		log.Fatalf("after csv error: %v\n", err)
+	}
+}

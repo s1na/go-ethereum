@@ -55,6 +55,12 @@ func MerkleizeStack(code []byte, chunkSize uint) (common.Hash, error) {
 	return trie.Hash(), nil
 }
 
+func MerkleizeBinary(code []byte, chunkSize uint) (common.Hash, error) {
+	trie := trie.NewBinaryTrie()
+	merkleize(code, chunkSize, trie)
+	return common.BytesToHash(trie.Hash()), nil
+}
+
 func merkleize(code []byte, chunkSize uint, trie Trie) {
 	chunks := Chunkify(code, chunkSize)
 	merkleizeChunks(chunks, trie)

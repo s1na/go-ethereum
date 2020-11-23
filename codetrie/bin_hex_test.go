@@ -36,30 +36,30 @@ func BenchmarkBinVsHex(b *testing.B) {
 }
 
 func BinWithLeaves(b *testing.B, num int, keys, vals [][]byte) {
-	trieB := trie.NewBinaryTrie()
-	for j := 0; j < num; j++ {
-		trieB.Update(keys[j], vals[j])
-	}
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
+		trieB := trie.NewBinaryTrie()
+		for j := 0; j < num; j++ {
+			trieB.Update(keys[j], vals[j])
+		}
 		trieB.Hash()
 	}
 }
 
 func HexWithLeaves(b *testing.B, num int, keys, vals [][]byte) {
-	trieH, err := trie.New(common.Hash{}, trie.NewDatabase(memorydb.New()))
-	if err != nil {
-		b.Fatalf("err: %v\n", err)
-	}
-	for j := 0; j < num; j++ {
-		trieH.Update(keys[j], vals[j])
-	}
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
+		trieH, err := trie.New(common.Hash{}, trie.NewDatabase(memorydb.New()))
+		if err != nil {
+			b.Fatalf("err: %v\n", err)
+		}
+		for j := 0; j < num; j++ {
+			trieH.Update(keys[j], vals[j])
+		}
 		trieH.Hash()
 	}
 }

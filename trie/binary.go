@@ -22,15 +22,16 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// BinaryNode represents any node in a binary trie.
 type BinaryNode interface {
 	Hash() []byte
 	HashM4() []byte
 	hash(off int) []byte
 	Commit() error
-	//tryGet(key []byte, depth int) ([]byte, error)
 }
 
 // BinaryHashPreimage represents a tuple of a hash and its preimage
@@ -55,6 +56,12 @@ const (
 	typeBlake2b
 )
 
+var blake2bEmptyRoot = common.FromHex("45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0")
+
+// BinaryTrie represents a multi-level binary trie.
+//
+// Nodes with only one child are compacted into a "prefix"
+// for the first node that has two children.
 type BinaryTrie struct {
 	root     BinaryNode
 	store    store
@@ -145,6 +152,7 @@ func NewBinTrie() BinaryNode {
 	return empty(struct{}{})
 }
 
+// TryGet returns the value for a key stored in the trie.
 func (bt *BinaryTrie) TryGet(key []byte) ([]byte, error) {
 	bk := newBinKey(key)
 	off := 0
@@ -186,6 +194,17 @@ func (bt *BinaryTrie) TryGet(key []byte) ([]byte, error) {
 		}
 		off += len(currentNode.prefix) + 1
 		currentNode = childNode
+	}
+}
+
+func newBranchNode(prefix binkey, key []byte, value []byte, ht hashType) *branch {
+	return &branch{
+		prefix: prefix,
+		left:   empty(struct{}{}),
+		right:  empty(struct{}{}),
+		key:    key,
+		value:  value,
+		hType:  ht,
 	}
 }
 
@@ -301,6 +320,7 @@ func (br *branch) HashM4() []byte {
 	return hash
 }
 
+// NewBinaryTrie creates a binary trie using Keccak256 for hashing.
 func NewBinaryTrie() *BinaryTrie {
 	return &BinaryTrie{
 		root:     empty(struct{}{}),
@@ -309,6 +329,7 @@ func NewBinaryTrie() *BinaryTrie {
 	}
 }
 
+// NewBinaryTrieWithBlake2b creates a binary trie using Blake2b for hashing.
 func NewBinaryTrieWithBlake2b() *BinaryTrie {
 	return &BinaryTrie{
 		root:     empty(struct{}{}),
@@ -317,21 +338,28 @@ func NewBinaryTrieWithBlake2b() *BinaryTrie {
 	}
 }
 
-func (t *BinaryTrie) Hash() []byte {
-	return t.root.Hash()
+// Hash returns the root hash of the binary trie, with the merkelization
+// rule described in EIP-3102.
+func (bt *BinaryTrie) Hash() []byte {
+	return bt.root.Hash()
 }
 
-func (t *BinaryTrie) HashM4() []byte {
-	return t.root.HashM4()
+// HashM4 returns the root hash of the binary trie, with the alternative
+// merkelization rule M4.
+func (bt *BinaryTrie) HashM4() []byte {
+	return bt.root.HashM4()
 }
 
-func (t *BinaryTrie) Update(key, value []byte) {
-	if err := t.TryUpdate(key, value); err != nil {
+// Update does the same thing as TryUpdate except it panics if it encounters
+// an error.
+func (bt *BinaryTrie) Update(key, value []byte) {
+	if err := bt.TryUpdate(key, value); err != nil {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 }
 
-func (bt *BinaryTrie) subTreeFromKey(path binkey) *branch {
+// subTreeFromPath rebuilds the subtrie rooted at path `path` from the db.
+func (bt *BinaryTrie) subTreeFromPath(path binkey) *branch {
 	subtrie := NewBinaryTrie()
 	for _, keyval := range bt.store {
 		// keyval.key is a full key from the store,
@@ -377,6 +405,8 @@ func (bt *BinaryTrie) resolveNode(childNode BinaryNode, bk binkey, off int) *bra
 	return childNode.(*branch)
 }
 
+// TryUpdate will set the trie's leaf at `key` to `value`. If there is
+// no leaf at `key`, it will be created.
 func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 	bk := newBinKey(key)
 	off := 0 // Number of key bits that've been walked at current iteration
@@ -389,14 +419,7 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 		// This is when the trie hasn't been inserted
 		// into, so initialize the root as a branch
 		// node (a value, really).
-		bt.root = &branch{
-			prefix: bk,
-			value:  value,
-			left:   hashBinaryNode(emptyRoot[:]),
-			right:  hashBinaryNode(emptyRoot[:]),
-			key:    key,
-			hType:  bt.hashType,
-		}
+		bt.root = newBranchNode(bk, key, value, bt.hashType)
 		bt.store = append(bt.store, storeSlot{key: bk, value: value})
 		sort.Sort(bt.store)
 
@@ -419,13 +442,7 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 			}
 			var isLeaf bool
 			if childNode == nil {
-				childNode = &branch{
-					prefix: bk[off+1:],
-					left:   hashBinaryNode(emptyRoot[:]),
-					right:  hashBinaryNode(emptyRoot[:]),
-					value:  value,
-					hType:  bt.hashType,
-				}
+				childNode = newBranchNode(bk[off+1:], nil, value, bt.hashType)
 				isLeaf = true
 			}
 
@@ -440,7 +457,7 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 				break
 			}
 			currentNode = childNode
-			off += 1
+			off++
 		} else {
 			// Starting from the following context:
 			//
@@ -479,25 +496,11 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 			if bk[off+split] == 1 {
 				// New node goes on the right
 				currentNode.left = midNode
-				currentNode.right = &branch{
-					prefix: bk[off+split+1:],
-					left:   hashBinaryNode(emptyRoot[:]),
-					right:  hashBinaryNode(emptyRoot[:]),
-					value:  value,
-					key:    key,
-					hType:  bt.hashType,
-				}
+				currentNode.right = newBranchNode(bk[off+split+1:], key, value, bt.hashType)
 			} else {
 				// New node goes on the left
 				currentNode.right = midNode
-				currentNode.left = &branch{
-					prefix: bk[off+split+1:],
-					left:   hashBinaryNode(emptyRoot[:]),
-					right:  hashBinaryNode(emptyRoot[:]),
-					value:  value,
-					key:    key,
-					hType:  bt.hashType,
-				}
+				currentNode.left = newBranchNode(bk[off+split+1:], key, value, bt.hashType)
 			}
 			break
 		}
@@ -519,11 +522,11 @@ func (bt *BinaryTrie) TryUpdate(key, value []byte) error {
 // the conversion from hexary to binary.
 // It basically performs a hash, except that it makes sure that there is
 // a channel to stream the intermediate (hash, preimage) values to.
-func (t *branch) Commit() error {
-	if t.CommitCh == nil {
+func (br *branch) Commit() error {
+	if br.CommitCh == nil {
 		return fmt.Errorf("commit channel missing")
 	}
-	t.Hash()
+	br.Hash()
 	return nil
 }
 
@@ -555,6 +558,7 @@ func (h hashBinaryNode) tryGet(key []byte, depth int) ([]byte, error) {
 func (e empty) Hash() []byte {
 	return emptyRoot[:]
 }
+
 func (e empty) HashM4() []byte {
 	return emptyRoot[:]
 }

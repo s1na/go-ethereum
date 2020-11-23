@@ -398,7 +398,7 @@ func (bt *BinaryTrie) resolveNode(childNode BinaryNode, bk binkey, off int) *bra
 		// The whole section of the store has to be
 		// hashed in order to produce the correct
 		// subtrie.
-		return bt.subTreeFromKey(bk[:off])
+		return bt.subTreeFromPath(bk[:off])
 	}
 
 	// Nothing to be done

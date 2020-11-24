@@ -2,8 +2,10 @@ package codetrie
 
 import (
 	"encoding/binary"
+	"errors"
 	"math"
 
+	"github.com/ethereum/go-ethereum/codetrie/ssz"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -59,6 +61,25 @@ func MerkleizeBinary(code []byte, chunkSize uint) (common.Hash, error) {
 	trie := trie.NewBinaryTrie()
 	merkleize(code, chunkSize, trie)
 	return common.BytesToHash(trie.Hash()), nil
+}
+
+func MerkleizeSSZ(code []byte, chunkSize uint) (common.Hash, error) {
+	if chunkSize != 32 {
+		return common.Hash{}, errors.New("MerkleizeSSZ only supports chunk size of 32")
+	}
+	rawChunks := Chunkify(code, 32)
+	chunks := make([]*ssz.Chunk, len(rawChunks))
+	for i, rc := range rawChunks {
+		chunks[i] = &ssz.Chunk{FIO: rc.fio, Code: rc.code}
+	}
+
+	metadata := &ssz.Metadata{Version: 0, CodeHash: crypto.Keccak256(code), CodeLength: uint16(len(code))}
+	codeTrie := &ssz.CodeTrie{Metadata: metadata, Chunks: chunks}
+	root, err := codeTrie.HashTreeRoot()
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return common.BytesToHash(root[:]), nil
 }
 
 func merkleize(code []byte, chunkSize uint, trie Trie) {

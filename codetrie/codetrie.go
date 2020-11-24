@@ -5,6 +5,9 @@ import (
 	"errors"
 	"math"
 
+	sszlib "github.com/ferranbt/fastssz"
+	"golang.org/x/crypto/sha3"
+
 	"github.com/ethereum/go-ethereum/codetrie/ssz"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -75,11 +78,15 @@ func MerkleizeSSZ(code []byte, chunkSize uint) (common.Hash, error) {
 
 	metadata := &ssz.Metadata{Version: 0, CodeHash: crypto.Keccak256(code), CodeLength: uint16(len(code))}
 	codeTrie := &ssz.CodeTrie{Metadata: metadata, Chunks: chunks}
-	root, err := codeTrie.HashTreeRoot()
+	hasher := sszlib.DefaultHasherPool.GetWithHash(sha3.NewLegacyKeccak256())
+	err := codeTrie.HashTreeRootWith(hasher)
 	if err != nil {
+		sszlib.DefaultHasherPool.Put(hasher)
 		return common.Hash{}, err
 	}
-	return common.BytesToHash(root[:]), nil
+	root, err := hasher.HashRoot()
+	sszlib.DefaultHasherPool.Put(hasher)
+	return common.BytesToHash(root[:]), err
 }
 
 func merkleize(code []byte, chunkSize uint, trie Trie) {

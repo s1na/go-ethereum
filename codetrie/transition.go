@@ -200,6 +200,9 @@ func BenchMerkleizationOverhead(codeGetter CodeGetter, it snapshot.AccountIterat
 
 		benchStart := time.Now()
 		root, err := MerkleizeStack(code, 32)
+		if err != nil {
+			return err
+		}
 		overhead := time.Since(benchStart)
 		stats = append(stats, ContractStat{CodeLen: len(code), Code: hex.EncodeToString(code), Duration: overhead.Nanoseconds(), overhead: overhead})
 		index[codeHashStr] = root

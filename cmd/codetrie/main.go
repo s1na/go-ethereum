@@ -49,7 +49,10 @@ func main() {
 				log.Fatalf("Failed decoding code hex: %v\n", err)
 			}
 			s := time.Now()
-			codetrie.MerkleizeStack(code, 32)
+			_, err = codetrie.MerkleizeStack(code, 32)
+			if err != nil {
+				log.Fatalf("Failed to merkleize: %v\n", err)
+			}
 			d := time.Since(s)
 			res[j].codeLen = c.CodeLen
 			res[j].durations = append(res[j].durations, d.Nanoseconds())

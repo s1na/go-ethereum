@@ -66,27 +66,56 @@ func MerkleizeBinary(code []byte, chunkSize uint) (common.Hash, error) {
 	return common.BytesToHash(trie.Hash()), nil
 }
 
-func MerkleizeSSZ(code []byte, chunkSize uint) (common.Hash, error) {
-	if chunkSize != 32 {
-		return common.Hash{}, errors.New("MerkleizeSSZ only supports chunk size of 32")
-	}
-	rawChunks := Chunkify(code, 32)
-	chunks := make([]*ssz.Chunk, len(rawChunks))
-	for i, rc := range rawChunks {
-		chunks[i] = &ssz.Chunk{FIO: rc.fio, Code: rc.code}
+func MerkleizeSSZSha(code []byte, chunkSize uint) (common.Hash, error) {
+	codeTrie, err := prepareSSZ(code, chunkSize)
+	if err != nil {
+		return common.Hash{}, err
 	}
 
-	metadata := &ssz.Metadata{Version: 0, CodeHash: crypto.Keccak256(code), CodeLength: uint16(len(code))}
-	codeTrie := &ssz.CodeTrie{Metadata: metadata, Chunks: chunks}
-	hasher := sszlib.DefaultHasherPool.GetWithHash(sha3.NewLegacyKeccak256())
-	err := codeTrie.HashTreeRootWith(hasher)
+	root, err := codeTrie.HashTreeRoot()
 	if err != nil {
+		return common.Hash{}, err
+	}
+
+	return common.BytesToHash(root[:]), nil
+}
+
+func MerkleizeSSZKeccak(code []byte, chunkSize uint) (common.Hash, error) {
+	codeTrie, err := prepareSSZ(code, chunkSize)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	hasher := sszlib.DefaultHasherPool.GetWithHash(sha3.NewLegacyKeccak256())
+	if err := codeTrie.HashTreeRootWith(hasher); err != nil {
 		sszlib.DefaultHasherPool.Put(hasher)
 		return common.Hash{}, err
 	}
+
 	root, err := hasher.HashRoot()
 	sszlib.DefaultHasherPool.Put(hasher)
+
 	return common.BytesToHash(root[:]), err
+}
+
+func prepareSSZ(code []byte, chunkSize uint) (*ssz.CodeTrie, error) {
+	if chunkSize != 32 {
+		return nil, errors.New("MerkleizeSSZ only supports chunk size of 32")
+	}
+
+	rawChunks := Chunkify(code, 32)
+	chunks := make([]*ssz.Chunk, len(rawChunks))
+	for i, rc := range rawChunks {
+		code := rc.code
+		if len(code) < 32 {
+			code = make([]byte, 32)
+			copy(code[:len(rc.code)], rc.code)
+		}
+		chunks[i] = &ssz.Chunk{FIO: rc.fio, Code: code}
+	}
+
+	metadata := &ssz.Metadata{Version: 0, CodeHash: crypto.Keccak256(code), CodeLength: uint16(len(code))}
+	return &ssz.CodeTrie{Metadata: metadata, Chunks: chunks}, nil
 }
 
 func merkleize(code []byte, chunkSize uint, trie Trie) {

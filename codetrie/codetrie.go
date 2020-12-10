@@ -86,14 +86,14 @@ func MerkleizeSSZKeccak(code []byte, chunkSize uint) (common.Hash, error) {
 		return common.Hash{}, err
 	}
 
-	hasher := sszlib.DefaultHasherPool.GetWithHash(sha3.NewLegacyKeccak256())
+	hasher := sszlib.NewHasherWithHash(sha3.NewLegacyKeccak256())
 	if err := codeTrie.HashTreeRootWith(hasher); err != nil {
-		sszlib.DefaultHasherPool.Put(hasher)
+		hasher.Reset()
 		return common.Hash{}, err
 	}
 
 	root, err := hasher.HashRoot()
-	sszlib.DefaultHasherPool.Put(hasher)
+	hasher.Reset()
 
 	return common.BytesToHash(root[:]), err
 }

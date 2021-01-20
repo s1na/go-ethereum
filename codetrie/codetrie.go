@@ -66,6 +66,14 @@ func MerkleizeBinary(code []byte, chunkSize uint) (common.Hash, error) {
 	return common.BytesToHash(trie.Hash()), nil
 }
 
+func GetSSZTree(code []byte, chunkSize uint) (*sszlib.Node, error) {
+	codeTrie, err := prepareSSZ(code, chunkSize)
+	if err != nil {
+		return nil, err
+	}
+
+	return codeTrie.GetTree()
+}
 func MerkleizeSSZSha(code []byte, chunkSize uint) (common.Hash, error) {
 	codeTrie, err := prepareSSZ(code, chunkSize)
 	if err != nil {

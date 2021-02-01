@@ -64,6 +64,23 @@ func (c *Contract) TouchPC(pc int) error {
 	return nil
 }
 
+func (c *Contract) TouchRange(from, to int) error {
+	if from >= to {
+		return errors.New("Invalid range")
+	}
+	if to > len(c.code) {
+		return errors.New("PC to touch exceeds bytecode length")
+	}
+
+	fcid := from / 32
+	tcid := to / 32
+	for i := fcid; i < tcid+1; i++ {
+		c.touchedChunks[i] = true
+	}
+
+	return nil
+}
+
 func (c *Contract) Prove() (*sszlib.CompressedMultiproof, error) {
 	tree, err := GetSSZTree(c.code, 32)
 	if err != nil {

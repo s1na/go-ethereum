@@ -5,8 +5,41 @@ import (
 
 	sszlib "github.com/ferranbt/fastssz"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+type ContractBag struct {
+	contracts map[common.Hash]*Contract
+}
+
+func NewContractBag() *ContractBag {
+	return &ContractBag{
+		contracts: make(map[common.Hash]*Contract),
+	}
+}
+
+func (b *ContractBag) Get(codeHash common.Hash, code []byte) *Contract {
+	if c, ok := b.contracts[codeHash]; ok {
+		return c
+	}
+
+	c := NewContract(code)
+	b.contracts[codeHash] = c
+	return c
+}
+
+func (b *ContractBag) ProofSize() (int, error) {
+	size := 0
+	for _, v := range b.contracts {
+		s, err := v.ProofSize()
+		if err != nil {
+			return 0, err
+		}
+		size += s
+	}
+	return size, nil
+}
 
 type Contract struct {
 	code          []byte
@@ -54,6 +87,27 @@ func (c *Contract) Prove() (*sszlib.CompressedMultiproof, error) {
 	}
 
 	return p.Compress(), nil
+}
+
+func (c *Contract) ProofSize() (int, error) {
+	p, err := c.Prove()
+	if err != nil {
+		return 0, err
+	}
+
+	size := 0
+	// Interpret each index as a uint16
+	size += len(p.Indices) * 2
+	// 0 < level < 256, i.e. uint8
+	size += len(p.ZeroLevels) * 1
+	for _, v := range p.Hashes {
+		size += len(v)
+	}
+	for _, v := range p.Leaves {
+		size += len(v)
+	}
+
+	return size, nil
 }
 
 func serializeProof(p *sszlib.CompressedMultiproof) ([]byte, error) {

@@ -34,8 +34,9 @@ type Config struct {
 
 	JumpTable [256]*operation // EVM instruction table, automatically populated if unset
 
-	EWASMInterpreter string // External EWASM interpreter options
-	EVMInterpreter   string // External EVM interpreter options
+	EWASMInterpreter  string // External EWASM interpreter options
+	EVMInterpreter    string // External EVM interpreter options
+	CodeMerkleization bool   // Enable code merkleization data collection
 
 	ExtraEips []int // Additional EIPS that are to be enabled
 }
@@ -281,6 +282,9 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		if in.cfg.Debug {
 			in.cfg.Tracer.CaptureState(in.evm, pc, op, gasCopy, cost, mem, stack, returns, in.returnData, contract, in.evm.depth, err)
 			logged = true
+		}
+		if in.cfg.CodeMerkleization {
+			log.Info("Collection code merkleization data")
 		}
 
 		// execute the operation

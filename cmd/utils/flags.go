@@ -722,6 +722,10 @@ var (
 		Usage: "External EVM configuration (default = built-in interpreter)",
 		Value: "",
 	}
+	CodeMerkleizationFlag = cli.BoolFlag{
+		Name:  "codemerkleization",
+		Usage: `Enables code merkleization data collection -- Not to be used in prod`,
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1558,6 +1562,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 
 	if ctx.GlobalIsSet(EWASMInterpreterFlag.Name) {
 		cfg.EWASMInterpreter = ctx.GlobalString(EWASMInterpreterFlag.Name)
+	}
+
+	if ctx.GlobalIsSet(CodeMerkleizationFlag.Name) {
+		cfg.CodeMerkleization = ctx.GlobalBool(CodeMerkleizationFlag.Name)
 	}
 
 	if ctx.GlobalIsSet(EVMInterpreterFlag.Name) {

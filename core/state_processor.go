@@ -92,7 +92,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		return nil, nil, 0, err
 	}
 	defer cmFile.Close()
-	if _, err := cmFile.WriteString(fmt.Sprintf("%d,%d", block.NumberU64(), s)); err != nil {
+	if _, err := cmFile.WriteString(fmt.Sprintf("%d,%d\n", block.NumberU64(), s)); err != nil {
 		return nil, nil, 0, err
 	}
 

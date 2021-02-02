@@ -10,7 +10,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/codetrie/ssz"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/trie"
@@ -178,7 +177,7 @@ func setFIO(chunks []*Chunk) {
 		}
 
 		for j, op := range chunk.code {
-			opcode := vm.OpCode(op)
+			opcode := OpCode(op)
 			if opcode.IsPush() {
 				size := getPushSize(opcode)
 				if j+size >= chunkSize {
@@ -188,10 +187,6 @@ func setFIO(chunks []*Chunk) {
 			}
 		}
 	}
-}
-
-func getPushSize(opcode vm.OpCode) int {
-	return (int(opcode) - 0x60) + 1
 }
 
 func BE(val interface{}, length int) []byte {

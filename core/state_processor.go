@@ -17,6 +17,9 @@
 package core
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/ethereum/go-ethereum/codetrie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -79,11 +82,21 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
+
+	// Write code merkleization stats to file
 	s, err := bag.ProofSize()
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	log.Info("Contract bag proof", "size", s)
+	cmFile, err := os.OpenFile("./cm-result.csv", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	defer cmFile.Close()
+	if _, err := cmFile.WriteString(fmt.Sprintf("%d,%d", block.NumberU64(), s)); err != nil {
+		return nil, nil, 0, err
+	}
+
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles())
 

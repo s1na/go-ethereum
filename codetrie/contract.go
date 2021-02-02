@@ -54,7 +54,7 @@ func NewContract(code []byte) *Contract {
 }
 
 func (c *Contract) TouchPC(pc int) error {
-	if pc > len(c.code) {
+	if pc >= len(c.code) {
 		return errors.New("PC to touch exceeds bytecode length")
 	}
 
@@ -68,7 +68,7 @@ func (c *Contract) TouchRange(from, to int) error {
 	if from >= to {
 		return errors.New("Invalid range")
 	}
-	if to > len(c.code) {
+	if to >= len(c.code) {
 		return errors.New("PC to touch exceeds bytecode length")
 	}
 

@@ -20,6 +20,7 @@ import (
 	"hash"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/codetrie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
@@ -37,6 +38,7 @@ type Config struct {
 	EWASMInterpreter  string // External EWASM interpreter options
 	EVMInterpreter    string // External EVM interpreter options
 	CodeMerkleization bool   // Enable code merkleization data collection
+	ContractBag       *codetrie.ContractBag
 
 	ExtraEips []int // Additional EIPS that are to be enabled
 }
@@ -284,7 +286,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			logged = true
 		}
 		if in.cfg.CodeMerkleization {
-			log.Info("Collection code merkleization data")
+			c := in.cfg.ContractBag.Get(contract.CodeHash, contract.Code)
+			c.TouchPC(int(pc))
 		}
 
 		// execute the operation

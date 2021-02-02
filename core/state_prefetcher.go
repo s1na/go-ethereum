@@ -19,11 +19,13 @@ package core
 import (
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/codetrie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -55,6 +57,8 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 	)
 	// Iterate over and process the individual transactions
 	byzantium := p.config.IsByzantium(block.Number())
+	bag := codetrie.NewContractBag()
+	cfg.ContractBag = bag
 	for i, tx := range block.Transactions() {
 		// If block precaching was interrupted, abort
 		if interrupt != nil && atomic.LoadUint32(interrupt) == 1 {
@@ -70,6 +74,11 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 			statedb.IntermediateRoot(true)
 		}
 	}
+	s, err := bag.ProofSize()
+	if err != nil {
+		return
+	}
+	log.Info("Contract bag prefetcher proof", "size", s)
 	// If were post-byzantium, pre-load trie nodes for the final root hash
 	if byzantium {
 		statedb.IntermediateRoot(true)

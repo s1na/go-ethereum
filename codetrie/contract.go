@@ -24,7 +24,7 @@ func (b *ContractBag) Get(codeHash common.Hash, code []byte) *Contract {
 		return c
 	}
 
-	c := NewContract(code, codeHash)
+	c := NewContract(code)
 	b.contracts[codeHash] = c
 	return c
 }
@@ -50,22 +50,16 @@ func (b *ContractBag) CodeSize() int {
 	return size
 }
 
-func (b *ContractBag) GetContracts() map[common.Hash]*Contract {
-	return b.contracts
-}
-
-
 type Contract struct {
 	code          []byte
-	codeHash      common.Hash
 	chunks        []*Chunk
 	touchedChunks map[int]bool
 }
 
-func NewContract(code []byte, codeHash common.Hash) *Contract {
+func NewContract(code []byte) *Contract {
 	chunks := Chunkify(code, 32)
 	touchedChunks := make(map[int]bool)
-	return &Contract{code: code, codeHash: codeHash, chunks: chunks, touchedChunks: touchedChunks}
+	return &Contract{code: code, chunks: chunks, touchedChunks: touchedChunks}
 }
 
 func (c *Contract) TouchPC(pc int) error {

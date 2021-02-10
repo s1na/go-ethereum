@@ -19,6 +19,7 @@ package core
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/codetrie"
 	"github.com/ethereum/go-ethereum/common"
@@ -87,14 +88,28 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	cmFile, err := os.OpenFile("./cm-result.csv", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+
+	cmFile, err := os.OpenFile("./data/" + strconv.FormatUint(block.NumberU64(), 10) +  ".csv", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	defer cmFile.Close()
-	if _, err := cmFile.WriteString(fmt.Sprintf("%d,%d\n", block.NumberU64(), s)); err != nil {
+
+	contracts := bag.GetContracts()
+	if _, err := cmFile.WriteString(fmt.Sprintf("Block: %d, ProofSize: %d, TotalContractSize: %d, TotalContracts: %d\n", block.NumberU64(), s, bag.CodeSize(), len(contracts))); err != nil {
 		return nil, nil, 0, err
 	}
+	for k, v := range contracts {
+		cpf, err := v.ProofSize()
+		if err != nil {
+			return nil, nil, 0, err
+		}
+
+		if _, err := cmFile.WriteString(fmt.Sprintf("%s : %d\n", k.Hex(), v.CodeSize())); err != nil {
+			return nil, nil, 0, err
+		}
+	}
+
+	cmFile.Close()
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles())

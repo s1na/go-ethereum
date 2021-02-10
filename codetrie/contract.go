@@ -24,7 +24,7 @@ func (b *ContractBag) Get(codeHash common.Hash, code []byte) *Contract {
 		return c
 	}
 
-	c := NewContract(code)
+	c := NewContract(code, codeHash)
 	b.contracts[codeHash] = c
 	return c
 }
@@ -41,16 +41,31 @@ func (b *ContractBag) ProofSize() (int, error) {
 	return size, nil
 }
 
+func (b *ContractBag) CodeSize() int {
+	size := 0
+	for _, v :=range b.contracts {
+		s := len(v.code)
+		size += s
+	}
+	return size
+}
+
+func (b *ContractBag) GetContracts() map[common.Hash]*Contract {
+	return b.contracts
+}
+
+
 type Contract struct {
 	code          []byte
+	codeHash      common.Hash
 	chunks        []*Chunk
 	touchedChunks map[int]bool
 }
 
-func NewContract(code []byte) *Contract {
+func NewContract(code []byte, codeHash common.Hash) *Contract {
 	chunks := Chunkify(code, 32)
 	touchedChunks := make(map[int]bool)
-	return &Contract{code: code, chunks: chunks, touchedChunks: touchedChunks}
+	return &Contract{code: code, codeHash: codeHash, chunks: chunks, touchedChunks: touchedChunks}
 }
 
 func (c *Contract) TouchPC(pc int) error {
@@ -125,6 +140,10 @@ func (c *Contract) ProofSize() (int, error) {
 	}
 
 	return size, nil
+}
+
+func (c *Contract) CodeSize() int {
+	return len(c.code)
 }
 
 func serializeProof(p *sszlib.CompressedMultiproof) ([]byte, error) {

@@ -32,7 +32,7 @@ func (b *ContractBag) Get(codeHash common.Hash, code []byte) *Contract {
 func (b *ContractBag) ProofSize() (int, error) {
 	size := 0
 	for _, v := range b.contracts {
-		s, err := v.ProofSize()
+		s, err := v.ProofSize(false)
 		if err != nil {
 			return 0, err
 		}
@@ -60,12 +60,16 @@ func (b *ContractBag) Stats() (*CMStats, error) {
 	stats := &CMStats{}
 	for _, v := range b.contracts {
 		stats.CodeSize += v.CodeSize()
-		ps, err := v.ProofSize()
+		ps, err := v.ProofSize(false)
 		if err != nil {
 			return nil, err
 		}
 		stats.ProofSize += ps
-
+		nm, err := v.ProofSize(true)
+		if err != nil {
+			return nil, err
+		}
+		stats.ProofSizeNoMD += nm
 	}
 	return stats, nil
 }

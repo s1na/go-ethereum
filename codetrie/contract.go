@@ -32,7 +32,7 @@ func (b *ContractBag) Get(codeHash common.Hash, code []byte) *Contract {
 func (b *ContractBag) ProofSize() (int, error) {
 	size := 0
 	for _, v := range b.contracts {
-		s, err := v.ProofSize(false)
+		s, err := v.ProofSize()
 		if err != nil {
 			return 0, err
 		}
@@ -51,33 +51,23 @@ func (b *ContractBag) CodeSize() int {
 }
 
 type CMStats struct {
-	NumContracts  int
-	ProofSize     int
-	ProofSizeNoMD int
-	CodeSize      int
-	ProofStats    *ProofStats
+	NumContracts int
+	ProofSize    int
+	CodeSize     int
+	ProofStats   *ProofStats
 }
 
 func (b *ContractBag) Stats() (*CMStats, error) {
-	stats := &CMStats{NumContracts: len(b.contracts)}
+	stats := &CMStats{NumContracts: len(b.contracts), ProofStats: &ProofStats{}}
 	for _, v := range b.contracts {
 		stats.CodeSize += v.CodeSize()
-		ps, err := v.ProofSize(false)
+		ps, err := v.ProofStats()
 		if err != nil {
 			return nil, err
 		}
-		stats.ProofSize += ps
-		nm, err := v.ProofSize(true)
-		if err != nil {
-			return nil, err
-		}
-		stats.ProofSizeNoMD += nm
-		pstats, err := v.ProofStats(false)
-		if err != nil {
-			return nil, err
-		}
-		stats.ProofStats = pstats
+		stats.ProofStats.Add(ps)
 	}
+	stats.ProofSize = stats.ProofStats.Sum()
 	return stats, nil
 }
 
@@ -121,17 +111,14 @@ func (c *Contract) TouchRange(from, to int) error {
 	return nil
 }
 
-func (c *Contract) Prove(noMD bool) (*sszlib.CompressedMultiproof, error) {
+func (c *Contract) Prove() (*sszlib.CompressedMultiproof, error) {
 	tree, err := GetSSZTree(c.code, 32)
 	if err != nil {
 		return nil, err
 	}
 
 	// ChunksLen and metadata fields
-	mdIndices := []int{}
-	if !noMD {
-		mdIndices = []int{7, 8, 9, 10}
-	}
+	mdIndices := []int{7, 8, 9, 10}
 	chunkIndices := make([]int, 0, len(c.touchedChunks)*2)
 	for k := range c.touchedChunks {
 		// 6144 is global index for first chunk's node
@@ -149,8 +136,8 @@ func (c *Contract) Prove(noMD bool) (*sszlib.CompressedMultiproof, error) {
 	return p.Compress(), nil
 }
 
-func (c *Contract) ProofSize(noMD bool) (int, error) {
-	p, err := c.Prove(noMD)
+func (c *Contract) ProofSize() (int, error) {
+	p, err := c.Prove()
 	if err != nil {
 		return 0, err
 	}
@@ -177,14 +164,24 @@ type ProofStats struct {
 	Leaves     int
 }
 
-func (c *Contract) ProofStats(noMD bool) (*ProofStats, error) {
-	p, err := c.Prove(noMD)
+func (ps *ProofStats) Add(o *ProofStats) {
+	ps.Indices += o.Indices
+	ps.ZeroLevels += o.ZeroLevels
+	ps.Hashes += o.Hashes
+	ps.Leaves += o.Leaves
+}
+
+func (ps *ProofStats) Sum() int {
+	return ps.Indices + ps.ZeroLevels + ps.Hashes + ps.Leaves
+}
+
+func (c *Contract) ProofStats() (*ProofStats, error) {
+	p, err := c.Prove()
 	if err != nil {
 		return nil, err
 	}
-	stats := &ProofStats{}
-	stats.Indices = len(p.Indices) * 2
-	stats.ZeroLevels = len(p.ZeroLevels) * 1
+
+	stats := &ProofStats{Indices: len(p.Indices) * 2, ZeroLevels: len(p.ZeroLevels) * 1}
 	for _, v := range p.Hashes {
 		stats.Hashes += len(v)
 	}

@@ -83,7 +83,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 
 	// Write code merkleization stats to file
-	s, err := bag.ProofSize()
+	stats, err := bag.Stats()
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -94,7 +94,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 
 	defer cmFile.Close()
-	if _, err := cmFile.WriteString(fmt.Sprintf("%d, %d, %d\n", block.NumberU64(), s, bag.CodeSize())); err != nil {
+	if _, err := cmFile.WriteString(fmt.Sprintf("%d, %d, %d, %d\n", block.NumberU64(), stats.ProofSize, stats.ProofSizeNoMD, stats.CodeSize)); err != nil {
 		return nil, nil, 0, err
 	}
 

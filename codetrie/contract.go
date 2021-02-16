@@ -43,11 +43,31 @@ func (b *ContractBag) ProofSize() (int, error) {
 
 func (b *ContractBag) CodeSize() int {
 	size := 0
-	for _, v :=range b.contracts {
+	for _, v := range b.contracts {
 		s := len(v.code)
 		size += s
 	}
 	return size
+}
+
+type CMStats struct {
+	ProofSize     int
+	ProofSizeNoMD int
+	CodeSize      int
+}
+
+func (b *ContractBag) Stats() (*CMStats, error) {
+	stats := &CMStats{}
+	for _, v := range b.contracts {
+		stats.CodeSize += v.CodeSize()
+		ps, err := v.ProofSize()
+		if err != nil {
+			return nil, err
+		}
+		stats.ProofSize += ps
+
+	}
+	return stats, nil
 }
 
 type Contract struct {
@@ -90,14 +110,17 @@ func (c *Contract) TouchRange(from, to int) error {
 	return nil
 }
 
-func (c *Contract) Prove() (*sszlib.CompressedMultiproof, error) {
+func (c *Contract) Prove(noMD bool) (*sszlib.CompressedMultiproof, error) {
 	tree, err := GetSSZTree(c.code, 32)
 	if err != nil {
 		return nil, err
 	}
 
 	// ChunksLen and metadata fields
-	mdIndices := []int{7, 8, 9, 10}
+	mdIndices := []int{}
+	if !noMD {
+		mdIndices = []int{7, 8, 9, 10}
+	}
 	chunkIndices := make([]int, 0, len(c.touchedChunks)*2)
 	for k := range c.touchedChunks {
 		// 6144 is global index for first chunk's node
@@ -115,8 +138,8 @@ func (c *Contract) Prove() (*sszlib.CompressedMultiproof, error) {
 	return p.Compress(), nil
 }
 
-func (c *Contract) ProofSize() (int, error) {
-	p, err := c.Prove()
+func (c *Contract) ProofSize(noMD bool) (int, error) {
+	p, err := c.Prove(noMD)
 	if err != nil {
 		return 0, err
 	}

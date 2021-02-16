@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/codetrie"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -288,6 +289,19 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		if in.cfg.CodeMerkleization && in.cfg.ContractBag != nil {
 			c := in.cfg.ContractBag.Get(contract.CodeHash, contract.Code)
 			c.TouchPC(int(pc))
+			if op == CODECOPY {
+				codeOffset := int(callContext.stack.Back(1).Uint64())
+				length := int(callContext.stack.Back(2).Uint64())
+				c.TouchRange(codeOffset, codeOffset+length)
+			} else if op == EXTCODECOPY {
+				addr := common.Address(callContext.stack.Back(0).Bytes20())
+				codeOffset := int(callContext.stack.Back(2).Uint64())
+				length := int(callContext.stack.Back(3).Uint64())
+				code := in.evm.StateDB.GetCode(addr)
+				codeHash := crypto.Keccak256Hash(code)
+				c2 := in.cfg.ContractBag.Get(codeHash, code)
+				c2.TouchRange(codeOffset, codeOffset+length)
+			}
 		}
 
 		// execute the operation

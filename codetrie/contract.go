@@ -51,13 +51,15 @@ func (b *ContractBag) CodeSize() int {
 }
 
 type CMStats struct {
+	NumContracts  int
 	ProofSize     int
 	ProofSizeNoMD int
 	CodeSize      int
+	ProofStats    *ProofStats
 }
 
 func (b *ContractBag) Stats() (*CMStats, error) {
-	stats := &CMStats{}
+	stats := &CMStats{NumContracts: len(b.contracts)}
 	for _, v := range b.contracts {
 		stats.CodeSize += v.CodeSize()
 		ps, err := v.ProofSize(false)
@@ -70,6 +72,11 @@ func (b *ContractBag) Stats() (*CMStats, error) {
 			return nil, err
 		}
 		stats.ProofSizeNoMD += nm
+		pstats, err := v.ProofStats(false)
+		if err != nil {
+			return nil, err
+		}
+		stats.ProofStats = pstats
 	}
 	return stats, nil
 }
@@ -161,6 +168,31 @@ func (c *Contract) ProofSize(noMD bool) (int, error) {
 	}
 
 	return size, nil
+}
+
+type ProofStats struct {
+	Indices    int
+	ZeroLevels int
+	Hashes     int
+	Leaves     int
+}
+
+func (c *Contract) ProofStats(noMD bool) (*ProofStats, error) {
+	p, err := c.Prove(noMD)
+	if err != nil {
+		return nil, err
+	}
+	stats := &ProofStats{}
+	stats.Indices = len(p.Indices) * 2
+	stats.ZeroLevels = len(p.ZeroLevels) * 1
+	for _, v := range p.Hashes {
+		stats.Hashes += len(v)
+	}
+	for _, v := range p.Leaves {
+		stats.Leaves += len(v)
+	}
+
+	return stats, nil
 }
 
 func (c *Contract) CodeSize() int {

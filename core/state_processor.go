@@ -94,8 +94,10 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 
 	defer cmFile.Close()
-	if _, err := cmFile.WriteString(fmt.Sprintf("%d, proof: %d, noMD: %d, totalCode: %d, indices: %d, zero: %d, hashes: %d, leaves: %d\n", block.NumberU64(), stats.ProofSize, stats.ProofSizeNoMD, stats.CodeSize, stats.ProofStats.Indices, stats.ProofStats.ZeroLevels, stats.ProofStats.Hashes, stats.ProofStats.Leaves)); err != nil {
-		return nil, nil, 0, err
+	if stats.NumContracts > 0 {
+		if _, err := cmFile.WriteString(fmt.Sprintf("%d, contracts: %d, proof: %d, totalCode: %d, indices: %d, zero: %d, hashes: %d, leaves: %d, touchedChunks: %v\n", block.NumberU64(), stats.NumContracts, stats.ProofSize, stats.CodeSize, stats.ProofStats.Indices, stats.ProofStats.ZeroLevels, stats.ProofStats.Hashes, stats.ProofStats.Leaves, stats.TouchedChunks)); err != nil {
+			return nil, nil, 0, err
+		}
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)

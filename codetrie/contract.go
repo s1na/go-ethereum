@@ -51,21 +51,27 @@ func (b *ContractBag) CodeSize() int {
 }
 
 type CMStats struct {
-	NumContracts int
-	ProofSize    int
-	CodeSize     int
-	ProofStats   *ProofStats
+	NumContracts  int
+	ProofSize     int
+	CodeSize      int
+	ProofStats    *ProofStats
+	TouchedChunks []int
 }
 
 func (b *ContractBag) Stats() (*CMStats, error) {
-	stats := &CMStats{NumContracts: len(b.contracts), ProofStats: &ProofStats{}}
-	for _, v := range b.contracts {
+	stats := &CMStats{
+		NumContracts:  len(b.contracts),
+		ProofStats:    &ProofStats{},
+		TouchedChunks: make([]int, len(b.contracts)),
+	}
+	for i, v := range b.contracts {
 		stats.CodeSize += v.CodeSize()
 		ps, err := v.ProofStats()
 		if err != nil {
 			return nil, err
 		}
 		stats.ProofStats.Add(ps)
+		TouchedChunks[i] = ps.TouchedChunks
 	}
 	stats.ProofSize = stats.ProofStats.Sum()
 	return stats, nil
@@ -158,10 +164,11 @@ func (c *Contract) ProofSize() (int, error) {
 }
 
 type ProofStats struct {
-	Indices    int
-	ZeroLevels int
-	Hashes     int
-	Leaves     int
+	Indices       int
+	ZeroLevels    int
+	Hashes        int
+	Leaves        int
+	TouchedChunks int
 }
 
 func (ps *ProofStats) Add(o *ProofStats) {
@@ -169,6 +176,7 @@ func (ps *ProofStats) Add(o *ProofStats) {
 	ps.ZeroLevels += o.ZeroLevels
 	ps.Hashes += o.Hashes
 	ps.Leaves += o.Leaves
+	ps.TouchedChunks += o.TouchedChunks
 }
 
 func (ps *ProofStats) Sum() int {
@@ -181,7 +189,7 @@ func (c *Contract) ProofStats() (*ProofStats, error) {
 		return nil, err
 	}
 
-	stats := &ProofStats{Indices: len(p.Indices) * 2, ZeroLevels: len(p.ZeroLevels) * 1}
+	stats := &ProofStats{Indices: len(p.Indices) * 2, ZeroLevels: len(p.ZeroLevels) * 1, TouchedChunks: len(c.touchedChunks)}
 	for _, v := range p.Hashes {
 		stats.Hashes += len(v)
 	}

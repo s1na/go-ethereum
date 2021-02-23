@@ -193,8 +193,15 @@ func (c *Contract) ProofStats() (*ProofStats, error) {
 	for _, v := range p.Hashes {
 		stats.Hashes += len(v)
 	}
-	for _, v := range p.Leaves {
-		stats.Leaves += len(v)
+	for i, v := range p.Leaves {
+		in := p.Indices[i]
+		// TODO: Hack as a temporary substitute for optimizing proof
+		// to encode FIO as u8 instead of bytes32.
+		if isIndexFIO(in) {
+			stats.Leaves += 1
+		} else {
+			stats.Leaves += len(v)
+		}
 	}
 
 	return stats, nil
@@ -206,4 +213,8 @@ func (c *Contract) CodeSize() int {
 
 func serializeProof(p *sszlib.CompressedMultiproof) ([]byte, error) {
 	return rlp.EncodeToBytes(p)
+}
+
+func isIndexFIO(i int) bool {
+	return i >= 12288 && i%2 == 0
 }

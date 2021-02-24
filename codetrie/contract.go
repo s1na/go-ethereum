@@ -2,6 +2,7 @@ package codetrie
 
 import (
 	"errors"
+	"sort"
 
 	sszlib "github.com/ferranbt/fastssz"
 
@@ -125,8 +126,10 @@ func (c *Contract) Prove() (*sszlib.CompressedMultiproof, error) {
 
 	// ChunksLen and metadata fields
 	mdIndices := []int{7, 8, 9, 10}
-	chunkIndices := make([]int, 0, len(c.touchedChunks)*2)
-	for k := range c.touchedChunks {
+
+	touchedChunks := c.sortedTouchedChunks()
+	chunkIndices := make([]int, 0, len(touchedChunks)*2)
+	for k := range touchedChunks {
 		// 6144 is global index for first chunk's node
 		// Each chunk node has two children: FIO, code
 		chunkIdx := 6144 + k
@@ -161,6 +164,15 @@ func (c *Contract) ProofSize() (int, error) {
 	}
 
 	return size, nil
+}
+
+func (c *Contract) sortedTouchedChunks() []int {
+	touched := make([]int, 0, len(c.touchedChunks))
+	for k := range c.touchedChunks {
+		touched = append(touched, k)
+	}
+	sort.Ints(touched)
+	return touched
 }
 
 type ProofStats struct {

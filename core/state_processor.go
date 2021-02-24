@@ -95,7 +95,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 	defer cmFile.Close()
 	if stats.NumContracts > 0 {
-		if _, err := cmFile.WriteString(fmt.Sprintf("%d, contracts: %d, proof: %d, totalCode: %d, indices: %d, zero: %d, hashes: %d, leaves: %d, touchedChunks: %v\n", block.NumberU64(), stats.NumContracts, stats.ProofSize, stats.CodeSize, stats.ProofStats.Indices, stats.ProofStats.ZeroLevels, stats.ProofStats.Hashes, stats.ProofStats.Leaves, stats.TouchedChunks)); err != nil {
+		if _, err := cmFile.WriteString(fmt.Sprintf("%d, contracts: %d, proof: %d, totalCode: %d, rlpSize: %d indices: %d, zero: %d, hashes: %d, leaves: %d, touchedChunks: %v\n", block.NumberU64(), stats.NumContracts, stats.ProofSize, stats.CodeSize, stats.ProofStats.RLPSize, stats.ProofStats.Indices, stats.ProofStats.ZeroLevels, stats.ProofStats.Hashes, stats.ProofStats.Leaves, stats.TouchedChunks)); err != nil {
 			return nil, nil, 0, err
 		}
 	}

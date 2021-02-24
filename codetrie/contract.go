@@ -176,6 +176,7 @@ func (c *Contract) sortedTouchedChunks() []int {
 }
 
 type ProofStats struct {
+	RLPSize       int
 	Indices       int
 	ZeroLevels    int
 	Hashes        int
@@ -184,6 +185,7 @@ type ProofStats struct {
 }
 
 func (ps *ProofStats) Add(o *ProofStats) {
+	ps.RLPSize += o.RLPSize
 	ps.Indices += o.Indices
 	ps.ZeroLevels += o.ZeroLevels
 	ps.Hashes += o.Hashes
@@ -216,6 +218,12 @@ func (c *Contract) ProofStats() (*ProofStats, error) {
 		}
 	}
 
+	rlpProof, err := serializeProof(p)
+	if err != nil {
+		return nil, err
+	}
+	stats.RLPSize = len(rlpProof)
+
 	return stats, nil
 }
 
@@ -223,8 +231,21 @@ func (c *Contract) CodeSize() int {
 	return len(c.code)
 }
 
+type SerializableMultiproof struct {
+	Indices    []uint
+	Leaves     [][]byte
+	Hashes     [][]byte
+	ZeroLevels []uint
+}
+
 func serializeProof(p *sszlib.CompressedMultiproof) ([]byte, error) {
-	return rlp.EncodeToBytes(p)
+	serializable := &SerializableMultiproof{
+		Indices:    make([]uint, len(p.Indices)),
+		ZeroLevels: make([]uint, len(p.ZeroLevels)),
+	}
+	serializable.Leaves = p.Leaves
+	serializable.Hashes = p.Hashes
+	return rlp.EncodeToBytes(serializable)
 }
 
 func isIndexFIO(i int) bool {

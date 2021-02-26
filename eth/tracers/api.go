@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/native"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
@@ -735,15 +736,22 @@ func (api *API) traceTx(ctx context.Context, message core.Message, vmctx vm.Bloc
 				return nil, err
 			}
 		}
-		// Constuct the JavaScript tracer to execute with
-		if tracer, err = New(*config.Tracer, txContext); err != nil {
-			return nil, err
+
+		if *config.Tracer == "native_unigram" {
+			tracer = native.NewUnigram()
+		} else {
+			// Constuct the JavaScript tracer to execute with
+			if tracer, err = New(*config.Tracer, txContext); err != nil {
+				return nil, err
+			}
 		}
 		// Handle timeouts and RPC cancellations
 		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
 		go func() {
 			<-deadlineCtx.Done()
-			tracer.(*Tracer).Stop(errors.New("execution timeout"))
+			if *config.Tracer != "native_unigram" {
+				tracer.(*Tracer).Stop(errors.New("execution timeout"))
+			}
 		}()
 		defer cancel()
 
@@ -777,6 +785,8 @@ func (api *API) traceTx(ctx context.Context, message core.Message, vmctx vm.Bloc
 		}, nil
 
 	case *Tracer:
+		return tracer.GetResult()
+	case *native.UnigramTracer:
 		return tracer.GetResult()
 
 	default:

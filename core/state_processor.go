@@ -18,6 +18,8 @@ package core
 
 import (
 	"fmt"
+	//"strconv"
+	//"encoding/json"
 	"os"
 
 	"github.com/ethereum/go-ethereum/codetrie"
@@ -87,6 +89,25 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if err != nil {
 		return nil, nil, 0, err
 	}
+
+	/*
+	if stats.NumContracts > 0 {
+		pFile, err := os.OpenFile("./data/" + strconv.FormatUint(block.NumberU64(), 10) + ".json", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+
+		j, err := json.Marshal(stats.ProofStats.Proofs)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+
+		defer pFile.Close()
+		if _, err := pFile.WriteString(string(j)); err != nil {
+			return nil, nil, 0, err
+		}
+	}
+	*/
 
 	cmFile, err := os.OpenFile("./cm-result.csv", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {

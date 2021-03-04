@@ -12,8 +12,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-type StepFunc func(op vm.OpCode)
-type ResultFunc func() (json.RawMessage, error)
+type StepFunc = func(op vm.OpCode)
+type ResultFunc = func() (json.RawMessage, error)
 
 type PluginTracer struct {
 	plugin *plugin.Plugin

@@ -2,6 +2,7 @@ package tracers
 
 import (
 	"encoding/json"
+	"errors"
 	"math/big"
 	"plugin"
 	"time"
@@ -11,8 +12,13 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+type StepFunc func(op vm.OpCode)
+type ResultFunc func() (json.RawMessage, error)
+
 type PluginTracer struct {
 	plugin *plugin.Plugin
+	step   StepFunc
+	result ResultFunc
 }
 
 func NewPluginTracer(path string) (*PluginTracer, error) {
@@ -20,7 +26,23 @@ func NewPluginTracer(path string) (*PluginTracer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &PluginTracer{plugin: p}, nil
+	stepSym, err := p.Lookup("Step")
+	if err != nil {
+		return nil, err
+	}
+	step, ok := stepSym.(StepFunc)
+	if !ok {
+		return nil, errors.New("plugin has invalid step signature")
+	}
+	resultSym, err := p.Lookup("Result")
+	if err != nil {
+		return nil, err
+	}
+	result, ok := resultSym.(ResultFunc)
+	if !ok {
+		return nil, errors.New("plugin has invalid result signature")
+	}
+	return &PluginTracer{plugin: p, step: step, result: result}, nil
 }
 
 func (t *PluginTracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) error {
@@ -29,6 +51,7 @@ func (t *PluginTracer) CaptureStart(from common.Address, to common.Address, crea
 }
 
 func (t *PluginTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, rStack *vm.ReturnStack, rData []byte, contract *vm.Contract, depth int, err error) error {
+	t.step(op)
 	return nil
 }
 
@@ -41,10 +64,5 @@ func (t *PluginTracer) CaptureEnd(output []byte, gasUsed uint64, t_ time.Duratio
 }
 
 func (t *PluginTracer) GetResult() (json.RawMessage, error) {
-	sym, err := t.plugin.Lookup("Result")
-	if err != nil {
-		return nil, err
-	}
-	res := sym.(func() json.RawMessage)()
-	return res, nil
+	return t.result()
 }

@@ -735,15 +735,23 @@ func (api *API) traceTx(ctx context.Context, message core.Message, vmctx vm.Bloc
 				return nil, err
 			}
 		}
-		// Constuct the JavaScript tracer to execute with
-		if tracer, err = New(*config.Tracer, txContext); err != nil {
-			return nil, err
+		if *config.Tracer == "pluginTracer" {
+			if tracer, err = NewPluginTracer("plugins/unigram.so"); err != nil {
+				return nil, err
+			}
+		} else {
+			// Constuct the JavaScript tracer to execute with
+			if tracer, err = New(*config.Tracer, txContext); err != nil {
+				return nil, err
+			}
 		}
 		// Handle timeouts and RPC cancellations
 		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
 		go func() {
 			<-deadlineCtx.Done()
-			tracer.(*Tracer).Stop(errors.New("execution timeout"))
+			if *config.Tracer != "pluginTracer" {
+				tracer.(*Tracer).Stop(errors.New("execution timeout"))
+			}
 		}()
 		defer cancel()
 
@@ -778,7 +786,8 @@ func (api *API) traceTx(ctx context.Context, message core.Message, vmctx vm.Bloc
 
 	case *Tracer:
 		return tracer.GetResult()
-
+	case *PluginTracer:
+		return tracer.GetResult()
 	default:
 		panic(fmt.Sprintf("bad tracer type %T", tracer))
 	}

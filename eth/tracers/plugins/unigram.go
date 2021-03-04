@@ -1,5 +1,9 @@
 package main
 
-func GetResult() []byte {
-	return []byte("Hello")
+import (
+	"encoding/json"
+)
+
+func Result() json.RawMessage {
+	return json.RawMessage(`{"foo": "bar"}`)
 }

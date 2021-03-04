@@ -1,6 +1,7 @@
 package tracers
 
 import (
+	"encoding/json"
 	"math/big"
 	"plugin"
 	"time"
@@ -39,11 +40,11 @@ func (t *PluginTracer) CaptureEnd(output []byte, gasUsed uint64, t_ time.Duratio
 	return nil
 }
 
-func (t *PluginTracer) GetResult() ([]byte, error) {
-	sym, err := t.plugin.Lookup("GetResult")
+func (t *PluginTracer) GetResult() (json.RawMessage, error) {
+	sym, err := t.plugin.Lookup("Result")
 	if err != nil {
 		return nil, err
 	}
-	res := sym.(func() []byte)()
+	res := sym.(func() json.RawMessage)()
 	return res, nil
 }

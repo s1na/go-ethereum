@@ -160,6 +160,7 @@ type TraceConfig struct {
 	Tracer  *string
 	Timeout *string
 	Reexec  *uint64
+	Plugin  *string // Only valid for the plugin tracer
 }
 
 // StdTraceConfig holds extra parameters to standard-json trace functions.
@@ -736,7 +737,10 @@ func (api *API) traceTx(ctx context.Context, message core.Message, vmctx vm.Bloc
 			}
 		}
 		if *config.Tracer == "pluginTracer" {
-			if tracer, err = NewPluginTracer("plugins/unigram.so"); err != nil {
+			if *config.Plugin == "" {
+				return nil, errors.New("path to plugin not provided")
+			}
+			if tracer, err = NewPluginTracer(*config.Plugin); err != nil {
 				return nil, err
 			}
 		} else {

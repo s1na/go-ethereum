@@ -286,7 +286,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			in.cfg.Tracer.CaptureState(in.evm, pc, op, gasCopy, cost, mem, stack, returns, in.returnData, contract, in.evm.depth, err)
 			logged = true
 		}
-		if in.cfg.CodeMerkleization && in.cfg.ContractBag != nil {
+		if in.cfg.CodeMerkleization && in.cfg.ContractBag != nil && input != nil { // assumes input == nil when creating contracts
 			c := in.cfg.ContractBag.Get(contract.CodeHash, contract.Code)
 			c.TouchPC(int(pc))
 			if op == CODECOPY {

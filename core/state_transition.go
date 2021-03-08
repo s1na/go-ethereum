@@ -256,8 +256,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if contractCreation {
 		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
 	} else {
+		// TODO: remove, only to make sure calling contract doesnt have nil input
+		// as opposed to contract creation
 		if st.data == nil {
-			errors.New("data == nil when Calling contract")
+			return nil, errors.New("data == nil when Calling contract")
 		}
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)

@@ -182,7 +182,6 @@ type ProofStats struct {
 	Hashes        int
 	Leaves        int
 	TouchedChunks int
-	Proofs        []SerializableMultiproof
 }
 
 func (ps *ProofStats) Add(o *ProofStats) {
@@ -192,7 +191,6 @@ func (ps *ProofStats) Add(o *ProofStats) {
 	ps.Hashes += o.Hashes
 	ps.Leaves += o.Leaves
 	ps.TouchedChunks += o.TouchedChunks
-	ps.Proofs = append(ps.Proofs, o.Proofs[0])
 }
 
 func (ps *ProofStats) Sum() int {
@@ -226,9 +224,6 @@ func (c *Contract) ProofStats() (*ProofStats, error) {
 		return nil, err
 	}
 	stats.RLPSize = len(rlpProof)
-	stats.Proofs = make([]SerializableMultiproof, 1)
-
-	stats.Proofs[0] = sp
 
 	return stats, nil
 }
@@ -251,7 +246,6 @@ func copyElements(source []int) []uint16 {
 	}
 	return result
 }
-
 
 func getSerializableProof(p *sszlib.CompressedMultiproof) SerializableMultiproof {
 	serializable := SerializableMultiproof{

@@ -182,6 +182,7 @@ type ProofStats struct {
 	Hashes        int
 	Leaves        int
 	TouchedChunks int
+	Proofs        []SerializableMultiproof
 }
 
 func (ps *ProofStats) Add(o *ProofStats) {
@@ -191,6 +192,7 @@ func (ps *ProofStats) Add(o *ProofStats) {
 	ps.Hashes += o.Hashes
 	ps.Leaves += o.Leaves
 	ps.TouchedChunks += o.TouchedChunks
+	ps.Proofs = append(ps.Proofs, o.Proofs[0])
 }
 
 func (ps *ProofStats) Sum() int {
@@ -218,11 +220,15 @@ func (c *Contract) ProofStats() (*ProofStats, error) {
 		}
 	}
 
-	rlpProof, err := serializeProof(p)
+	sp := getSerializableProof(p)
+	rlpProof, err := serializeProof(sp)
 	if err != nil {
 		return nil, err
 	}
 	stats.RLPSize = len(rlpProof)
+	stats.Proofs = make([]SerializableMultiproof, 1)
+
+	stats.Proofs[0] = sp
 
 	return stats, nil
 }
@@ -232,20 +238,50 @@ func (c *Contract) CodeSize() int {
 }
 
 type SerializableMultiproof struct {
-	Indices    []uint
+	Indices    []uint16
 	Leaves     [][]byte
 	Hashes     [][]byte
-	ZeroLevels []uint
+	ZeroLevels []uint16
 }
 
-func serializeProof(p *sszlib.CompressedMultiproof) ([]byte, error) {
-	serializable := &SerializableMultiproof{
-		Indices:    make([]uint, len(p.Indices)),
-		ZeroLevels: make([]uint, len(p.ZeroLevels)),
+func copyElements(source []int) []uint16 {
+	result := make([]uint16, len(source))
+	for i, v := range source {
+		result[i] = uint16(v)
 	}
-	serializable.Leaves = p.Leaves
+	return result
+}
+
+
+func getSerializableProof(p *sszlib.CompressedMultiproof) SerializableMultiproof {
+	serializable := SerializableMultiproof{
+		Indices:    make([]uint16, len(p.Indices)),
+		ZeroLevels: make([]uint16, len(p.ZeroLevels)),
+	}
 	serializable.Hashes = p.Hashes
-	return rlp.EncodeToBytes(serializable)
+	serializable.Leaves = make([][]byte, len(p.Leaves))
+	for i, v := range p.Leaves {
+		in := p.Indices[i]
+		if isIndexFIO(in) {
+			serializable.Leaves[i] = v[0:1]
+		} else {
+			serializable.Leaves[i] = v
+		}
+	}
+
+	serializable.Indices = copyElements(p.Indices)
+	serializable.ZeroLevels = copyElements(p.ZeroLevels)
+
+	return serializable
+
+}
+
+func serializeProof(s SerializableMultiproof) ([]byte, error) {
+	serialized, err := rlp.EncodeToBytes(s)
+	if err != nil {
+		return nil, err
+	}
+	return serialized, err
 }
 
 func isIndexFIO(i int) bool {

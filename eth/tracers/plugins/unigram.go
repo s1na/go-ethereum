@@ -6,19 +6,23 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-var hist map[vm.OpCode]int
-
-func init() {
-	hist = make(map[vm.OpCode]int)
+type Tracer struct {
+	hist map[vm.OpCode]int
 }
 
-func Step(op vm.OpCode) {
-	if _, ok := hist[op]; !ok {
-		hist[op] = 0
+func New() *Tracer {
+	return &Tracer{
+		hist: make(map[vm.OpCode]int),
 	}
-	hist[op]++
 }
 
-func Result() (json.RawMessage, error) {
-	return json.Marshal(hist)
+func (t *Tracer) Step(op vm.OpCode) {
+	if _, ok := t.hist[op]; !ok {
+		t.hist[op] = 0
+	}
+	t.hist[op]++
+}
+
+func (t *Tracer) Result() (json.RawMessage, error) {
+	return json.Marshal(t.hist)
 }

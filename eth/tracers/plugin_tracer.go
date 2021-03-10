@@ -12,16 +12,16 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-type NewFunc = func() Plugin
+type NewFunc = func() PluginAPI
 
-type Plugin interface {
+type PluginAPI interface {
 	Step(op vm.OpCode)
 	Result() (json.RawMessage, error)
 }
 
 type PluginTracer struct {
 	plugin *plugin.Plugin
-	tracer Plugin
+	tracer PluginAPI
 }
 
 func NewPluginTracer(path string) (*PluginTracer, error) {

@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	sszlib "github.com/ferranbt/fastssz"
+	"github.com/golang/snappy"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -223,7 +224,8 @@ func (c *Contract) ProofStats() (*ProofStats, error) {
 	if err != nil {
 		return nil, err
 	}
-	stats.RLPSize = len(rlpProof)
+	compressedRLP := snappy.Encode(nil, rlpProof)
+	stats.RLPSize = len(compressedRLP)
 
 	return stats, nil
 }

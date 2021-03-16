@@ -178,6 +178,7 @@ func (c *Contract) sortedTouchedChunks() []int {
 
 type ProofStats struct {
 	RLPSize       int
+	UnRLPSize     int
 	SnappySize    int
 	Indices       int
 	ZeroLevels    int
@@ -188,6 +189,7 @@ type ProofStats struct {
 
 func (ps *ProofStats) Add(o *ProofStats) {
 	ps.RLPSize += o.RLPSize
+	ps.UnRLPSize += o.UnRLPSize
 	ps.SnappySize += o.SnappySize
 	ps.Indices += o.Indices
 	ps.ZeroLevels += o.ZeroLevels
@@ -227,8 +229,16 @@ func (c *Contract) ProofStats() (*ProofStats, error) {
 		return nil, err
 	}
 	stats.RLPSize = len(rlpProof)
-	compressedRLP := snappy.Encode(nil, rlpProof)
-	stats.SnappySize = len(compressedRLP)
+
+	// Measure snappy size of uncompressed proof
+	dec := p.Decompress()
+	unsp := getSerializableUnProof(dec)
+	unrlpProof, err := serializeUnProof(unsp)
+	if err != nil {
+		return nil, err
+	}
+	compressedUnRLP := snappy.Encode(nil, unrlpProof)
+	stats.SnappySize = len(compressedUnRLP)
 
 	return stats, nil
 }
@@ -276,6 +286,36 @@ func getSerializableProof(p *sszlib.CompressedMultiproof) SerializableMultiproof
 }
 
 func serializeProof(s SerializableMultiproof) ([]byte, error) {
+	serialized, err := rlp.EncodeToBytes(s)
+	if err != nil {
+		return nil, err
+	}
+	return serialized, err
+}
+
+// Serializable uncompressed multiproof
+type SerializableUnMultiproof struct {
+	Indices []uint16
+	Leaves  [][]byte
+	Hashes  [][]byte
+}
+
+func getSerializableUnProof(p *sszlib.Multiproof) SerializableUnMultiproof {
+	serializable := SerializableUnMultiproof{
+		Indices: make([]uint16, len(p.Indices)),
+	}
+	serializable.Hashes = p.Hashes
+	serializable.Leaves = make([][]byte, len(p.Leaves))
+	for i, v := range p.Leaves {
+		serializable.Leaves[i] = v
+	}
+
+	serializable.Indices = copyElements(p.Indices)
+
+	return serializable
+}
+
+func serializeUnProof(s SerializableUnMultiproof) ([]byte, error) {
 	serialized, err := rlp.EncodeToBytes(s)
 	if err != nil {
 		return nil, err

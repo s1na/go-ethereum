@@ -237,6 +237,7 @@ func (c *Contract) ProofStats() (*ProofStats, error) {
 	if err != nil {
 		return nil, err
 	}
+	stats.UnRLPSize = len(unrlpProof)
 	compressedUnRLP := snappy.Encode(nil, unrlpProof)
 	stats.SnappySize = len(compressedUnRLP)
 

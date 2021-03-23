@@ -57,12 +57,14 @@ type CMStats struct {
 	ProofSize    int
 	CodeSize     int
 	ProofStats   *ProofStats
+	RLPStats     *RLPStats
 }
 
 func (b *ContractBag) Stats() (*CMStats, error) {
 	stats := &CMStats{
 		NumContracts: len(b.contracts),
 		ProofStats:   &ProofStats{},
+		RLPStats:     &RLPStats{},
 	}
 	for _, c := range b.contracts {
 		stats.CodeSize += c.CodeSize()
@@ -76,6 +78,12 @@ func (b *ContractBag) Stats() (*CMStats, error) {
 			return nil, err
 		}
 		stats.ProofStats.Add(ps)
+
+		rs, err := NewRLPStats(p)
+		if err != nil {
+			return nil, err
+		}
+		stats.RLPStats.Add(rs)
 	}
 	stats.ProofSize = stats.ProofStats.Sum()
 	return stats, nil
@@ -181,9 +189,6 @@ func (c *Contract) CodeSize() int {
 }
 
 type ProofStats struct {
-	RLPSize    int
-	UnRLPSize  int
-	SnappySize int
 	Indices    int
 	ZeroLevels int
 	Hashes     int
@@ -206,6 +211,29 @@ func NewProofStats(p *sszlib.CompressedMultiproof) (*ProofStats, error) {
 		}
 	}
 
+	return stats, nil
+}
+
+func (ps *ProofStats) Add(o *ProofStats) {
+	ps.Indices += o.Indices
+	ps.ZeroLevels += o.ZeroLevels
+	ps.Hashes += o.Hashes
+	ps.Leaves += o.Leaves
+}
+
+func (ps *ProofStats) Sum() int {
+	return ps.Indices + ps.ZeroLevels + ps.Hashes + ps.Leaves
+}
+
+type RLPStats struct {
+	RLPSize    int
+	UnRLPSize  int
+	SnappySize int
+}
+
+func NewRLPStats(p *sszlib.CompressedMultiproof) (*RLPStats, error) {
+	stats := &RLPStats{}
+
 	sp := getSerializableProof(p)
 	rlpProof, err := serializeProof(sp)
 	if err != nil {
@@ -227,18 +255,10 @@ func NewProofStats(p *sszlib.CompressedMultiproof) (*ProofStats, error) {
 	return stats, nil
 }
 
-func (ps *ProofStats) Add(o *ProofStats) {
-	ps.RLPSize += o.RLPSize
-	ps.UnRLPSize += o.UnRLPSize
-	ps.SnappySize += o.SnappySize
-	ps.Indices += o.Indices
-	ps.ZeroLevels += o.ZeroLevels
-	ps.Hashes += o.Hashes
-	ps.Leaves += o.Leaves
-}
-
-func (ps *ProofStats) Sum() int {
-	return ps.Indices + ps.ZeroLevels + ps.Hashes + ps.Leaves
+func (rs *RLPStats) Add(o *RLPStats) {
+	rs.RLPSize += o.RLPSize
+	rs.UnRLPSize += o.UnRLPSize
+	rs.SnappySize += o.SnappySize
 }
 
 type SerializableMultiproof struct {

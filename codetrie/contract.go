@@ -7,8 +7,8 @@ import (
 	sszlib "github.com/ferranbt/fastssz"
 	"github.com/golang/snappy"
 
+	"github.com/ethereum/go-ethereum/codetrie/ssz"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type CMStats struct {
@@ -51,11 +51,12 @@ func (b *ContractBag) Stats() (*CMStats, error) {
 	stats.NumContracts = len(b.contracts)
 	for _, c := range b.contracts {
 		stats.CodeSize += c.CodeSize()
-		p, err := c.Prove()
+		rawProof, err := c.Prove()
 		if err != nil {
 			return nil, err
 		}
-		cp := p.Compress()
+		p := ssz.NewMultiproof(rawProof)
+		cp := ssz.NewCompressedMultiproof(rawProof.Compress())
 
 		ps, err := NewProofStats(cp)
 		if err != nil {
@@ -158,22 +159,14 @@ type ProofStats struct {
 	Leaves     int
 }
 
-func NewProofStats(p *sszlib.CompressedMultiproof) (*ProofStats, error) {
+func NewProofStats(p *ssz.CompressedMultiproof) (*ProofStats, error) {
 	stats := &ProofStats{Indices: len(p.Indices) * 2, ZeroLevels: len(p.ZeroLevels) * 1}
 	for _, v := range p.Hashes {
 		stats.Hashes += len(v)
 	}
-	for i, v := range p.Leaves {
-		in := p.Indices[i]
-		// TODO: Hack as a temporary substitute for optimizing proof
-		// to encode FIO as u8 instead of bytes32.
-		if isIndexFIO(in) {
-			stats.Leaves += 1
-		} else {
-			stats.Leaves += len(v)
-		}
+	for _, v := range p.Leaves {
+		stats.Leaves += len(v)
 	}
-
 	return stats, nil
 }
 
@@ -194,19 +187,17 @@ type RLPStats struct {
 	SnappySize int
 }
 
-func NewRLPStats(p *sszlib.Multiproof, cp *sszlib.CompressedMultiproof) (*RLPStats, error) {
+func NewRLPStats(p *ssz.Multiproof, cp *ssz.CompressedMultiproof) (*RLPStats, error) {
 	stats := &RLPStats{}
 
-	sp := getSerializableProof(cp)
-	rlpProof, err := serializeProof(sp)
+	rlpProof, err := cp.Serialize()
 	if err != nil {
 		return nil, err
 	}
 	stats.RLPSize = len(rlpProof)
 
 	// Measure snappy size of uncompressed proof
-	unsp := getSerializableUnProof(p)
-	unrlpProof, err := serializeUnProof(unsp)
+	unrlpProof, err := p.Serialize()
 	if err != nil {
 		return nil, err
 	}
@@ -221,92 +212,4 @@ func (rs *RLPStats) Add(o *RLPStats) {
 	rs.RLPSize += o.RLPSize
 	rs.UnRLPSize += o.UnRLPSize
 	rs.SnappySize += o.SnappySize
-}
-
-type SerializableMultiproof struct {
-	Indices    []uint16
-	Leaves     [][]byte
-	Hashes     [][]byte
-	ZeroLevels []uint8
-}
-
-func getSerializableProof(p *sszlib.CompressedMultiproof) SerializableMultiproof {
-	serializable := SerializableMultiproof{
-		Indices:    make([]uint16, len(p.Indices)),
-		ZeroLevels: make([]uint8, len(p.ZeroLevels)),
-	}
-	serializable.Hashes = p.Hashes
-	serializable.Leaves = make([][]byte, len(p.Leaves))
-	for i, v := range p.Leaves {
-		in := p.Indices[i]
-		if isIndexFIO(in) {
-			serializable.Leaves[i] = v[0:1]
-		} else {
-			serializable.Leaves[i] = v
-		}
-	}
-
-	serializable.Indices = intSliceToUint16(p.Indices)
-	serializable.ZeroLevels = intSliceToUint8(p.ZeroLevels)
-
-	return serializable
-
-}
-
-func serializeProof(s SerializableMultiproof) ([]byte, error) {
-	serialized, err := rlp.EncodeToBytes(s)
-	if err != nil {
-		return nil, err
-	}
-	return serialized, err
-}
-
-// Serializable uncompressed multiproof
-type SerializableUnMultiproof struct {
-	Indices []uint16
-	Leaves  [][]byte
-	Hashes  [][]byte
-}
-
-func getSerializableUnProof(p *sszlib.Multiproof) SerializableUnMultiproof {
-	serializable := SerializableUnMultiproof{
-		Indices: make([]uint16, len(p.Indices)),
-	}
-	serializable.Hashes = p.Hashes
-	serializable.Leaves = make([][]byte, len(p.Leaves))
-	for i, v := range p.Leaves {
-		serializable.Leaves[i] = v
-	}
-
-	serializable.Indices = intSliceToUint16(p.Indices)
-
-	return serializable
-}
-
-func serializeUnProof(s SerializableUnMultiproof) ([]byte, error) {
-	serialized, err := rlp.EncodeToBytes(s)
-	if err != nil {
-		return nil, err
-	}
-	return serialized, err
-}
-
-func isIndexFIO(i int) bool {
-	return i >= 12288 && i%2 == 0
-}
-
-func intSliceToUint16(source []int) []uint16 {
-	result := make([]uint16, len(source))
-	for i, v := range source {
-		result[i] = uint16(v)
-	}
-	return result
-}
-
-func intSliceToUint8(source []int) []uint8 {
-	result := make([]uint8, len(source))
-	for i, v := range source {
-		result[i] = uint8(v)
-	}
-	return result
 }

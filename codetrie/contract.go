@@ -11,6 +11,14 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+type CMStats struct {
+	NumContracts int
+	ProofSize    int
+	CodeSize     int
+	ProofStats   *ProofStats
+	RLPStats     *RLPStats
+}
+
 type ContractBag struct {
 	contracts map[common.Hash]*Contract
 }
@@ -29,35 +37,6 @@ func (b *ContractBag) Get(codeHash common.Hash, code []byte) *Contract {
 	c := NewContract(code)
 	b.contracts[codeHash] = c
 	return c
-}
-
-func (b *ContractBag) ProofSize() (int, error) {
-	size := 0
-	for _, v := range b.contracts {
-		s, err := v.ProofSize()
-		if err != nil {
-			return 0, err
-		}
-		size += s
-	}
-	return size, nil
-}
-
-func (b *ContractBag) CodeSize() int {
-	size := 0
-	for _, v := range b.contracts {
-		s := len(v.code)
-		size += s
-	}
-	return size
-}
-
-type CMStats struct {
-	NumContracts int
-	ProofSize    int
-	CodeSize     int
-	ProofStats   *ProofStats
-	RLPStats     *RLPStats
 }
 
 func (b *ContractBag) Stats() (*CMStats, error) {
@@ -127,6 +106,10 @@ func (c *Contract) TouchRange(from, to int) error {
 	return nil
 }
 
+func (c *Contract) CodeSize() int {
+	return len(c.code)
+}
+
 func (c *Contract) Prove() (*sszlib.CompressedMultiproof, error) {
 	tree, err := GetSSZTree(c.code, 32)
 	if err != nil {
@@ -154,27 +137,6 @@ func (c *Contract) Prove() (*sszlib.CompressedMultiproof, error) {
 	return p.Compress(), nil
 }
 
-func (c *Contract) ProofSize() (int, error) {
-	p, err := c.Prove()
-	if err != nil {
-		return 0, err
-	}
-
-	size := 0
-	// Interpret each index as a uint16
-	size += len(p.Indices) * 2
-	// 0 < level < 256, i.e. uint8
-	size += len(p.ZeroLevels) * 1
-	for _, v := range p.Hashes {
-		size += len(v)
-	}
-	for _, v := range p.Leaves {
-		size += len(v)
-	}
-
-	return size, nil
-}
-
 func (c *Contract) sortedTouchedChunks() []int {
 	touched := make([]int, 0, len(c.touchedChunks))
 	for k := range c.touchedChunks {
@@ -182,10 +144,6 @@ func (c *Contract) sortedTouchedChunks() []int {
 	}
 	sort.Ints(touched)
 	return touched
-}
-
-func (c *Contract) CodeSize() int {
-	return len(c.code)
 }
 
 type ProofStats struct {

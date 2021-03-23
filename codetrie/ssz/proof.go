@@ -2,6 +2,7 @@ package ssz
 
 import (
 	sszlib "github.com/ferranbt/fastssz"
+	"github.com/golang/snappy"
 
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -64,6 +65,68 @@ func NewCompressedMultiproof(p *sszlib.CompressedMultiproof) *CompressedMultipro
 
 func (p *CompressedMultiproof) Serialize() ([]byte, error) {
 	return rlp.EncodeToBytes(p)
+}
+
+func (p *CompressedMultiproof) ProofStats() *ProofStats {
+	stats := &ProofStats{Indices: len(p.Indices) * 2, ZeroLevels: len(p.ZeroLevels) * 1}
+	for _, v := range p.Hashes {
+		stats.Hashes += len(v)
+	}
+	for _, v := range p.Leaves {
+		stats.Leaves += len(v)
+	}
+	return stats
+}
+
+type ProofStats struct {
+	Indices    int
+	ZeroLevels int
+	Hashes     int
+	Leaves     int
+}
+
+func (ps *ProofStats) Add(o *ProofStats) {
+	ps.Indices += o.Indices
+	ps.ZeroLevels += o.ZeroLevels
+	ps.Hashes += o.Hashes
+	ps.Leaves += o.Leaves
+}
+
+func (ps *ProofStats) Sum() int {
+	return ps.Indices + ps.ZeroLevels + ps.Hashes + ps.Leaves
+}
+
+type RLPStats struct {
+	RLPSize    int
+	UnRLPSize  int
+	SnappySize int
+}
+
+func NewRLPStats(p *Multiproof, cp *CompressedMultiproof) (*RLPStats, error) {
+	stats := &RLPStats{}
+
+	rlpProof, err := cp.Serialize()
+	if err != nil {
+		return nil, err
+	}
+	stats.RLPSize = len(rlpProof)
+
+	// Measure snappy size of uncompressed proof
+	unrlpProof, err := p.Serialize()
+	if err != nil {
+		return nil, err
+	}
+	stats.UnRLPSize = len(unrlpProof)
+	compressedUnRLP := snappy.Encode(nil, unrlpProof)
+	stats.SnappySize = len(compressedUnRLP)
+
+	return stats, nil
+}
+
+func (rs *RLPStats) Add(o *RLPStats) {
+	rs.RLPSize += o.RLPSize
+	rs.UnRLPSize += o.UnRLPSize
+	rs.SnappySize += o.SnappySize
 }
 
 func intSliceToUint16(source []int) []uint16 {

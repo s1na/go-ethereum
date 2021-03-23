@@ -53,20 +53,25 @@ func (b *ContractBag) CodeSize() int {
 }
 
 type CMStats struct {
-	NumContracts  int
-	ProofSize     int
-	CodeSize      int
-	ProofStats    *ProofStats
+	NumContracts int
+	ProofSize    int
+	CodeSize     int
+	ProofStats   *ProofStats
 }
 
 func (b *ContractBag) Stats() (*CMStats, error) {
 	stats := &CMStats{
-		NumContracts:  len(b.contracts),
-		ProofStats:    &ProofStats{},
+		NumContracts: len(b.contracts),
+		ProofStats:   &ProofStats{},
 	}
-	for _, v := range b.contracts {
-		stats.CodeSize += v.CodeSize()
-		ps, err := v.ProofStats()
+	for _, c := range b.contracts {
+		stats.CodeSize += c.CodeSize()
+		p, err := c.Prove()
+		if err != nil {
+			return nil, err
+		}
+
+		ps, err := NewProofStats(p)
 		if err != nil {
 			return nil, err
 		}
@@ -171,36 +176,21 @@ func (c *Contract) sortedTouchedChunks() []int {
 	return touched
 }
 
+func (c *Contract) CodeSize() int {
+	return len(c.code)
+}
+
 type ProofStats struct {
-	RLPSize       int
-	UnRLPSize     int
-	SnappySize    int
-	Indices       int
-	ZeroLevels    int
-	Hashes        int
-	Leaves        int
+	RLPSize    int
+	UnRLPSize  int
+	SnappySize int
+	Indices    int
+	ZeroLevels int
+	Hashes     int
+	Leaves     int
 }
 
-func (ps *ProofStats) Add(o *ProofStats) {
-	ps.RLPSize += o.RLPSize
-	ps.UnRLPSize += o.UnRLPSize
-	ps.SnappySize += o.SnappySize
-	ps.Indices += o.Indices
-	ps.ZeroLevels += o.ZeroLevels
-	ps.Hashes += o.Hashes
-	ps.Leaves += o.Leaves
-}
-
-func (ps *ProofStats) Sum() int {
-	return ps.Indices + ps.ZeroLevels + ps.Hashes + ps.Leaves
-}
-
-func (c *Contract) ProofStats() (*ProofStats, error) {
-	p, err := c.Prove()
-	if err != nil {
-		return nil, err
-	}
-
+func NewProofStats(p *sszlib.CompressedMultiproof) (*ProofStats, error) {
 	stats := &ProofStats{Indices: len(p.Indices) * 2, ZeroLevels: len(p.ZeroLevels) * 1}
 	for _, v := range p.Hashes {
 		stats.Hashes += len(v)
@@ -237,8 +227,18 @@ func (c *Contract) ProofStats() (*ProofStats, error) {
 	return stats, nil
 }
 
-func (c *Contract) CodeSize() int {
-	return len(c.code)
+func (ps *ProofStats) Add(o *ProofStats) {
+	ps.RLPSize += o.RLPSize
+	ps.UnRLPSize += o.UnRLPSize
+	ps.SnappySize += o.SnappySize
+	ps.Indices += o.Indices
+	ps.ZeroLevels += o.ZeroLevels
+	ps.Hashes += o.Hashes
+	ps.Leaves += o.Leaves
+}
+
+func (ps *ProofStats) Sum() int {
+	return ps.Indices + ps.ZeroLevels + ps.Hashes + ps.Leaves
 }
 
 type SerializableMultiproof struct {
@@ -246,14 +246,6 @@ type SerializableMultiproof struct {
 	Leaves     [][]byte
 	Hashes     [][]byte
 	ZeroLevels []uint16
-}
-
-func copyElements(source []int) []uint16 {
-	result := make([]uint16, len(source))
-	for i, v := range source {
-		result[i] = uint16(v)
-	}
-	return result
 }
 
 func getSerializableProof(p *sszlib.CompressedMultiproof) SerializableMultiproof {
@@ -319,4 +311,12 @@ func serializeUnProof(s SerializableUnMultiproof) ([]byte, error) {
 
 func isIndexFIO(i int) bool {
 	return i >= 12288 && i%2 == 0
+}
+
+func copyElements(source []int) []uint16 {
+	result := make([]uint16, len(source))
+	for i, v := range source {
+		result[i] = uint16(v)
+	}
+	return result
 }

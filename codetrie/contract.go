@@ -19,6 +19,13 @@ type CMStats struct {
 	RLPStats     *RLPStats
 }
 
+func NewCMStats() *CMStats {
+	return &CMStats{
+		ProofStats: &ProofStats{},
+		RLPStats:   &RLPStats{},
+	}
+}
+
 type ContractBag struct {
 	contracts map[common.Hash]*Contract
 }
@@ -40,11 +47,8 @@ func (b *ContractBag) Get(codeHash common.Hash, code []byte) *Contract {
 }
 
 func (b *ContractBag) Stats() (*CMStats, error) {
-	stats := &CMStats{
-		NumContracts: len(b.contracts),
-		ProofStats:   &ProofStats{},
-		RLPStats:     &RLPStats{},
-	}
+	stats := NewCMStats()
+	stats.NumContracts = len(b.contracts)
 	for _, c := range b.contracts {
 		stats.CodeSize += c.CodeSize()
 		p, err := c.Prove()
@@ -223,13 +227,13 @@ type SerializableMultiproof struct {
 	Indices    []uint16
 	Leaves     [][]byte
 	Hashes     [][]byte
-	ZeroLevels []uint16
+	ZeroLevels []uint8
 }
 
 func getSerializableProof(p *sszlib.CompressedMultiproof) SerializableMultiproof {
 	serializable := SerializableMultiproof{
 		Indices:    make([]uint16, len(p.Indices)),
-		ZeroLevels: make([]uint16, len(p.ZeroLevels)),
+		ZeroLevels: make([]uint8, len(p.ZeroLevels)),
 	}
 	serializable.Hashes = p.Hashes
 	serializable.Leaves = make([][]byte, len(p.Leaves))
@@ -242,8 +246,8 @@ func getSerializableProof(p *sszlib.CompressedMultiproof) SerializableMultiproof
 		}
 	}
 
-	serializable.Indices = copyElements(p.Indices)
-	serializable.ZeroLevels = copyElements(p.ZeroLevels)
+	serializable.Indices = intSliceToUint16(p.Indices)
+	serializable.ZeroLevels = intSliceToUint8(p.ZeroLevels)
 
 	return serializable
 
@@ -274,7 +278,7 @@ func getSerializableUnProof(p *sszlib.Multiproof) SerializableUnMultiproof {
 		serializable.Leaves[i] = v
 	}
 
-	serializable.Indices = copyElements(p.Indices)
+	serializable.Indices = intSliceToUint16(p.Indices)
 
 	return serializable
 }
@@ -291,10 +295,18 @@ func isIndexFIO(i int) bool {
 	return i >= 12288 && i%2 == 0
 }
 
-func copyElements(source []int) []uint16 {
+func intSliceToUint16(source []int) []uint16 {
 	result := make([]uint16, len(source))
 	for i, v := range source {
 		result[i] = uint16(v)
+	}
+	return result
+}
+
+func intSliceToUint8(source []int) []uint8 {
+	result := make([]uint8, len(source))
+	for i, v := range source {
+		result[i] = uint8(v)
 	}
 	return result
 }

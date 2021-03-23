@@ -82,21 +82,23 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs = append(allLogs, receipt.Logs...)
 	}
 
-	// Write code merkleization stats to file
-	stats, err := bag.Stats()
-	if err != nil {
-		return nil, nil, 0, err
-	}
-
-	cmFile, err := os.OpenFile("./cm-result.csv", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-
-	defer cmFile.Close()
-	if stats.NumContracts > 0 {
-		if _, err := cmFile.WriteString(fmt.Sprintf("%d, %d, %d, %d, %d, %d, %d, %d, %d, %d\n", block.NumberU64(), stats.CodeSize, stats.ProofSize, stats.ProofStats.RLPSize, stats.ProofStats.UnRLPSize, stats.ProofStats.SnappySize, stats.ProofStats.Indices, stats.ProofStats.ZeroLevels, stats.ProofStats.Hashes, stats.ProofStats.Leaves)); err != nil {
+	if cfg.CodeMerkleization {
+		// Write code merkleization stats to file
+		stats, err := bag.Stats()
+		if err != nil {
 			return nil, nil, 0, err
+		}
+
+		cmFile, err := os.OpenFile("./cm-result.csv", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+
+		defer cmFile.Close()
+		if stats.NumContracts > 0 {
+			if _, err := cmFile.WriteString(fmt.Sprintf("%d, %d, %d, %d, %d, %d, %d, %d, %d, %d\n", block.NumberU64(), stats.CodeSize, stats.ProofSize, stats.ProofStats.RLPSize, stats.ProofStats.UnRLPSize, stats.ProofStats.SnappySize, stats.ProofStats.Indices, stats.ProofStats.ZeroLevels, stats.ProofStats.Hashes, stats.ProofStats.Leaves)); err != nil {
+				return nil, nil, 0, err
+			}
 		}
 	}
 

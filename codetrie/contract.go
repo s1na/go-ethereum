@@ -81,14 +81,12 @@ func (b *ContractBag) Stats() (*CMStats, error) {
 
 type Contract struct {
 	code          []byte
-	chunks        []*Chunk
 	touchedChunks map[int]bool
 }
 
 func NewContract(code []byte) *Contract {
-	chunks := Chunkify(code, 32)
 	touchedChunks := make(map[int]bool)
-	return &Contract{code: code, chunks: chunks, touchedChunks: touchedChunks}
+	return &Contract{code: code, touchedChunks: touchedChunks}
 }
 
 func (c *Contract) TouchPC(pc int) error {

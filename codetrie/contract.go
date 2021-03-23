@@ -55,14 +55,15 @@ func (b *ContractBag) Stats() (*CMStats, error) {
 		if err != nil {
 			return nil, err
 		}
+		cp := p.Compress()
 
-		ps, err := NewProofStats(p)
+		ps, err := NewProofStats(cp)
 		if err != nil {
 			return nil, err
 		}
 		stats.ProofStats.Add(ps)
 
-		rs, err := NewRLPStats(p)
+		rs, err := NewRLPStats(p, cp)
 		if err != nil {
 			return nil, err
 		}
@@ -114,7 +115,7 @@ func (c *Contract) CodeSize() int {
 	return len(c.code)
 }
 
-func (c *Contract) Prove() (*sszlib.CompressedMultiproof, error) {
+func (c *Contract) Prove() (*sszlib.Multiproof, error) {
 	tree, err := GetSSZTree(c.code, 32)
 	if err != nil {
 		return nil, err
@@ -138,7 +139,7 @@ func (c *Contract) Prove() (*sszlib.CompressedMultiproof, error) {
 		return nil, err
 	}
 
-	return p.Compress(), nil
+	return p, nil
 }
 
 func (c *Contract) sortedTouchedChunks() []int {
@@ -193,10 +194,10 @@ type RLPStats struct {
 	SnappySize int
 }
 
-func NewRLPStats(p *sszlib.CompressedMultiproof) (*RLPStats, error) {
+func NewRLPStats(p *sszlib.Multiproof, cp *sszlib.CompressedMultiproof) (*RLPStats, error) {
 	stats := &RLPStats{}
 
-	sp := getSerializableProof(p)
+	sp := getSerializableProof(cp)
 	rlpProof, err := serializeProof(sp)
 	if err != nil {
 		return nil, err
@@ -204,8 +205,7 @@ func NewRLPStats(p *sszlib.CompressedMultiproof) (*RLPStats, error) {
 	stats.RLPSize = len(rlpProof)
 
 	// Measure snappy size of uncompressed proof
-	dec := p.Decompress()
-	unsp := getSerializableUnProof(dec)
+	unsp := getSerializableUnProof(p)
 	unrlpProof, err := serializeUnProof(unsp)
 	if err != nil {
 		return nil, err

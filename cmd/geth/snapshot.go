@@ -511,12 +511,14 @@ func computeCommitment(ctx *cli.Context) error {
 		root = head.Root()
 		log.Info("Start traversing the state", "root", root, "number", head.NumberU64())
 	}
+
 	triedb := trie.NewDatabase(chaindb)
-	t, err := trie.NewSecure(root, triedb)
+	t, err := snapshot.New(chaindb, triedb, 256, chain.CurrentBlock().Root(), false, false, false)
 	if err != nil {
-		log.Error("Failed to open trie", "root", root, "error", err)
+		log.Error("Failed to open snapshot tree", "error", err)
 		return err
 	}
+
 	var (
 		accounts int
 		slots    int
@@ -525,52 +527,56 @@ func computeCommitment(ctx *cli.Context) error {
 		start      = time.Now()
 	)
 	vRoot := verkle.New()
-	accIter := trie.NewIterator(t.NodeIterator(nil))
+
+	accIter, err := t.AccountIterator(root, common.Hash{})
+	if err != nil {
+		return err
+	}
+	defer accIter.Release()
+
 	for accIter.Next() {
 		accounts += 1
-		vRoot.InsertOrdered(accIter.Key, accIter.Value, ks, lg1)
-
-		var acc state.Account
-		if err := rlp.DecodeBytes(accIter.Value, &acc); err != nil {
-			log.Error("Invalid account encountered during traversal", "error", err)
+		key := accIter.Hash().Bytes()
+		slimAcc := accIter.Account()
+		acc, err := snapshot.FullAccount(slimAcc)
+		if err != nil {
+			log.Error("Failed parsing slim account from snapshot", "error", err)
 			return err
 		}
-		if acc.Root != emptyRoot {
-			//sRoot := verkle.New()
-			storageTrie, err := trie.NewSecure(acc.Root, triedb)
+		value, err := rlp.EncodeToBytes(acc)
+		if err != nil {
+			log.Error("Failed to encode account to rlp", "error", err)
+		}
+		vRoot.InsertOrdered(key, value, ks, lg1)
+
+		if !bytes.Equal(acc.Root, emptyRoot.Bytes()) {
+			sRoot := verkle.New()
+			storageIter, err := t.StorageIterator(root, accIter.Hash(), common.Hash{})
 			if err != nil {
-				log.Error("Failed to open storage trie", "root", acc.Root, "error", err)
 				return err
 			}
-			storageIter := trie.NewIterator(storageTrie.NodeIterator(nil))
+			defer storageIter.Release()
+
 			for storageIter.Next() {
-				//sRoot.InsertOrdered(storageIter.Key, storageIter.Value, ks, lg1)
-				slots += 1
+				sRoot.InsertOrdered(storageIter.Hash().Bytes(), storageIter.Slot(), ks, lg1)
+				slots++
 			}
-			if storageIter.Err != nil {
-				log.Error("Failed to traverse storage trie", "root", acc.Root, "error", storageIter.Err)
-				return storageIter.Err
+			if storageIter.Error() != nil {
+				log.Error("Failed to traverse storage trie", "root", acc.Root, "error", storageIter.Error())
+				return storageIter.Error()
 			}
 		}
-		//if !bytes.Equal(acc.CodeHash, emptyCode) {
-		//code := rawdb.ReadCode(chaindb, common.BytesToHash(acc.CodeHash))
-		//if len(code) == 0 {
-		//log.Error("Code is missing", "hash", common.BytesToHash(acc.CodeHash))
-		//return errors.New("missing code")
-		//}
-		//codes += 1
-		//}
 		if time.Since(lastReport) > time.Second*8 {
-			log.Info("Traversing state", "accounts", accounts, "slots", slots, /*"codes", codes,*/, "elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("Traversing state", "accounts", accounts, "slots", slots, "elapsed", common.PrettyDuration(time.Since(start)))
 			lastReport = time.Now()
 		}
 	}
-	if accIter.Err != nil {
-		log.Error("Failed to compute commitment", "root", root, "error", accIter.Err)
-		return accIter.Err
+	if accIter.Error() != nil {
+		log.Error("Failed to compute commitment", "root", root, "error", accIter.Error())
+		return accIter.Error()
 	}
 	vRoot.ComputeCommitment(ks, lg1)
-	log.Info("Commitment computation complete", "compressed", bls.ToCompressedG1(vRoot.GetCommitment()), "accounts", accounts, "slots", slots /*"codes", codes,*/, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Commitment computation complete", "compressed", bls.ToCompressedG1(vRoot.GetCommitment()), "accounts", accounts, "slots", slots, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 

@@ -32,6 +32,9 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	cli "gopkg.in/urfave/cli.v1"
+	"github.com/gballet/go-verkle"
+	"github.com/protolambda/go-kzg/bls"
+	"github.com/protolambda/go-kzg"
 )
 
 var (
@@ -140,6 +143,28 @@ will traverse the whole state from the given root and will abort if any referenc
 trie node or contract code is missing. This command can be used for state integrity
 verification. The default checking target is the HEAD state. It's basically identical
 to traverse-state, but the check granularity is smaller. 
+
+It's also usable without snapshot enabled.
+`,
+			},
+			{
+				Name:      "compute-commitments",
+				Usage:     "Traverse the state and compute the root commitment of the state",
+				ArgsUsage: "<root>",
+				Action:    utils.MigrateFlags(computeCommitment),
+				Category:  "MISCELLANEOUS COMMANDS",
+				Flags: []cli.Flag{
+					utils.DataDirFlag,
+					utils.RopstenFlag,
+					utils.RinkebyFlag,
+					utils.GoerliFlag,
+					utils.LegacyTestnetFlag,
+				},
+				Description: `
+geth snapshot traverse-state <state-root>
+will traverse the whole state from the given state root and will abort if any
+referenced trie node or contract code is missing. This command can be used for
+state integrity verification. The default checking target is the HEAD state.
 
 It's also usable without snapshot enabled.
 `,
@@ -425,6 +450,117 @@ func traverseRawState(ctx *cli.Context) error {
 		return accIter.Error()
 	}
 	log.Info("State is complete", "nodes", nodes, "accounts", accounts, "slots", slots, "codes", codes, "elapsed", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+func GenerateTestingSetupWithLagrange(secret string, n uint64, fftCfg *kzg.FFTSettings) ([]bls.G1Point, []bls.G2Point, []bls.G1Point, error) {
+	var s bls.Fr
+	bls.SetFr(&s, secret)
+
+	var sPow bls.Fr
+	bls.CopyFr(&sPow, &bls.ONE)
+
+	s1Out := make([]bls.G1Point, n, n)
+	s2Out := make([]bls.G2Point, n, n)
+	for i := uint64(0); i < n; i++ {
+		bls.MulG1(&s1Out[i], &bls.GenG1, &sPow)
+		bls.MulG2(&s2Out[i], &bls.GenG2, &sPow)
+		var tmp bls.Fr
+		bls.CopyFr(&tmp, &sPow)
+		bls.MulModFr(&sPow, &tmp, &s)
+	}
+
+	s1Lagrange, err := fftCfg.FFTG1(s1Out, true)
+
+	return s1Out, s2Out, s1Lagrange, err
+}
+
+func computeCommitment(ctx *cli.Context) error {
+	fftCfg := kzg.NewFFTSettings(10)
+	s1, s2, lg1, err := GenerateTestingSetupWithLagrange("1927409816240961209460912649124", 1024, fftCfg)
+	if err != nil {
+		panic(err)
+	}
+	ks := kzg.NewKZGSettings(fftCfg, s1, s2)
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	chain, chaindb := utils.MakeChain(ctx, stack, true)
+	defer chaindb.Close()
+
+	if ctx.NArg() > 1 {
+		log.Error("Too many arguments given")
+		return errors.New("too many arguments")
+	}
+	// Use the HEAD root as the default
+	head := chain.CurrentBlock()
+	if head == nil {
+		log.Error("Head block is missing")
+		return errors.New("head block is missing")
+	}
+	var root common.Hash
+	if ctx.NArg() == 1 {
+		root, err = parseRoot(ctx.Args()[0])
+		if err != nil {
+			log.Error("Failed to resolve state root", "error", err)
+			return err
+		}
+		log.Info("Start traversing the state", "root", root)
+	} else {
+		root = head.Root()
+		log.Info("Start traversing the state", "root", root, "number", head.NumberU64())
+	}
+	triedb := trie.NewDatabase(chaindb)
+	t, err := trie.NewSecure(root, triedb)
+	if err != nil {
+		log.Error("Failed to open trie", "root", root, "error", err)
+		return err
+	}
+	var (
+		accounts   int
+		//slots      int
+		//codes      int
+		lastReport time.Time
+		start      = time.Now()
+	)
+	vRoot := verkle.New()
+	accIter := trie.NewIterator(t.NodeIterator(nil))
+	for accIter.Next() {
+		accounts += 1
+		vRoot.InsertOrdered(accIter.Key, accIter.Value, ks, lg1)
+
+		var acc state.Account
+		if err := rlp.DecodeBytes(accIter.Value, &acc); err != nil {
+			log.Error("Invalid account encountered during traversal", "error", err)
+			return err
+		}
+		if acc.Root != emptyRoot {
+			sRoot := verkle.New()
+			storageTrie, err := trie.NewSecure(acc.Root, triedb)
+			if err != nil {
+				log.Error("Failed to open storage trie", "root", acc.Root, "error", err)
+				return err
+			}
+			storageIter := trie.NewIterator(storageTrie.NodeIterator(nil))
+			for storageIter.Next() {
+				sRoot.InsertOrdered(storageIter.Key, storageIter.Value, ks, lg1)
+			}
+			if storageIter.Err != nil {
+				log.Error("Failed to traverse storage trie", "root", acc.Root, "error", storageIter.Err)
+				return storageIter.Err
+			}
+		}
+		if time.Since(lastReport) > time.Second*8 {
+			log.Info("Traversing state", "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
+			lastReport = time.Now()
+		}
+	}
+	if accIter.Err != nil {
+		log.Error("Failed to compute commitment", "root", root, "error", accIter.Err)
+		return accIter.Err
+	}
+	log.Info("Commitment computation complete", "compressed", bls.ToCompressedG1(vRoot.GetCommitment()), "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 

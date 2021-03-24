@@ -565,6 +565,7 @@ func computeCommitment(ctx *cli.Context) error {
 				log.Error("Failed to traverse storage trie", "root", acc.Root, "error", storageIter.Error())
 				return storageIter.Error()
 			}
+			sRoot.ComputeCommitment(ks, lg1)
 		}
 		if time.Since(lastReport) > time.Second*8 {
 			log.Info("Traversing state", "accounts", accounts, "slots", slots, "elapsed", common.PrettyDuration(time.Since(start)))

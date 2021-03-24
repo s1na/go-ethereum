@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/pruner"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -483,6 +484,16 @@ func computeCommitment(ctx *cli.Context) error {
 	}
 	ks := kzg.NewKZGSettings(fftCfg, s1, s2)
 
+	verkleGenerate := func(db ethdb.KeyValueWriter, in chan snapshot.TrieKV, out chan common.Hash) {
+		t := verkle.New()
+		for leaf := range in {
+			t.InsertOrdered(leaf.Key[:], leaf.Value, ks, lg1)
+		}
+		comm := t.ComputeCommitment(ks, lg1)
+		root := common.BytesToHash(bls.ToCompressedG1(comm))
+		out <- root
+	}
+
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
@@ -519,64 +530,9 @@ func computeCommitment(ctx *cli.Context) error {
 		return err
 	}
 
-	var (
-		accounts int
-		//slots      int
-		//codes      int
-		lastReport time.Time
-		start      = time.Now()
-	)
-	vRoot := verkle.New()
-
-	accIter, err := t.AccountIterator(root, common.Hash{})
-	if err != nil {
-		return err
+	if err := t.ComputeVerkleCommitment(root, verkleGenerate); err != nil {
+		log.Error("Failed to compute verkle commitment", "error", err)
 	}
-	defer accIter.Release()
-
-	for accIter.Next() {
-		accounts += 1
-		key := accIter.Hash().Bytes()
-		slimAcc := accIter.Account()
-		acc, err := snapshot.FullAccount(slimAcc)
-		if err != nil {
-			log.Error("Failed parsing slim account from snapshot", "error", err)
-			return err
-		}
-		value, err := rlp.EncodeToBytes(acc)
-		if err != nil {
-			log.Error("Failed to encode account to rlp", "error", err)
-		}
-		vRoot.InsertOrdered(key, value, ks, lg1)
-
-		if !bytes.Equal(acc.Root, emptyRoot.Bytes()) {
-			sRoot := verkle.New()
-			storageIter, err := t.StorageIterator(root, accIter.Hash(), common.Hash{})
-			if err != nil {
-				return err
-			}
-			defer storageIter.Release()
-
-			for storageIter.Next() {
-				sRoot.InsertOrdered(storageIter.Hash().Bytes(), storageIter.Slot(), ks, lg1)
-			}
-			if storageIter.Error() != nil {
-				log.Error("Failed to traverse storage trie", "root", acc.Root, "error", storageIter.Error())
-				return storageIter.Error()
-			}
-			sRoot.ComputeCommitment(ks, lg1)
-		}
-		if time.Since(lastReport) > time.Second*8 {
-			log.Info("Traversing state", "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
-			lastReport = time.Now()
-		}
-	}
-	if accIter.Error() != nil {
-		log.Error("Failed to compute commitment", "root", root, "error", accIter.Error())
-		return accIter.Error()
-	}
-	vRoot.ComputeCommitment(ks, lg1)
-	log.Info("Commitment computation complete", "compressed", bls.ToCompressedG1(vRoot.GetCommitment()), "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 

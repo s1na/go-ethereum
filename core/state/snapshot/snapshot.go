@@ -718,12 +718,12 @@ func (t *Tree) Verify(root common.Hash) error {
 		}
 		defer storageIt.Release()
 
-		hash, err := generateTrieRoot(nil, storageIt, accountHash, stackTrieGenerate, nil, stat, false)
+		hash, err := generateTrieRoot(nil, storageIt, accountHash, stackTrieGenerate, nil, stat, false, true)
 		if err != nil {
 			return common.Hash{}, err
 		}
 		return hash, nil
-	}, newGenerateStats(), true)
+	}, newGenerateStats(), true, true)
 
 	if err != nil {
 		return err
@@ -749,12 +749,12 @@ func (t *Tree) ComputeVerkleCommitment(root common.Hash, generatorFn trieGenerat
 		}
 		defer storageIt.Release()
 
-		hash, err := generateTrieRoot(nil, storageIt, accountHash, generatorFn, nil, stat, false)
+		hash, err := generateTrieRoot(nil, storageIt, accountHash, generatorFn, nil, stat, false, false)
 		if err != nil {
 			return common.Hash{}, err
 		}
 		return hash, nil
-	}, newGenerateStats(), true)
+	}, newGenerateStats(), true, false)
 
 	if err != nil {
 		return err

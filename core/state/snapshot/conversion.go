@@ -52,12 +52,12 @@ type (
 
 // GenerateAccountTrieRoot takes an account iterator and reproduces the root hash.
 func GenerateAccountTrieRoot(it AccountIterator) (common.Hash, error) {
-	return generateTrieRoot(nil, it, common.Hash{}, stackTrieGenerate, nil, newGenerateStats(), true)
+	return generateTrieRoot(nil, it, common.Hash{}, stackTrieGenerate, nil, newGenerateStats(), true, true)
 }
 
 // GenerateStorageTrieRoot takes a storage iterator and reproduces the root hash.
 func GenerateStorageTrieRoot(account common.Hash, it StorageIterator) (common.Hash, error) {
-	return generateTrieRoot(nil, it, account, stackTrieGenerate, nil, newGenerateStats(), true)
+	return generateTrieRoot(nil, it, account, stackTrieGenerate, nil, newGenerateStats(), true, true)
 }
 
 // GenerateTrie takes the whole snapshot tree as the input, traverses all the
@@ -87,12 +87,12 @@ func GenerateTrie(snaptree *Tree, root common.Hash, src ethdb.Database, dst ethd
 		}
 		defer storageIt.Release()
 
-		hash, err := generateTrieRoot(dst, storageIt, accountHash, stackTrieGenerate, nil, stat, false)
+		hash, err := generateTrieRoot(dst, storageIt, accountHash, stackTrieGenerate, nil, stat, false, true)
 		if err != nil {
 			return common.Hash{}, err
 		}
 		return hash, nil
-	}, newGenerateStats(), true)
+	}, newGenerateStats(), true, true)
 
 	if err != nil {
 		return err
@@ -242,7 +242,7 @@ func runReport(stats *generateStats, stop chan bool) {
 // generateTrieRoot generates the trie hash based on the snapshot iterator.
 // It can be used for generating account trie, storage trie or even the
 // whole state which connects the accounts and the corresponding storages.
-func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash, generatorFn trieGeneratorFn, leafCallback leafCallbackFn, stats *generateStats, report bool) (common.Hash, error) {
+func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash, generatorFn trieGeneratorFn, leafCallback leafCallbackFn, stats *generateStats, report bool, checkSubRoot bool) (common.Hash, error) {
 	var (
 		in      = make(chan TrieKV)         // chan to pass leaves
 		out     = make(chan common.Hash, 1) // chan to collect result
@@ -321,7 +321,7 @@ func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash,
 						results <- err
 						return
 					}
-					if !bytes.Equal(account.Root, subroot.Bytes()) {
+					if checkSubRoot && !bytes.Equal(account.Root, subroot.Bytes()) {
 						results <- fmt.Errorf("invalid subroot(%x), want %x, got %x", it.Hash(), account.Root, subroot)
 						return
 					}

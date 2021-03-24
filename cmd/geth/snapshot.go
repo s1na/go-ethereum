@@ -31,10 +31,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	cli "gopkg.in/urfave/cli.v1"
 	"github.com/gballet/go-verkle"
-	"github.com/protolambda/go-kzg/bls"
 	"github.com/protolambda/go-kzg"
+	"github.com/protolambda/go-kzg/bls"
+	cli "gopkg.in/urfave/cli.v1"
 )
 
 var (
@@ -511,44 +511,58 @@ func computeCommitment(ctx *cli.Context) error {
 		root = head.Root()
 		log.Info("Start traversing the state", "root", root, "number", head.NumberU64())
 	}
+
 	triedb := trie.NewDatabase(chaindb)
-	t, err := trie.NewSecure(root, triedb)
+	t, err := snapshot.New(chaindb, triedb, 256, chain.CurrentBlock().Root(), false, false, false)
 	if err != nil {
-		log.Error("Failed to open trie", "root", root, "error", err)
+		log.Error("Failed to open snapshot tree", "error", err)
 		return err
 	}
+
 	var (
-		accounts   int
+		accounts int
 		//slots      int
 		//codes      int
 		lastReport time.Time
 		start      = time.Now()
 	)
 	vRoot := verkle.New()
-	accIter := trie.NewIterator(t.NodeIterator(nil))
+
+	accIter, err := t.AccountIterator(root, common.Hash{})
+	if err != nil {
+		return err
+	}
+	defer accIter.Release()
+
 	for accIter.Next() {
 		accounts += 1
-		vRoot.InsertOrdered(accIter.Key, accIter.Value, ks, lg1)
-
-		var acc state.Account
-		if err := rlp.DecodeBytes(accIter.Value, &acc); err != nil {
-			log.Error("Invalid account encountered during traversal", "error", err)
+		key := accIter.Hash().Bytes()
+		slimAcc := accIter.Account()
+		acc, err := snapshot.FullAccount(slimAcc)
+		if err != nil {
+			log.Error("Failed parsing slim account from snapshot", "error", err)
 			return err
 		}
-		if acc.Root != emptyRoot {
+		value, err := rlp.EncodeToBytes(acc)
+		if err != nil {
+			log.Error("Failed to encode account to rlp", "error", err)
+		}
+		vRoot.InsertOrdered(key, value, ks, lg1)
+
+		if !bytes.Equal(acc.Root, emptyRoot.Bytes()) {
 			sRoot := verkle.New()
-			storageTrie, err := trie.NewSecure(acc.Root, triedb)
+			storageIter, err := t.StorageIterator(root, accIter.Hash(), common.Hash{})
 			if err != nil {
-				log.Error("Failed to open storage trie", "root", acc.Root, "error", err)
 				return err
 			}
-			storageIter := trie.NewIterator(storageTrie.NodeIterator(nil))
+			defer storageIter.Release()
+
 			for storageIter.Next() {
-				sRoot.InsertOrdered(storageIter.Key, storageIter.Value, ks, lg1)
+				sRoot.InsertOrdered(storageIter.Hash().Bytes(), storageIter.Slot(), ks, lg1)
 			}
-			if storageIter.Err != nil {
-				log.Error("Failed to traverse storage trie", "root", acc.Root, "error", storageIter.Err)
-				return storageIter.Err
+			if storageIter.Error() != nil {
+				log.Error("Failed to traverse storage trie", "root", acc.Root, "error", storageIter.Error())
+				return storageIter.Error()
 			}
 		}
 		if time.Since(lastReport) > time.Second*8 {
@@ -556,9 +570,9 @@ func computeCommitment(ctx *cli.Context) error {
 			lastReport = time.Now()
 		}
 	}
-	if accIter.Err != nil {
-		log.Error("Failed to compute commitment", "root", root, "error", accIter.Err)
-		return accIter.Err
+	if accIter.Error() != nil {
+		log.Error("Failed to compute commitment", "root", root, "error", accIter.Error())
+		return accIter.Error()
 	}
 	log.Info("Commitment computation complete", "compressed", bls.ToCompressedG1(vRoot.GetCommitment()), "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil

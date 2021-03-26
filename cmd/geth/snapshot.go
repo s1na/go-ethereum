@@ -487,7 +487,7 @@ func computeCommitment(ctx *cli.Context) error {
 	verkleGenerate := func(db ethdb.KeyValueWriter, in chan snapshot.TrieKV, out chan common.Hash) {
 		t := verkle.New()
 		for leaf := range in {
-			t.InsertOrdered(leaf.Key[:], leaf.Value, ks, lg1)
+			t.InsertOrdered(common.CopyBytes(leaf.Key[:]), leaf.Value, ks, lg1)
 		}
 		comm := t.ComputeCommitment(ks, lg1)
 		root := common.BytesToHash(bls.ToCompressedG1(comm))

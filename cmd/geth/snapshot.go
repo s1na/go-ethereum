@@ -31,10 +31,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	cli "gopkg.in/urfave/cli.v1"
 	"github.com/gballet/go-verkle"
-	"github.com/protolambda/go-kzg/bls"
 	"github.com/protolambda/go-kzg"
+	"github.com/protolambda/go-kzg/bls"
+	cli "gopkg.in/urfave/cli.v1"
 )
 
 var (
@@ -518,8 +518,8 @@ func computeCommitment(ctx *cli.Context) error {
 		return err
 	}
 	var (
-		accounts   int
-		//slots      int
+		accounts int
+		slots    int
 		//codes      int
 		lastReport time.Time
 		start      = time.Now()
@@ -536,7 +536,7 @@ func computeCommitment(ctx *cli.Context) error {
 			return err
 		}
 		if acc.Root != emptyRoot {
-			sRoot := verkle.New()
+			//sRoot := verkle.New()
 			storageTrie, err := trie.NewSecure(acc.Root, triedb)
 			if err != nil {
 				log.Error("Failed to open storage trie", "root", acc.Root, "error", err)
@@ -544,15 +544,24 @@ func computeCommitment(ctx *cli.Context) error {
 			}
 			storageIter := trie.NewIterator(storageTrie.NodeIterator(nil))
 			for storageIter.Next() {
-				sRoot.InsertOrdered(storageIter.Key, storageIter.Value, ks, lg1)
+				//sRoot.InsertOrdered(storageIter.Key, storageIter.Value, ks, lg1)
+				slots += 1
 			}
 			if storageIter.Err != nil {
 				log.Error("Failed to traverse storage trie", "root", acc.Root, "error", storageIter.Err)
 				return storageIter.Err
 			}
 		}
+		//if !bytes.Equal(acc.CodeHash, emptyCode) {
+		//code := rawdb.ReadCode(chaindb, common.BytesToHash(acc.CodeHash))
+		//if len(code) == 0 {
+		//log.Error("Code is missing", "hash", common.BytesToHash(acc.CodeHash))
+		//return errors.New("missing code")
+		//}
+		//codes += 1
+		//}
 		if time.Since(lastReport) > time.Second*8 {
-			log.Info("Traversing state", "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("Traversing state", "accounts", accounts, "slots", slots, /*"codes", codes,*/, "elapsed", common.PrettyDuration(time.Since(start)))
 			lastReport = time.Now()
 		}
 	}
@@ -560,7 +569,8 @@ func computeCommitment(ctx *cli.Context) error {
 		log.Error("Failed to compute commitment", "root", root, "error", accIter.Err)
 		return accIter.Err
 	}
-	log.Info("Commitment computation complete", "compressed", bls.ToCompressedG1(vRoot.GetCommitment()), "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
+	vRoot.ComputeCommitment(ks, lg1)
+	log.Info("Commitment computation complete", "compressed", bls.ToCompressedG1(vRoot.GetCommitment()), "accounts", accounts, "slots", slots /*"codes", codes,*/, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 

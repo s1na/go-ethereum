@@ -504,6 +504,8 @@ func computeCommitment(ctx *cli.Context) error {
 			t.InsertOrdered(common.CopyBytes(leaf.Key[:]), leaf.Value, ks, lg1, nodesCh)
 		}
 		comm := t.ComputeCommitment(ks, lg1)
+		// Flush remaining nodes to nodes channel
+		t.Flush(nodesCh)
 		root := common.BytesToHash(bls.ToCompressedG1(comm))
 		out <- root
 	}

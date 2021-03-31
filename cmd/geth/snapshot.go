@@ -484,21 +484,43 @@ func computeCommitment(ctx *cli.Context) error {
 	}
 	ks := kzg.NewKZGSettings(fftCfg, s1, s2)
 
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	chain, chaindb := utils.MakeChain(ctx, stack, true)
+	defer chaindb.Close()
+
+	verkledb, err := stack.OpenDatabase("verkle", 0, 0, "")
+	if err != nil {
+		log.Error("Failed to open db for verkle nodes", "error", err)
+		return err
+	}
+	defer verkledb.Close()
+
+	nodesCh := make(chan verkle.FlushableNode)
 	verkleGenerate := func(db ethdb.KeyValueWriter, in chan snapshot.TrieKV, out chan common.Hash) {
 		t := verkle.New()
 		for leaf := range in {
-			t.InsertOrdered(common.CopyBytes(leaf.Key[:]), leaf.Value, ks, lg1)
+			t.InsertOrdered(common.CopyBytes(leaf.Key[:]), leaf.Value, ks, lg1, nodesCh)
 		}
 		comm := t.ComputeCommitment(ks, lg1)
 		root := common.BytesToHash(bls.ToCompressedG1(comm))
 		out <- root
 	}
 
-	stack, _ := makeConfigNode(ctx)
-	defer stack.Close()
-
-	chain, chaindb := utils.MakeChain(ctx, stack, true)
-	defer chaindb.Close()
+	nodesCount := 0
+	go func() {
+		for fn := range nodesCh {
+			nodesCount++
+			value, err := rlp.EncodeToBytes(fn.Node)
+			if err != nil {
+				log.Error("Failed to encode verkle node", "error", err)
+			}
+			if err := verkledb.Put(fn.Hash[:], value); err != nil {
+				log.Error("Failed to write verkle node to db", "error", err)
+			}
+		}
+	}()
 
 	if ctx.NArg() > 1 {
 		log.Error("Too many arguments given")
@@ -533,6 +555,7 @@ func computeCommitment(ctx *cli.Context) error {
 	if err := t.ComputeVerkleCommitment(root, verkleGenerate); err != nil {
 		log.Error("Failed to compute verkle commitment", "error", err)
 	}
+	log.Info("Number of nodes written to DB: %d\n", nodesCount)
 	return nil
 }
 

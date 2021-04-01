@@ -503,9 +503,9 @@ func computeCommitment(ctx *cli.Context) error {
 		for leaf := range in {
 			t.InsertOrdered(common.CopyBytes(leaf.Key[:]), leaf.Value, ks, lg1, nodesCh)
 		}
-		comm := t.ComputeCommitment(ks, lg1)
 		// Flush remaining nodes to nodes channel
 		t.Flush(nodesCh)
+		comm := t.ComputeCommitment(ks, lg1)
 		root := common.BytesToHash(bls.ToCompressedG1(comm))
 		out <- root
 	}
@@ -514,9 +514,9 @@ func computeCommitment(ctx *cli.Context) error {
 	go func() {
 		for fn := range nodesCh {
 			nodesCount++
-			value, err := rlp.EncodeToBytes(fn.Node)
+			value, err := fn.Node.Serialize()
 			if err != nil {
-				log.Error("Failed to encode verkle node", "error", err)
+				log.Error("Failed to serialize verkle node", "error", err)
 			}
 			if err := verkledb.Put(fn.Hash[:], value); err != nil {
 				log.Error("Failed to write verkle node to db", "error", err)

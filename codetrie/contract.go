@@ -27,11 +27,14 @@ func NewCMStats() *CMStats {
 
 type ContractBag struct {
 	contracts map[common.Hash]*Contract
+	// TODO: remove
+	LargeInitCodes map[common.Hash]int
 }
 
 func NewContractBag() *ContractBag {
 	return &ContractBag{
-		contracts: make(map[common.Hash]*Contract),
+		contracts:      make(map[common.Hash]*Contract),
+		LargeInitCodes: make(map[common.Hash]int),
 	}
 }
 
@@ -43,6 +46,10 @@ func (b *ContractBag) Get(codeHash common.Hash, code []byte) *Contract {
 	c := NewContract(code)
 	b.contracts[codeHash] = c
 	return c
+}
+
+func (b *ContractBag) AddLargeInit(codeHash common.Hash, size int) {
+	b.LargeInitCodes[codeHash] = size
 }
 
 func (b *ContractBag) Stats() (*CMStats, error) {

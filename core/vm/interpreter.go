@@ -303,6 +303,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 				c2 := in.cfg.ContractBag.Get(codeHash, code)
 				c2.TouchRange(codeOffset, codeOffset+length)
 			}
+		} else if in.cfg.CodeMerkleization && in.cfg.ContractBag != nil && input == nil {
+			if len(contract.Code) > 0xc000 {
+				in.cfg.ContractBag.AddLargeInit(contract.CodeHash, len(contract.Code))
+				//log.Info("initcode larger than 0xc000", "len", len(contract.Code))
+			}
 		}
 
 		// execute the operation

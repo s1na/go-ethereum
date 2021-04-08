@@ -19,6 +19,8 @@ package core
 import (
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/codetrie"
 	"github.com/ethereum/go-ethereum/common"
@@ -108,7 +110,12 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 		defer liFile.Close()
 		if len(bag.LargeInitCodes) > 0 {
-			if _, err := liFile.WriteString(fmt.Sprintf("%d, %d\n", block.NumberU64(), len(bag.LargeInitCodes))); err != nil {
+			sizeList := make([]string, 0, 2*len(bag.LargeInitCodes))
+			for h, s := range bag.LargeInitCodes {
+				sizeList = append(sizeList, h.Hex())
+				sizeList = append(sizeList, strconv.Itoa(s))
+			}
+			if _, err := liFile.WriteString(fmt.Sprintf("%d, %d, %s\n", block.NumberU64(), len(bag.LargeInitCodes), strings.Join(sizeList, ","))); err != nil {
 				return nil, nil, 0, err
 			}
 		}

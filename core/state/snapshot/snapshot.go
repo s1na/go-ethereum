@@ -718,12 +718,12 @@ func (t *Tree) Verify(root common.Hash) error {
 		}
 		defer storageIt.Release()
 
-		hash, err := generateTrieRoot(nil, storageIt, accountHash, stackTrieGenerate, nil, stat, false)
+		hash, err := generateTrieRoot(nil, storageIt, accountHash, stackTrieGenerate, nil, stat, false, true)
 		if err != nil {
 			return common.Hash{}, err
 		}
 		return hash, nil
-	}, newGenerateStats(), true)
+	}, newGenerateStats(), true, true)
 
 	if err != nil {
 		return err
@@ -731,6 +731,35 @@ func (t *Tree) Verify(root common.Hash) error {
 	if got != root {
 		return fmt.Errorf("state root hash mismatch: got %x, want %x", got, root)
 	}
+	return nil
+}
+
+// Computes verkle commitment against snapshot
+func (t *Tree) ComputeVerkleCommitment(root common.Hash, generatorFn trieGeneratorFn) error {
+	acctIt, err := t.AccountIterator(root, common.Hash{})
+	if err != nil {
+		return err
+	}
+	defer acctIt.Release()
+
+	got, err := generateTrieRoot(nil, acctIt, common.Hash{}, generatorFn, func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
+		storageIt, err := t.StorageIterator(root, accountHash, common.Hash{})
+		if err != nil {
+			return common.Hash{}, err
+		}
+		defer storageIt.Release()
+
+		hash, err := generateTrieRoot(nil, storageIt, accountHash, generatorFn, nil, stat, false, false)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		return hash, nil
+	}, newGenerateStats(), true, false)
+
+	if err != nil {
+		return err
+	}
+	log.Info("Computed verkle commitment", "commitment", got)
 	return nil
 }
 

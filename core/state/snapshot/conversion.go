@@ -34,16 +34,16 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// trieKV represents a trie key-value pair
-type trieKV struct {
-	key   common.Hash
-	value []byte
+// TrieKV represents a trie key-value pair
+type TrieKV struct {
+	Key   common.Hash
+	Value []byte
 }
 
 type (
 	// trieGeneratorFn is the interface of trie generation which can
 	// be implemented by different trie algorithm.
-	trieGeneratorFn func(db ethdb.KeyValueWriter, in chan (trieKV), out chan (common.Hash))
+	trieGeneratorFn func(db ethdb.KeyValueWriter, in chan (TrieKV), out chan (common.Hash))
 
 	// leafCallbackFn is the callback invoked at the leaves of the trie,
 	// returns the subtrie root with the specified subtrie identifier.
@@ -52,12 +52,12 @@ type (
 
 // GenerateAccountTrieRoot takes an account iterator and reproduces the root hash.
 func GenerateAccountTrieRoot(it AccountIterator) (common.Hash, error) {
-	return generateTrieRoot(nil, it, common.Hash{}, stackTrieGenerate, nil, newGenerateStats(), true)
+	return generateTrieRoot(nil, it, common.Hash{}, stackTrieGenerate, nil, newGenerateStats(), true, true)
 }
 
 // GenerateStorageTrieRoot takes a storage iterator and reproduces the root hash.
 func GenerateStorageTrieRoot(account common.Hash, it StorageIterator) (common.Hash, error) {
-	return generateTrieRoot(nil, it, account, stackTrieGenerate, nil, newGenerateStats(), true)
+	return generateTrieRoot(nil, it, account, stackTrieGenerate, nil, newGenerateStats(), true, true)
 }
 
 // GenerateTrie takes the whole snapshot tree as the input, traverses all the
@@ -87,12 +87,12 @@ func GenerateTrie(snaptree *Tree, root common.Hash, src ethdb.Database, dst ethd
 		}
 		defer storageIt.Release()
 
-		hash, err := generateTrieRoot(dst, storageIt, accountHash, stackTrieGenerate, nil, stat, false)
+		hash, err := generateTrieRoot(dst, storageIt, accountHash, stackTrieGenerate, nil, stat, false, true)
 		if err != nil {
 			return common.Hash{}, err
 		}
 		return hash, nil
-	}, newGenerateStats(), true)
+	}, newGenerateStats(), true, true)
 
 	if err != nil {
 		return err
@@ -242,9 +242,9 @@ func runReport(stats *generateStats, stop chan bool) {
 // generateTrieRoot generates the trie hash based on the snapshot iterator.
 // It can be used for generating account trie, storage trie or even the
 // whole state which connects the accounts and the corresponding storages.
-func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash, generatorFn trieGeneratorFn, leafCallback leafCallbackFn, stats *generateStats, report bool) (common.Hash, error) {
+func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash, generatorFn trieGeneratorFn, leafCallback leafCallbackFn, stats *generateStats, report bool, checkSubRoot bool) (common.Hash, error) {
 	var (
-		in      = make(chan trieKV)         // chan to pass leaves
+		in      = make(chan TrieKV)         // chan to pass leaves
 		out     = make(chan common.Hash, 1) // chan to collect result
 		stoplog = make(chan bool, 1)        // 1-size buffer, works when logging is not enabled
 		wg      sync.WaitGroup
@@ -289,7 +289,7 @@ func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash,
 	var (
 		logged    = time.Now()
 		processed = uint64(0)
-		leaf      trieKV
+		leaf      TrieKV
 	)
 	// Start to feed leaves
 	for it.Next() {
@@ -321,7 +321,7 @@ func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash,
 						results <- err
 						return
 					}
-					if !bytes.Equal(account.Root, subroot.Bytes()) {
+					if checkSubRoot && !bytes.Equal(account.Root, subroot.Bytes()) {
 						results <- fmt.Errorf("invalid subroot(%x), want %x, got %x", it.Hash(), account.Root, subroot)
 						return
 					}
@@ -332,9 +332,9 @@ func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash,
 					return stop(err)
 				}
 			}
-			leaf = trieKV{it.Hash(), fullData}
+			leaf = TrieKV{it.Hash(), fullData}
 		} else {
-			leaf = trieKV{it.Hash(), common.CopyBytes(it.(StorageIterator).Slot())}
+			leaf = TrieKV{it.Hash(), common.CopyBytes(it.(StorageIterator).Slot())}
 		}
 		in <- leaf
 
@@ -360,10 +360,10 @@ func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash,
 	return stop(nil)
 }
 
-func stackTrieGenerate(db ethdb.KeyValueWriter, in chan trieKV, out chan common.Hash) {
+func stackTrieGenerate(db ethdb.KeyValueWriter, in chan TrieKV, out chan common.Hash) {
 	t := trie.NewStackTrie(db)
 	for leaf := range in {
-		t.TryUpdate(leaf.key[:], leaf.value)
+		t.TryUpdate(leaf.Key[:], leaf.Value)
 	}
 	var root common.Hash
 	if db == nil {

@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/pruner"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -489,6 +490,44 @@ func computeCommitment(ctx *cli.Context) error {
 	chain, chaindb := utils.MakeChain(ctx, stack, true)
 	defer chaindb.Close()
 
+	verkledb, err := stack.OpenDatabase("verkle", 0, 0, "")
+	if err != nil {
+		log.Error("Failed to open db for verkle nodes", "error", err)
+		return err
+	}
+	defer verkledb.Close()
+
+	nodesCh := make(chan verkle.FlushableNode)
+	verkleGenerate := func(db ethdb.KeyValueWriter, in chan snapshot.TrieKV, out chan common.Hash) {
+		t := verkle.New()
+		for leaf := range in {
+			t.InsertOrdered(common.CopyBytes(leaf.Key[:]), leaf.Value, ks, lg1, nodesCh)
+		}
+		// Flush remaining nodes to nodes channel
+		rootNode, ok := t.(*verkle.InternalNode)
+		if !ok {
+			panic("verkle tree has invalid root node")
+		}
+		rootNode.Flush(nodesCh)
+		comm := t.ComputeCommitment(ks, lg1)
+		root := common.BytesToHash(bls.ToCompressedG1(comm))
+		out <- root
+	}
+
+	nodesCount := 0
+	go func() {
+		for fn := range nodesCh {
+			nodesCount++
+			value, err := fn.Node.Serialize()
+			if err != nil {
+				log.Error("Failed to serialize verkle node", "error", err)
+			}
+			if err := verkledb.Put(fn.Hash[:], value); err != nil {
+				log.Error("Failed to write verkle node to db", "error", err)
+			}
+		}
+	}()
+
 	if ctx.NArg() > 1 {
 		log.Error("Too many arguments given")
 		return errors.New("too many arguments")
@@ -511,66 +550,18 @@ func computeCommitment(ctx *cli.Context) error {
 		root = head.Root()
 		log.Info("Start traversing the state", "root", root, "number", head.NumberU64())
 	}
+
 	triedb := trie.NewDatabase(chaindb)
-	t, err := trie.NewSecure(root, triedb)
+	t, err := snapshot.New(chaindb, triedb, 256, chain.CurrentBlock().Root(), false, false, false)
 	if err != nil {
-		log.Error("Failed to open trie", "root", root, "error", err)
+		log.Error("Failed to open snapshot tree", "error", err)
 		return err
 	}
-	var (
-		accounts int
-		slots    int
-		//codes      int
-		lastReport time.Time
-		start      = time.Now()
-	)
-	vRoot := verkle.New()
-	accIter := trie.NewIterator(t.NodeIterator(nil))
-	for accIter.Next() {
-		accounts += 1
-		vRoot.InsertOrdered(accIter.Key, accIter.Value, ks, lg1)
 
-		var acc state.Account
-		if err := rlp.DecodeBytes(accIter.Value, &acc); err != nil {
-			log.Error("Invalid account encountered during traversal", "error", err)
-			return err
-		}
-		if acc.Root != emptyRoot {
-			//sRoot := verkle.New()
-			storageTrie, err := trie.NewSecure(acc.Root, triedb)
-			if err != nil {
-				log.Error("Failed to open storage trie", "root", acc.Root, "error", err)
-				return err
-			}
-			storageIter := trie.NewIterator(storageTrie.NodeIterator(nil))
-			for storageIter.Next() {
-				//sRoot.InsertOrdered(storageIter.Key, storageIter.Value, ks, lg1)
-				slots += 1
-			}
-			if storageIter.Err != nil {
-				log.Error("Failed to traverse storage trie", "root", acc.Root, "error", storageIter.Err)
-				return storageIter.Err
-			}
-		}
-		//if !bytes.Equal(acc.CodeHash, emptyCode) {
-		//code := rawdb.ReadCode(chaindb, common.BytesToHash(acc.CodeHash))
-		//if len(code) == 0 {
-		//log.Error("Code is missing", "hash", common.BytesToHash(acc.CodeHash))
-		//return errors.New("missing code")
-		//}
-		//codes += 1
-		//}
-		if time.Since(lastReport) > time.Second*8 {
-			log.Info("Traversing state", "accounts", accounts, "slots", slots, /*"codes", codes,*/, "elapsed", common.PrettyDuration(time.Since(start)))
-			lastReport = time.Now()
-		}
+	if err := t.ComputeVerkleCommitment(root, verkleGenerate); err != nil {
+		log.Error("Failed to compute verkle commitment", "error", err)
 	}
-	if accIter.Err != nil {
-		log.Error("Failed to compute commitment", "root", root, "error", accIter.Err)
-		return accIter.Err
-	}
-	vRoot.ComputeCommitment(ks, lg1)
-	log.Info("Commitment computation complete", "compressed", bls.ToCompressedG1(vRoot.GetCommitment()), "accounts", accounts, "slots", slots /*"codes", codes,*/, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Info("Number of nodes written to DB\n", "nodes", nodesCount)
 	return nil
 }
 

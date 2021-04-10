@@ -499,16 +499,16 @@ func computeCommitment(ctx *cli.Context) error {
 
 	nodesCh := make(chan verkle.FlushableNode)
 	verkleGenerate := func(db ethdb.KeyValueWriter, in chan snapshot.TrieKV, out chan common.Hash) {
-		t := verkle.New()
+		t := verkle.New(10, lg1)
 		for leaf := range in {
-			t.InsertOrdered(common.CopyBytes(leaf.Key[:]), leaf.Value, ks, lg1, nodesCh)
+			t.InsertOrdered(common.CopyBytes(leaf.Key[:]), leaf.Value, ks, nodesCh)
 		}
 		// Flush remaining nodes to nodes channel
 		rootNode, ok := t.(*verkle.InternalNode)
 		if !ok {
 			panic("verkle tree has invalid root node")
 		}
-		comm := t.ComputeCommitment(ks, lg1)
+		comm := t.ComputeCommitment(ks)
 		rootNode.Flush(nodesCh)
 		root := common.BytesToHash(bls.ToCompressedG1(comm))
 		out <- root

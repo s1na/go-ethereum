@@ -2,7 +2,6 @@ package codetrie
 
 import (
 	"encoding/binary"
-	"errors"
 	"math"
 
 	sszlib "github.com/ferranbt/fastssz"
@@ -106,16 +105,12 @@ func MerkleizeSSZKeccak(code []byte, chunkSize uint) (common.Hash, error) {
 }
 
 func prepareSSZ(code []byte, chunkSize uint) (*ssz.CodeTrie, error) {
-	if chunkSize != 32 {
-		return nil, errors.New("MerkleizeSSZ only supports chunk size of 32")
-	}
-
-	rawChunks := Chunkify(code, 32)
+	rawChunks := Chunkify(code, chunkSize)
 	chunks := make([]*ssz.Chunk, len(rawChunks))
 	for i, rc := range rawChunks {
 		code := rc.code
-		if len(code) < 32 {
-			code = make([]byte, 32)
+		if uint(len(code)) < chunkSize {
+			code = make([]byte, chunkSize)
 			copy(code[:len(rc.code)], rc.code)
 		}
 		chunks[i] = &ssz.Chunk{FIO: rc.fio, Code: code}

@@ -10,6 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+const CHUNK_SIZE = 32
+
 type CMStats struct {
 	NumContracts int
 	ProofSize    int
@@ -92,7 +94,7 @@ func (c *Contract) TouchPC(pc int) error {
 		return errors.New("PC to touch exceeds bytecode length")
 	}
 
-	cid := pc / 32
+	cid := pc / CHUNK_SIZE
 	c.touchedChunks[cid] = true
 
 	return nil
@@ -106,8 +108,8 @@ func (c *Contract) TouchRange(from, to int) error {
 		return errors.New("PC to touch exceeds bytecode length")
 	}
 
-	fcid := from / 32
-	tcid := to / 32
+	fcid := from / CHUNK_SIZE
+	tcid := to / CHUNK_SIZE
 	for i := fcid; i < tcid+1; i++ {
 		c.touchedChunks[i] = true
 	}
@@ -120,7 +122,7 @@ func (c *Contract) CodeSize() int {
 }
 
 func (c *Contract) Prove() (*sszlib.Multiproof, error) {
-	tree, err := GetSSZTree(c.code, 32)
+	tree, err := GetSSZTree(c.code, CHUNK_SIZE)
 	if err != nil {
 		return nil, err
 	}

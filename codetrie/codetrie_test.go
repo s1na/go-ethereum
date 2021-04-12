@@ -18,13 +18,19 @@ type TChunk struct {
 }
 
 type ChunkifyTest struct {
+	Input     string
+	Chunks    []TChunk
+	ChunkSize uint
+}
+
+type MerkleizeTest struct {
 	Input    string
 	Chunks   []TChunk
 	CodeRoot string
 }
 
-func TestChunkifyNum(t *testing.T) {
-	testCases := []ChunkifyTest{
+func TestMerkleize(t *testing.T) {
+	testCases := []MerkleizeTest{
 		{
 			Input: "6000",
 			Chunks: []TChunk{
@@ -146,6 +152,97 @@ func TestChunkifyNum(t *testing.T) {
 		}
 		if !bytes.Equal(stackRoot.Bytes(), expectedRoot) {
 			t.Errorf("%v: invalid code root for MerkleizeStack: expected %s, got %s\n", t.Name(), c.CodeRoot, stackRoot.Hex())
+		}
+	}
+}
+
+func TestChunkifySize(t *testing.T) {
+	testCases := []ChunkifyTest{
+		{
+			ChunkSize: 48,
+			Input:     strings.Repeat("58", 47) + "7f" + strings.Repeat("5b", 32) + strings.Repeat("58", 30),
+			Chunks: []TChunk{
+				{
+					fio:  0,
+					code: strings.Repeat("58", 47) + "7f",
+				},
+				{
+					fio:  32,
+					code: strings.Repeat("5b", 32) + strings.Repeat("58", 16),
+				},
+				{
+					fio:  0,
+					code: strings.Repeat("58", 14),
+				},
+			},
+		},
+		{
+			ChunkSize: 16,
+			Input:     strings.Repeat("58", 15) + "7f" + strings.Repeat("5b", 32) + strings.Repeat("58", 10),
+			Chunks: []TChunk{
+				{
+					fio:  0,
+					code: strings.Repeat("58", 15) + "7f",
+				},
+				{
+					fio:  16,
+					code: strings.Repeat("5b", 16),
+				},
+				{
+					fio:  16,
+					code: strings.Repeat("5b", 16),
+				},
+				{
+					fio:  0,
+					code: strings.Repeat("58", 10),
+				},
+			},
+		},
+		{
+			ChunkSize: 8,
+			Input:     strings.Repeat("58", 6) + "6b" + strings.Repeat("5b", 12) + strings.Repeat("58", 8),
+			Chunks: []TChunk{
+				{
+					fio:  0,
+					code: strings.Repeat("58", 6) + "6b" + "5b",
+				},
+				{
+					fio:  8,
+					code: strings.Repeat("5b", 8),
+				},
+				{
+					fio:  3,
+					code: strings.Repeat("5b", 3) + strings.Repeat("58", 5),
+				},
+				{
+					fio:  0,
+					code: strings.Repeat("58", 3),
+				},
+			},
+		},
+	}
+
+	for _, c := range testCases {
+		code, err := hex.DecodeString(c.Input)
+		if err != nil {
+			t.Error(err)
+		}
+		chunks := Chunkify(code, c.ChunkSize)
+		if len(chunks) != len(c.Chunks) {
+			t.Errorf("%v: invalid number of chunks: expected %d, got %d\n", t.Name(), len(c.Chunks), len(chunks))
+		}
+		for i, chunk := range chunks {
+			expectedChunk := c.Chunks[i]
+			if chunk.fio != expectedChunk.fio {
+				t.Errorf("%v: invalid chunk FIO: expected %d, got %d\n", t.Name(), expectedChunk.fio, chunk.fio)
+			}
+			expectedCode, err := hex.DecodeString(expectedChunk.code)
+			if err != nil {
+				t.Error(err)
+			}
+			if !bytes.Equal(chunk.code, expectedCode) {
+				t.Errorf("%v: invalid chunk code: expected %s, got %s\n", t.Name(), expectedChunk.code, hex.EncodeToString(chunk.code))
+			}
 		}
 	}
 }

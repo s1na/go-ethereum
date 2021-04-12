@@ -178,12 +178,32 @@ func setFIO(chunks []*Chunk) {
 
 		for j, op := range chunk.code {
 			opcode := OpCode(op)
-			if opcode.IsPush() {
-				size := getPushSize(opcode)
-				if j+size >= chunkSize {
-					nextFIO := (j + size + 1) - chunkSize
-					chunks[i+1].fio = uint8(nextFIO)
-				}
+			// Push is the only opcode with immediate
+			if !opcode.IsPush() {
+				continue
+			}
+			size := getPushSize(opcode)
+			// Fits within chunk
+			if j+size < chunkSize {
+				continue
+			}
+
+			// Note: largest possible immediate is 32 bytes.
+			// If chunkSize < 32, then data could span multiple chunks.
+			// restData is number of data bytes in next chunks.
+			restData := (j + size + 1) - chunkSize
+			spanningChunks := int(math.Ceil(float64(restData) / float64(chunkSize)))
+			if i+spanningChunks >= len(chunks) {
+				panic("pushdata exceeds code length")
+			}
+			k := 1
+			for restData > chunkSize {
+				chunks[i+k].fio = uint8(chunkSize)
+				k++
+				restData -= chunkSize
+			}
+			if restData > 0 {
+				chunks[i+k].fio = uint8(restData)
 			}
 		}
 	}

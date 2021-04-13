@@ -21,11 +21,16 @@ type CMStats struct {
 }
 
 func NewCMStats() *CMStats {
-	return &CMStats{
+	stats := &CMStats{
 		ProofSizes: make([]int, len(CHUNK_SIZES)),
 		ProofStats: make([]*ssz.ProofStats, len(CHUNK_SIZES)),
 		RLPStats:   make([]*ssz.RLPStats, len(CHUNK_SIZES)),
 	}
+	for i := 0; i < len(CHUNK_SIZES); i++ {
+		stats.ProofStats[i] = &ssz.ProofStats{}
+		stats.RLPStats[i] = &ssz.RLPStats{}
+	}
+	return stats
 }
 
 type ContractBag struct {

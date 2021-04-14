@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -44,6 +45,8 @@ var (
 
 	// emptyCode is the known hash of the empty EVM bytecode.
 	emptyCode = crypto.Keccak256(nil)
+
+	VERKLE_ROOT_KEY = []byte("verkle-root")
 )
 
 var (
@@ -168,6 +171,24 @@ referenced trie node or contract code is missing. This command can be used for
 state integrity verification. The default checking target is the HEAD state.
 
 It's also usable without snapshot enabled.
+`,
+			},
+			{
+				Name:      "build-verkle",
+				Usage:     "Builds the verkle tree from db",
+				ArgsUsage: "<root>",
+				Action:    utils.MigrateFlags(buildVerkle),
+				Category:  "MISCELLANEOUS COMMANDS",
+				Flags: []cli.Flag{
+					utils.DataDirFlag,
+					utils.RopstenFlag,
+					utils.RinkebyFlag,
+					utils.GoerliFlag,
+					utils.LegacyTestnetFlag,
+				},
+				Description: `
+geth snapshot build-verkle
+will read verkle nodes from database and builds the tree, computing the commitment.
 `,
 			},
 		},
@@ -558,10 +579,97 @@ func computeCommitment(ctx *cli.Context) error {
 		return err
 	}
 
-	if err := t.ComputeVerkleCommitment(root, verkleGenerate); err != nil {
+	commitment, err := t.ComputeVerkleCommitment(root, verkleGenerate)
+	if err != nil {
 		log.Error("Failed to compute verkle commitment", "error", err)
 	}
 	log.Info("Number of nodes written to DB\n", "nodes", nodesCount)
+	verkledb.Put(VERKLE_ROOT_KEY, commitment.Bytes())
+	return nil
+}
+
+func buildVerkle(ctx *cli.Context) error {
+	if ctx.NArg() > 1 {
+		log.Error("Too many arguments given")
+		return errors.New("too many arguments")
+	}
+
+	fftCfg := kzg.NewFFTSettings(10)
+	s1, s2, lg1, err := GenerateTestingSetupWithLagrange("1927409816240961209460912649124", 1024, fftCfg)
+	if err != nil {
+		panic(err)
+	}
+	ks := kzg.NewKZGSettings(fftCfg, s1, s2)
+	treeConfig := verkle.InitTreeConfig(10, lg1)
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	_, chaindb := utils.MakeChain(ctx, stack, true)
+	defer chaindb.Close()
+
+	verkledb, err := stack.OpenDatabase("verkle", 0, 0, "")
+	if err != nil {
+		log.Error("Failed to open db for verkle nodes", "error", err)
+		return err
+	}
+	defer verkledb.Close()
+
+	rootHash, err := verkledb.Get(VERKLE_ROOT_KEY)
+	if err != nil {
+		return err
+	}
+
+	leaves := 0
+	var resolve func([]byte) (verkle.VerkleNode, error)
+	resolve = func(hash []byte) (verkle.VerkleNode, error) {
+		encoded, err := verkledb.Get(hash)
+		if err != nil {
+			return nil, err
+		}
+
+		node, err := verkle.ParseNode(encoded, treeConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		switch node.(type) {
+		case *verkle.LeafNode:
+			leaves++
+			return node, nil
+		case *verkle.HashedNode:
+			fmt.Printf("hashed node: %v\n", node.Hash())
+
+		case *verkle.InternalNode:
+			internal := node.(*verkle.InternalNode)
+			for i, child := range internal.Children() {
+				if _, ok := child.(verkle.Empty); ok {
+					continue
+				}
+				h, isHash := child.(*verkle.HashedNode)
+				if !isHash {
+					return nil, errors.New("internal node has unexpected child")
+				}
+				res, err := resolve(h.Hash().Bytes())
+				if err != nil {
+					return nil, err
+				}
+				internal.SetChild(i, res)
+			}
+			return node, nil
+		case *verkle.Empty:
+			return node, nil
+		default:
+			panic("unexpected node type")
+		}
+		panic("unreachable code")
+	}
+	root, err := resolve(rootHash)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Re-built tree from db. Root commitment: %x\n", root.ComputeCommitment(ks))
 	return nil
 }
 

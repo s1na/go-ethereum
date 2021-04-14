@@ -735,10 +735,10 @@ func (t *Tree) Verify(root common.Hash) error {
 }
 
 // Computes verkle commitment against snapshot
-func (t *Tree) ComputeVerkleCommitment(root common.Hash, generatorFn trieGeneratorFn) error {
+func (t *Tree) ComputeVerkleCommitment(root common.Hash, generatorFn trieGeneratorFn) (common.Hash, error) {
 	acctIt, err := t.AccountIterator(root, common.Hash{})
 	if err != nil {
-		return err
+		return common.Hash{}, err
 	}
 	defer acctIt.Release()
 
@@ -757,10 +757,10 @@ func (t *Tree) ComputeVerkleCommitment(root common.Hash, generatorFn trieGenerat
 	}, newGenerateStats(), true, false)
 
 	if err != nil {
-		return err
+		return common.Hash{}, err
 	}
 	log.Info("Computed verkle commitment", "commitment", got)
-	return nil
+	return got, nil
 }
 
 // disklayer is an internal helper function to return the disk layer.

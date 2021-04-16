@@ -18,7 +18,11 @@ package core
 
 import (
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
 
+	"github.com/ethereum/go-ethereum/bag"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -67,6 +71,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
+	bag := bag.NewBag()
+	cfg.Bag = bag
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 	// Iterate over and process the individual transactions
@@ -83,6 +89,24 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
+
+	if len(bag.LargeInitCodes) > 0 {
+		liFile, err := os.OpenFile("./li-result.csv", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		defer liFile.Close()
+
+		sizeList := make([]string, 0, 2*len(bag.LargeInitCodes))
+		for h, s := range bag.LargeInitCodes {
+			sizeList = append(sizeList, h.Hex())
+			sizeList = append(sizeList, strconv.Itoa(s))
+		}
+		if _, err := liFile.WriteString(fmt.Sprintf("%d, %d, %s\n", block.NumberU64(), len(bag.LargeInitCodes), strings.Join(sizeList, ","))); err != nil {
+			return nil, nil, 0, err
+		}
+	}
+
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles())
 

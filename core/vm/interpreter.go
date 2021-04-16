@@ -20,6 +20,7 @@ import (
 	"hash"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/bag"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
@@ -37,7 +38,8 @@ type Config struct {
 	EWASMInterpreter string // External EWASM interpreter options
 	EVMInterpreter   string // External EVM interpreter options
 
-	ExtraEips []int // Additional EIPS that are to be enabled
+	ExtraEips []int    // Additional EIPS that are to be enabled
+	Bag       *bag.Bag // Data collection bag
 }
 
 // Interpreter is used to run Ethereum based contracts and will utilise the
@@ -277,6 +279,13 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		if in.cfg.Debug {
 			in.cfg.Tracer.CaptureState(in.evm, pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
 			logged = true
+		}
+
+		// Create operations have nil as input
+		if in.cfg.Bag != nil && input == nil {
+			if len(contract.Code) >= 0xc000 {
+				in.cfg.Bag.AddLargeInit(contract.CodeHash, len(contract.Code))
+			}
 		}
 
 		// execute the operation

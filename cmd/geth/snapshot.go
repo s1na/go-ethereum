@@ -477,12 +477,6 @@ func GenerateTestingSetupWithLagrange(secret string, n uint64, fftCfg *kzg.FFTSe
 }
 
 func computeCommitment(ctx *cli.Context) error {
-	fftCfg := kzg.NewFFTSettings(10)
-	s1, s2, lg1, err := GenerateTestingSetupWithLagrange("1927409816240961209460912649124", 1024, fftCfg)
-	if err != nil {
-		panic(err)
-	}
-	ks := kzg.NewKZGSettings(fftCfg, s1, s2)
 
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
@@ -499,16 +493,16 @@ func computeCommitment(ctx *cli.Context) error {
 
 	nodesCh := make(chan verkle.FlushableNode)
 	verkleGenerate := func(db ethdb.KeyValueWriter, in chan snapshot.TrieKV, out chan common.Hash) {
-		t := verkle.New(10, lg1)
+		t := verkle.New(10)
 		for leaf := range in {
-			t.InsertOrdered(common.CopyBytes(leaf.Key[:]), leaf.Value, ks, nodesCh)
+			t.InsertOrdered(common.CopyBytes(leaf.Key[:]), leaf.Value, nodesCh)
 		}
 		// Flush remaining nodes to nodes channel
 		rootNode, ok := t.(*verkle.InternalNode)
 		if !ok {
 			panic("verkle tree has invalid root node")
 		}
-		comm := t.ComputeCommitment(ks)
+		comm := t.ComputeCommitment()
 		rootNode.Flush(nodesCh)
 		root := common.BytesToHash(bls.ToCompressedG1(comm))
 		out <- root

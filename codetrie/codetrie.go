@@ -240,8 +240,10 @@ func setFIO(chunks []*Chunk) {
 			// restData is number of data bytes in next chunks.
 			restData := (j + size + 1) - chunkSize
 			spanningChunks := int(math.Ceil(float64(restData) / float64(chunkSize)))
+			// Mostly happens in case of Solidity metadata at
+			// the end of code.
 			if i+spanningChunks >= len(chunks) {
-				panic("pushdata exceeds code length")
+				continue
 			}
 			k := 1
 			for restData > chunkSize {

@@ -20,6 +20,7 @@ var (
 	versionValue  = []byte{0x00}
 	codeLengthKey = []byte{0xff, 0xfe}
 	codeHashKey   = []byte{0xff, 0xff}
+	swarmIdent    = []byte{0xa1, 0x65, 0x62, 0x7a, 0x7a, 0x72, 0x30} // a165 bzzr0
 )
 
 type Trie interface {
@@ -217,19 +218,46 @@ func setFIO(chunks []*Chunk) {
 	}
 
 	chunkSize := len(chunks[0].code)
+	swarmMatch := 0
+	swarmLeft := 0
 
 	for i, chunk := range chunks {
 		if i == len(chunks)-1 {
 			break
 		}
 
+		pushDataLeft := 0
 		for j, op := range chunk.code {
+
+			if swarmLeft > 0 {
+				swarmLeft -= 1 // skip bytes corresponding to swarm metadata
+				continue
+			}
+
+			if op == swarmIdent[swarmMatch] {
+				swarmMatch += 1
+				if swarmMatch == len(swarmIdent) {
+					swarmLeft = 36
+				}
+			} else {
+				swarmMatch = 0
+			}
+
+			if uint8(j) < chunk.fio { // FIO already set in previous chunk analysis
+				continue
+			}
+			if pushDataLeft > 0 { // current byte corresponds to PUSH data
+				pushDataLeft -= 1
+				continue
+			}
+
 			opcode := OpCode(op)
 			// Push is the only opcode with immediate
 			if !opcode.IsPush() {
 				continue
 			}
 			size := getPushSize(opcode)
+			pushDataLeft = size
 			// Fits within chunk
 			if j+size < chunkSize {
 				continue

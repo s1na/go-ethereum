@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"runtime"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -477,7 +478,7 @@ func GenerateTestingSetupWithLagrange(secret string, n uint64, fftCfg *kzg.FFTSe
 }
 
 func computeCommitment(ctx *cli.Context) error {
-
+	const nodesInBatch = 500000
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
@@ -491,7 +492,8 @@ func computeCommitment(ctx *cli.Context) error {
 	}
 	defer verkledb.Close()
 
-	nodesCh := make(chan verkle.FlushableNode)
+	threads := runtime.NumCPU()
+	nodesCh := make(chan verkle.FlushableNode, threads)
 	verkleGenerate := func(db ethdb.KeyValueWriter, in chan snapshot.TrieKV, out chan common.Hash) {
 		t := verkle.New(10)
 		for leaf := range in {
@@ -508,6 +510,8 @@ func computeCommitment(ctx *cli.Context) error {
 		out <- root
 	}
 
+	batch := verkledb.NewBatch()
+	dbDone := make(chan bool)
 	nodesCount := 0
 	go func() {
 		for fn := range nodesCh {
@@ -516,10 +520,18 @@ func computeCommitment(ctx *cli.Context) error {
 			if err != nil {
 				log.Error("Failed to serialize verkle node", "error", err)
 			}
-			if err := verkledb.Put(fn.Hash[:], value); err != nil {
+			if err := batch.Put(fn.Hash[:], value); err != nil {
 				log.Error("Failed to write verkle node to db", "error", err)
 			}
+			// Flush writes every 10 node
+			if nodesCount%nodesInBatch == 0 {
+				if err := batch.Write(); err != nil {
+					log.Error("failed to flush batch writes", "error", err)
+				}
+				batch.Reset()
+			}
 		}
+		dbDone <- true
 	}()
 
 	if ctx.NArg() > 1 {
@@ -554,6 +566,11 @@ func computeCommitment(ctx *cli.Context) error {
 
 	if err := t.ComputeVerkleCommitment(root, verkleGenerate); err != nil {
 		log.Error("Failed to compute verkle commitment", "error", err)
+	}
+	close(nodesCh)
+	<-dbDone
+	if err := batch.Write(); err != nil {
+		log.Error("failed to flush batch writes", "error", err)
 	}
 	log.Info("Number of nodes written to DB\n", "nodes", nodesCount)
 	return nil

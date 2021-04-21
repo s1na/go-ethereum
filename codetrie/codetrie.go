@@ -238,6 +238,7 @@ func setFIO(chunks []*Chunk) {
 				swarmMatch += 1
 				if swarmMatch == len(swarmIdent) {
 					swarmLeft = 36
+					swarmMatch = 0
 				}
 			} else {
 				swarmMatch = 0

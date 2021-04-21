@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"runtime"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -491,7 +492,8 @@ func computeCommitment(ctx *cli.Context) error {
 	}
 	defer verkledb.Close()
 
-	nodesCh := make(chan verkle.FlushableNode)
+	threads := runtime.NumCPU()
+	nodesCh := make(chan verkle.FlushableNode, threads)
 	verkleGenerate := func(db ethdb.KeyValueWriter, in chan snapshot.TrieKV, out chan common.Hash) {
 		t := verkle.New(10)
 		for leaf := range in {
@@ -508,6 +510,7 @@ func computeCommitment(ctx *cli.Context) error {
 		out <- root
 	}
 
+	dbDone := make(chan bool)
 	nodesCount := 0
 	go func() {
 		for fn := range nodesCh {
@@ -520,6 +523,7 @@ func computeCommitment(ctx *cli.Context) error {
 				log.Error("Failed to write verkle node to db", "error", err)
 			}
 		}
+		dbDone <- true
 	}()
 
 	if ctx.NArg() > 1 {
@@ -555,6 +559,8 @@ func computeCommitment(ctx *cli.Context) error {
 	if err := t.ComputeVerkleCommitment(root, verkleGenerate); err != nil {
 		log.Error("Failed to compute verkle commitment", "error", err)
 	}
+	close(nodesCh)
+	<-dbDone
 	log.Info("Number of nodes written to DB\n", "nodes", nodesCount)
 	return nil
 }

@@ -219,7 +219,6 @@ func setFIO(chunks []*Chunk) {
 
 	chunkSize := len(chunks[0].code)
 	swarmMatch := 0
-	swarmLeft := 0
 
 	for i, chunk := range chunks {
 		if i == len(chunks)-1 {
@@ -229,17 +228,12 @@ func setFIO(chunks []*Chunk) {
 		pushDataLeft := 0
 		for j, op := range chunk.code {
 
-			if swarmLeft > 0 {
-				swarmLeft -= 1 // skip bytes corresponding to swarm metadata
-				continue
+			if swarmMatch == len(swarmIdent) {
+				continue // skip bytes corresponding to swarm metadata
 			}
 
 			if op == swarmIdent[swarmMatch] || (swarmMatch == 0 && op == 0xa2) {
 				swarmMatch += 1
-				if swarmMatch == len(swarmIdent) {
-					swarmLeft = 36
-					swarmMatch = 0
-				}
 			} else {
 				swarmMatch = 0
 			}

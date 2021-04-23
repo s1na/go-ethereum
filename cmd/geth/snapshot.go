@@ -46,6 +46,8 @@ var (
 	emptyCode = crypto.Keccak256(nil)
 )
 
+const VERKLE_ROOT_KEY = []byte("verkle-root")
+
 var (
 	snapshotCommand = cli.Command{
 		Name:        "snapshot",
@@ -477,7 +479,6 @@ func GenerateTestingSetupWithLagrange(secret string, n uint64, fftCfg *kzg.FFTSe
 }
 
 func computeCommitment(ctx *cli.Context) error {
-
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
@@ -552,8 +553,12 @@ func computeCommitment(ctx *cli.Context) error {
 		return err
 	}
 
-	if err := t.ComputeVerkleCommitment(root, verkleGenerate); err != nil {
+	comm, err := t.ComputeVerkleCommitment(root, verkleGenerate)
+	if err != nil {
 		log.Error("Failed to compute verkle commitment", "error", err)
+	}
+	if err := verkledb.Put(VERKLE_ROOT_KEY, comm.Bytes()); err != nil {
+		return err
 	}
 	log.Info("Number of nodes written to DB\n", "nodes", nodesCount)
 	return nil

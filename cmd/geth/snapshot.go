@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -44,9 +45,9 @@ var (
 
 	// emptyCode is the known hash of the empty EVM bytecode.
 	emptyCode = crypto.Keccak256(nil)
-)
 
-const VERKLE_ROOT_KEY = []byte("verkle-root")
+	verkleRootKey = []byte("verkle-root")
+)
 
 var (
 	snapshotCommand = cli.Command{
@@ -170,6 +171,24 @@ referenced trie node or contract code is missing. This command can be used for
 state integrity verification. The default checking target is the HEAD state.
 
 It's also usable without snapshot enabled.
+`,
+			},
+			{
+				Name:      "build-verkle",
+				Usage:     "Builds the verkle tree from db",
+				ArgsUsage: "<root>",
+				Action:    utils.MigrateFlags(buildVerkle),
+				Category:  "MISCELLANEOUS COMMANDS",
+				Flags: []cli.Flag{
+					utils.DataDirFlag,
+					utils.RopstenFlag,
+					utils.RinkebyFlag,
+					utils.GoerliFlag,
+					utils.LegacyTestnetFlag,
+				},
+				Description: `
+geth snapshot build-verkle
+will read verkle nodes from database and builds the tree, computing the commitment.
 `,
 			},
 		},
@@ -557,10 +576,46 @@ func computeCommitment(ctx *cli.Context) error {
 	if err != nil {
 		log.Error("Failed to compute verkle commitment", "error", err)
 	}
-	if err := verkledb.Put(VERKLE_ROOT_KEY, comm.Bytes()); err != nil {
+	if err := verkledb.Put(verkleRootKey, comm.Bytes()); err != nil {
 		return err
 	}
 	log.Info("Number of nodes written to DB\n", "nodes", nodesCount)
+	return nil
+}
+
+func buildVerkle(ctx *cli.Context) error {
+	if ctx.NArg() > 1 {
+		log.Error("Too many arguments given")
+		return errors.New("too many arguments")
+	}
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	_, chaindb := utils.MakeChain(ctx, stack, true)
+	defer chaindb.Close()
+
+	verkledb, err := stack.OpenDatabase("verkle", 0, 0, "")
+	if err != nil {
+		log.Error("Failed to open db for verkle nodes", "error", err)
+		return err
+	}
+	defer verkledb.Close()
+
+	rootHash, err := verkledb.Get(verkleRootKey)
+	if err != nil {
+		return err
+	}
+	rootRaw, err := verkledb.Get(rootHash)
+	if err != nil {
+		return err
+	}
+	treeConfig := verkle.GetTreeConfig(10)
+	root, err := verkle.Rebuild(rootRaw, treeConfig, verkledb.Get)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Re-built tree from db. Root commitment: %x\n", root.ComputeCommitment())
 	return nil
 }
 

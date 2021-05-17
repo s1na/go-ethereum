@@ -224,6 +224,11 @@ func setFIO(chunks []*Chunk) {
 		}
 
 		for j, op := range chunk.code {
+			// Skip bytes part of a data
+			if int(chunks[i].fio) > j {
+				continue
+			}
+
 			opcode := OpCode(op)
 			// Push is the only opcode with immediate
 			if !opcode.IsPush() {

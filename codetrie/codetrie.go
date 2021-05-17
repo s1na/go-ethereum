@@ -3,7 +3,6 @@ package codetrie
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"math"
 
 	sszlib "github.com/ferranbt/fastssz"
@@ -33,17 +32,13 @@ type CodeTrie interface {
 	GetTree() (*sszlib.Node, error)
 }
 
-const (
-	FIOUnset = 0xff
-)
-
 type Chunk struct {
 	fio  uint8 // firstInstructionOffset
 	code []byte
 }
 
 func NewChunk() *Chunk {
-	return &Chunk{fio: FIOUnset, code: nil}
+	return &Chunk{fio: 0, code: nil}
 }
 
 func (c *Chunk) Serialize() []byte {
@@ -208,20 +203,10 @@ func Chunkify(code []byte, chunkSize uint) []*Chunk {
 		if i == numChunks-1 {
 			endIdx = uint(len(code))
 		}
-		chunks[i] = &Chunk{fio: FIOUnset, code: code[startIdx:endIdx]}
+		chunks[i] = &Chunk{fio: 0, code: code[startIdx:endIdx]}
 	}
 
 	setFIO(chunks)
-
-	// Sanity check that all chunks were processed
-	for i, _ := range chunks {
-		if i == len(chunks)-1 {
-			break
-		}
-		if chunks[i].fio == FIOUnset {
-			panic(fmt.Sprintf("Chunk %d has unprocessed FIO", i))
-		}
-	}
 
 	return chunks
 }
@@ -236,11 +221,6 @@ func setFIO(chunks []*Chunk) {
 	for i, chunk := range chunks {
 		if i == len(chunks)-1 {
 			break
-		}
-
-		// This chunk was already processed (it is a data chunk continuation)
-		if chunks[i].fio != FIOUnset {
-			continue
 		}
 
 		for j, op := range chunk.code {

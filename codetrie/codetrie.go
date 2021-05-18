@@ -212,6 +212,7 @@ func Chunkify(code []byte, chunkSize uint) []*Chunk {
 }
 
 func setFIO(chunks []*Chunk) {
+	// Abort if there is only one chunk
 	if len(chunks) < 2 {
 		return
 	}
@@ -219,13 +220,14 @@ func setFIO(chunks []*Chunk) {
 	chunkSize := len(chunks[0].code)
 
 	for i, chunk := range chunks {
+		// Skip last chunk (as there's no chunk following)
 		if i == len(chunks)-1 {
 			break
 		}
 
 		for j, op := range chunk.code {
 			// Skip bytes part of a data
-			if int(chunks[i].fio) > j {
+			if j < int(chunks[i].fio) {
 				continue
 			}
 
@@ -244,20 +246,19 @@ func setFIO(chunks []*Chunk) {
 			// If chunkSize < 32, then data could span multiple chunks.
 			// restData is number of data bytes in next chunks.
 			restData := (j + size + 1) - chunkSize
-			spanningChunks := int(math.Ceil(float64(restData) / float64(chunkSize)))
-			// Mostly happens in case of Solidity metadata at
-			// the end of code.
-			if i+spanningChunks >= len(chunks) {
-				continue
-			}
 			k := 1
 			for restData > chunkSize {
-				chunks[i+k].fio = uint8(chunkSize)
+				// We may be trying to access non-existing chunks in case of truncated or invalid code
+				if (i+k) <= len(chunks)-1 {
+					chunks[i+k].fio = uint8(chunkSize)
+				}
 				k++
 				restData -= chunkSize
 			}
 			if restData > 0 {
-				chunks[i+k].fio = uint8(restData)
+				if (i+k) <= len(chunks)-1 {
+					chunks[i+k].fio = uint8(restData)
+				}
 			}
 		}
 	}

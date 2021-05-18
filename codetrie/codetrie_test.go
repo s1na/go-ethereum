@@ -404,11 +404,11 @@ func TestMerkleize24(t *testing.T) {
 					code: strings.Repeat("58", 23) + "7f",
 				},
 				{
-					fio: 0,
+					fio: 24,
 					code: strings.Repeat("58", 3),
 				},
 			},
-			CodeRoot: "7e4cf3548c4896daa1c463be7016156e6324c3eac239df2d668deb833d8e725e",
+			CodeRoot: "b2cf2c424ea0e1b43b0d2d2fb9b2b4983a9aac4a2319af47806e6b9625767a44",
 		},
 		{
 			// Test of https://etherscan.io/tx/0x8217ac6d4c0578a3d954c6800ab59060a3c376c81ee17c3726bd4bcc7167e12e

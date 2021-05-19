@@ -502,9 +502,8 @@ func computeCommitment(ctx *cli.Context) error {
 		if !ok {
 			panic("verkle tree has invalid root node")
 		}
-		comm := t.ComputeCommitment()
+		root := t.Hash()
 		rootNode.Flush(nodesCh)
-		root := common.BytesToHash(bls.ToCompressedG1(comm))
 		out <- root
 	}
 

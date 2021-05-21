@@ -735,7 +735,7 @@ func (t *Tree) Verify(root common.Hash) error {
 }
 
 // Computes verkle commitment against snapshot
-func (t *Tree) ComputeVerkleCommitment(root common.Hash, generatorFn trieGeneratorFn) error {
+func (t *Tree) ComputeVerkleCommitment(root common.Hash, generatorFn trieGeneratorFn, slotsCh chan TrieKV) error {
 	acctIt, err := t.AccountIterator(root, common.Hash{})
 	if err != nil {
 		return err
@@ -749,11 +749,11 @@ func (t *Tree) ComputeVerkleCommitment(root common.Hash, generatorFn trieGenerat
 		}
 		defer storageIt.Release()
 
-		hash, err := generateTrieRoot(nil, storageIt, accountHash, generatorFn, nil, stat, false, false)
-		if err != nil {
-			return common.Hash{}, err
+		// Start to feed leaves
+		for storageIt.Next() {
+			slotsCh <- TrieKV{storageIt.Hash(), common.CopyBytes(storageIt.Slot())}
 		}
-		return hash, nil
+		return common.Hash{}, err
 	}, newGenerateStats(), true, false)
 
 	if err != nil {

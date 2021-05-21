@@ -492,10 +492,19 @@ func computeCommitment(ctx *cli.Context) error {
 	defer verkledb.Close()
 
 	nodesCh := make(chan verkle.FlushableNode)
+	slotsCh := make(chan snapshot.TrieKV)
+	doneCh := make(chan bool)
 	verkleGenerate := func(db ethdb.KeyValueWriter, in chan snapshot.TrieKV, out chan common.Hash) {
 		t := verkle.New(10)
-		for leaf := range in {
-			t.InsertOrdered(common.CopyBytes(leaf.Key[:]), leaf.Value, nodesCh)
+		for {
+			select {
+			case leaf := <-in:
+				t.InsertOrdered(common.CopyBytes(leaf.Key[:]), leaf.Value, nodesCh, verkledb.Get)
+			case leaf := <-slotsCh:
+				t.InsertOrdered(common.CopyBytes(leaf.Key[:]), leaf.Value, nodesCh, verkledb.Get)
+			case <-doneCh:
+				break
+			}
 		}
 		// Flush remaining nodes to nodes channel
 		rootNode, ok := t.(*verkle.InternalNode)
@@ -551,9 +560,10 @@ func computeCommitment(ctx *cli.Context) error {
 		return err
 	}
 
-	if err := t.ComputeVerkleCommitment(root, verkleGenerate); err != nil {
+	if err := t.ComputeVerkleCommitment(root, verkleGenerate, slotsCh); err != nil {
 		log.Error("Failed to compute verkle commitment", "error", err)
 	}
+	doneCh <- true
 	log.Info("Number of nodes written to DB\n", "nodes", nodesCount)
 	return nil
 }

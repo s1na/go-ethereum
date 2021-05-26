@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -751,16 +752,30 @@ func (t *Tree) ComputeVerkleCommitment(root common.Hash, generatorFn trieGenerat
 		return common.Hash(sha256.Sum256(raw))
 	}
 
-	got, err := generateTrieRoot(nil, acctIt, common.Hash{}, generatorFn, func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
+	got, err := generateTrieRoot(nil, acctIt, common.Hash{}, generatorFn, func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stats *generateStats) (common.Hash, error) {
 		storageIt, err := t.StorageIterator(root, accountHash, common.Hash{})
 		if err != nil {
 			return common.Hash{}, err
 		}
 		defer storageIt.Release()
 
+		logged := time.Now()
+		processed := uint64(0)
+
 		// Start to feed leaves
 		for storageIt.Next() {
 			slotsCh <- TrieKV{slotKey(accountHash.Bytes(), storageIt.Hash().Bytes()), common.CopyBytes(storageIt.Slot())}
+			// Accumulate the generation statistic if it's required.
+			processed++
+			if time.Since(logged) > 3*time.Second && stats != nil {
+				stats.progressContract(accountHash, storageIt.Hash(), processed)
+				logged, processed = time.Now(), 0
+			}
+		}
+
+		// Commit the last part statistic.
+		if processed > 0 && stats != nil {
+			stats.finishContract(accountHash, processed)
 		}
 		return common.Hash{}, err
 	}, newGenerateStats(), true, false)

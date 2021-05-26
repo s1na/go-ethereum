@@ -18,7 +18,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"errors"
 	"time"
 
@@ -495,13 +494,6 @@ func computeCommitment(ctx *cli.Context) error {
 	nodesCh := make(chan verkle.FlushableNode)
 	slotsCh := make(chan snapshot.TrieKV)
 	doneCh := make(chan bool)
-	slotKey := func(address, slot []byte) []byte {
-		// TODO: implement correct storage key scheme
-		raw := make([]byte, len(address)+len(slot))
-		copy(raw[:len(address)], address)
-		copy(raw[len(address):], slot)
-		return sha256.Sum256(raw)
-	}
 
 	verkleGenerate := func(db ethdb.KeyValueWriter, in chan snapshot.TrieKV, out chan common.Hash) {
 		t := verkle.New(10)
@@ -510,7 +502,8 @@ func computeCommitment(ctx *cli.Context) error {
 			case leaf := <-in:
 				t.InsertOrdered(common.CopyBytes(leaf.Key[:]), leaf.Value, nodesCh, verkledb.Get)
 			case leaf := <-slotsCh:
-				t.InsertOrdered(common.CopyBytes(leaf.Key[:]), leaf.Value, nodesCh, verkledb.Get)
+				// Slot key is copied before being hashed
+				t.InsertOrdered(leaf.Key[:], leaf.Value, nodesCh, verkledb.Get)
 			case <-doneCh:
 				break
 			}

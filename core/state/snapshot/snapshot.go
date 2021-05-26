@@ -19,6 +19,7 @@ package snapshot
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"sync"
@@ -742,6 +743,14 @@ func (t *Tree) ComputeVerkleCommitment(root common.Hash, generatorFn trieGenerat
 	}
 	defer acctIt.Release()
 
+	slotKey := func(address, slot []byte) common.Hash {
+		// TODO: implement correct storage key scheme
+		raw := make([]byte, len(address)+len(slot))
+		copy(raw[:len(address)], address)
+		copy(raw[len(address):], slot)
+		return common.Hash(sha256.Sum256(raw))
+	}
+
 	got, err := generateTrieRoot(nil, acctIt, common.Hash{}, generatorFn, func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
 		storageIt, err := t.StorageIterator(root, accountHash, common.Hash{})
 		if err != nil {
@@ -751,7 +760,7 @@ func (t *Tree) ComputeVerkleCommitment(root common.Hash, generatorFn trieGenerat
 
 		// Start to feed leaves
 		for storageIt.Next() {
-			slotsCh <- TrieKV{storageIt.Hash(), common.CopyBytes(storageIt.Slot())}
+			slotsCh <- TrieKV{slotKey(accountHash.Bytes(), storageIt.Hash().Bytes()), common.CopyBytes(storageIt.Slot())}
 		}
 		return common.Hash{}, err
 	}, newGenerateStats(), true, false)

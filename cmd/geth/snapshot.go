@@ -19,6 +19,8 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -507,6 +509,12 @@ func computeCommitment(ctx *cli.Context) error {
 		out <- root
 	}
 
+	childrenf, err := os.OpenFile("children.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer childrenf.Close()
+
 	nodesCount := 0
 	go func() {
 		for fn := range nodesCh {
@@ -517,6 +525,11 @@ func computeCommitment(ctx *cli.Context) error {
 			}
 			if err := verkledb.Put(fn.Hash[:], value); err != nil {
 				log.Error("Failed to write verkle node to db", "error", err)
+			}
+			if fn.Children > 0 {
+				if _, err := childrenf.WriteString(fmt.Sprintf("%d,", fn.Children)); err != nil {
+					log.Error("Failed to write children count to file", "error", err)
+				}
 			}
 		}
 	}()

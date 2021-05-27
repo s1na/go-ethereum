@@ -492,28 +492,11 @@ func computeCommitment(ctx *cli.Context) error {
 	defer verkledb.Close()
 
 	nodesCh := make(chan verkle.FlushableNode)
-	slotsCh := make(chan snapshot.TrieKV)
 
 	verkleGenerate := func(db ethdb.KeyValueWriter, in chan snapshot.TrieKV, out chan common.Hash) {
 		t := verkle.New(10)
-		for {
-			stop := false
-			select {
-			case leaf, ok := <-in:
-				if !ok {
-					// We expect no incoming storage slots after the account
-					// channel has been closed
-					stop = true
-					break
-				}
-				t.InsertOrdered(common.CopyBytes(leaf.Key[:]), leaf.Value, nodesCh, verkledb.Get)
-			case leaf := <-slotsCh:
-				// Slot key is copied before being hashed
-				t.InsertOrdered(leaf.Key[:], leaf.Value, nodesCh, verkledb.Get)
-			}
-			if stop {
-				break
-			}
+		for leaf := range in {
+			t.InsertOrdered(common.CopyBytes(leaf.Key[:]), leaf.Value, nodesCh, verkledb.Get)
 		}
 		// Flush remaining nodes to nodes channel
 		rootNode, ok := t.(*verkle.InternalNode)
@@ -569,10 +552,9 @@ func computeCommitment(ctx *cli.Context) error {
 		return err
 	}
 
-	if err := t.ComputeVerkleCommitment(root, verkleGenerate, slotsCh); err != nil {
+	if err := t.ComputeVerkleCommitment(root, verkleGenerate); err != nil {
 		log.Error("Failed to compute verkle commitment", "error", err)
 	}
-	close(slotsCh)
 	log.Info("Number of nodes written to DB\n", "nodes", nodesCount)
 	return nil
 }

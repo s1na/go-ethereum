@@ -713,7 +713,7 @@ func (t *Tree) Verify(root common.Hash) error {
 	}
 	defer acctIt.Release()
 
-	got, err := generateTrieRoot(nil, acctIt, common.Hash{}, stackTrieGenerate, func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
+	got, err := generateTrieRoot(nil, acctIt, common.Hash{}, stackTrieGenerate, func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats, _ chan TrieKV) (common.Hash, error) {
 		storageIt, err := t.StorageIterator(root, accountHash, common.Hash{})
 		if err != nil {
 			return common.Hash{}, err
@@ -752,7 +752,7 @@ func (t *Tree) ComputeVerkleCommitment(root common.Hash, generatorFn trieGenerat
 		return common.Hash(sha256.Sum256(raw))
 	}
 
-	got, err := generateTrieRoot(nil, acctIt, common.Hash{}, generatorFn, func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stats *generateStats) (common.Hash, error) {
+	got, err := generateTrieRoot(nil, acctIt, common.Hash{}, generatorFn, func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stats *generateStats, in chan TrieKV) (common.Hash, error) {
 		storageIt, err := t.StorageIterator(root, accountHash, common.Hash{})
 		if err != nil {
 			return common.Hash{}, err
@@ -764,7 +764,7 @@ func (t *Tree) ComputeVerkleCommitment(root common.Hash, generatorFn trieGenerat
 
 		// Start to feed leaves
 		for storageIt.Next() {
-			slotsCh <- TrieKV{slotKey(accountHash.Bytes(), storageIt.Hash().Bytes()), common.CopyBytes(storageIt.Slot())}
+			in <- TrieKV{slotKey(accountHash.Bytes(), storageIt.Hash().Bytes()), common.CopyBytes(storageIt.Slot())}
 			// Accumulate the generation statistic if it's required.
 			processed++
 			if time.Since(logged) > 3*time.Second && stats != nil {

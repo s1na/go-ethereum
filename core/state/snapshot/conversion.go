@@ -47,7 +47,7 @@ type (
 
 	// leafCallbackFn is the callback invoked at the leaves of the trie,
 	// returns the subtrie root with the specified subtrie identifier.
-	leafCallbackFn func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error)
+	leafCallbackFn func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats, in chan TrieKV) (common.Hash, error)
 )
 
 // GenerateAccountTrieRoot takes an account iterator and reproduces the root hash.
@@ -71,7 +71,7 @@ func GenerateTrie(snaptree *Tree, root common.Hash, src ethdb.Database, dst ethd
 	}
 	defer acctIt.Release()
 
-	got, err := generateTrieRoot(dst, acctIt, common.Hash{}, stackTrieGenerate, func(dst ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
+	got, err := generateTrieRoot(dst, acctIt, common.Hash{}, stackTrieGenerate, func(dst ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats, _ chan TrieKV) (common.Hash, error) {
 		// Migrate the code first, commit the contract code into the tmp db.
 		if codeHash != emptyCode {
 			code := rawdb.ReadCode(src, codeHash)
@@ -274,13 +274,13 @@ func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash,
 	// stop is a helper function to shutdown the background threads
 	// and return the re-generated trie hash.
 	stop := func(fail error) (common.Hash, error) {
-		close(in)
-		result := <-out
 		for i := 0; i < threads; i++ {
 			if err := <-results; err != nil && fail == nil {
 				fail = err
 			}
 		}
+		close(in)
+		result := <-out
 		stoplog <- fail == nil
 
 		wg.Wait()
@@ -316,7 +316,7 @@ func generateTrieRoot(db ethdb.KeyValueWriter, it Iterator, account common.Hash,
 					return stop(err)
 				}
 				go func(hash common.Hash) {
-					subroot, err := leafCallback(db, hash, common.BytesToHash(account.CodeHash), stats)
+					subroot, err := leafCallback(db, hash, common.BytesToHash(account.CodeHash), stats, in)
 					if err != nil {
 						results <- err
 						return

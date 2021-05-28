@@ -18,7 +18,7 @@ require (
 	github.com/fatih/color v1.7.0
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
 	github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff
-	github.com/gballet/go-verkle v0.0.0-20210420105604-589b0c59e8db
+	github.com/gballet/go-verkle v0.0.0-20210521132427-c89638f04955
 	github.com/go-stack/stack v1.8.0
 	github.com/golang/protobuf v1.4.3
 	github.com/golang/snappy v0.0.3-0.20201103224600-674baa8c7fc3
@@ -26,9 +26,9 @@ require (
 	github.com/gorilla/websocket v1.4.2
 	github.com/graph-gophers/graphql-go v0.0.0-20201113091052-beb923fada29
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
-	github.com/herumi/bls-eth-go-binary v0.0.0-20210407105559-9588dcfc7de7 // indirect
+	github.com/herumi/bls-eth-go-binary v0.0.0-20210520070601-31246bfa8ac4 // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3
-	github.com/holiman/uint256 v1.1.1
+	github.com/holiman/uint256 v1.2.0
 	github.com/huin/goupnp v1.0.1-0.20200620063722-49508fba0031
 	github.com/influxdata/influxdb v1.8.3
 	github.com/jackpal/go-nat-pmp v1.0.2-0.20160603034137-1fa385a6f458
@@ -50,8 +50,8 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/syndtr/goleveldb v1.0.1-0.20200815110645-5c35d600f0ca
 	github.com/tyler-smith/go-bip39 v1.0.1-0.20181017060643-dbb3b84ba2ef
-	golang.org/x/crypto v0.0.0-20210415154028-4f45737414dc
-	golang.org/x/sys v0.0.0-20210420072515-93ed5bcd2bfe
+	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
+	golang.org/x/sys v0.0.0-20210525143221-35b2ab0089ea
 	golang.org/x/text v0.3.3
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce

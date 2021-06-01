@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -11,6 +12,64 @@ import (
 var (
 	SnapshotLeafPrefix = []byte("l") // Same prefix for both accounts and storage slots
 )
+
+type LeafIterator interface {
+	snapshot.Iterator
+
+	Leaf() []byte
+}
+
+type leafIterator struct {
+	it ethdb.Iterator
+}
+
+func NewLeafIterator(db ethdb.KeyValueStore) LeafIterator {
+	return &leafIterator{
+		it: db.NewIterator(SnapshotLeafPrefix, nil),
+	}
+}
+
+func (it *leafIterator) Next() bool {
+	// If the iterator was already exhausted, don't bother
+	if it.it == nil {
+		return false
+	}
+	// Try to advance the iterator and release it if we reached the end
+	for {
+		if !it.it.Next() {
+			it.it.Release()
+			it.it = nil
+			return false
+		}
+		if len(it.it.Key()) == len(SnapshotLeafPrefix)+common.HashLength {
+			break
+		}
+	}
+	return true
+}
+
+func (it *leafIterator) Error() error {
+	if it.it == nil {
+		return nil // Iterator is exhausted and released
+	}
+	return it.it.Error()
+}
+
+func (it *leafIterator) Hash() common.Hash {
+	return common.BytesToHash(it.it.Key()) // The prefix will be truncated
+}
+
+func (it *leafIterator) Leaf() []byte {
+	return it.it.Value()
+}
+
+func (it *leafIterator) Release() {
+	// The iterator is auto-released on exhaustion, so make sure it's still alive
+	if it.it != nil {
+		it.it.Release()
+		it.it = nil
+	}
+}
 
 func WriteAccountSnapshot(db ethdb.KeyValueWriter, hash common.Hash, entry []byte) {
 	if err := db.Put(accountSnapshotKey(hash), entry); err != nil {

@@ -9,8 +9,7 @@ import (
 )
 
 var (
-	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
-	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
+	SnapshotLeafPrefix = []byte("l") // Same prefix for both accounts and storage slots
 )
 
 func WriteAccountSnapshot(db ethdb.KeyValueWriter, hash common.Hash, entry []byte) {
@@ -28,13 +27,13 @@ func WriteStorageSnapshot(db ethdb.KeyValueWriter, accountHash, storageHash comm
 
 // accountSnapshotKey = SnapshotAccountPrefix + hash
 func accountSnapshotKey(hash common.Hash) []byte {
-	return append(SnapshotAccountPrefix, hash.Bytes()...)
+	return append(SnapshotLeafPrefix, hash.Bytes()...)
 }
 
 // storageSnapshotKey = SnapshotStoragePrefix + account hash + storage hash
 func storageSnapshotKey(accountHash, storageHash common.Hash) []byte {
 	skey := storageKey(accountHash, storageHash)
-	return append(SnapshotStoragePrefix, skey...)
+	return append(SnapshotLeafPrefix, skey...)
 }
 
 func storageKey(accountHash, storageHash common.Hash) []byte {

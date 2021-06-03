@@ -373,3 +373,71 @@ func stackTrieGenerate(db ethdb.KeyValueWriter, in chan TrieKV, out chan common.
 	}
 	out <- root
 }
+
+func generateVerkleRoot(db ethdb.KeyValueWriter, it LeafIterator, generatorFn trieGeneratorFn, report bool) (common.Hash, error) {
+	var (
+		in      = make(chan TrieKV)         // chan to pass leaves
+		out     = make(chan common.Hash, 1) // chan to collect result
+		stoplog = make(chan bool, 1)        // 1-size buffer, works when logging is not enabled
+		wg      sync.WaitGroup
+		stats   = newGenerateStats()
+	)
+	// Spin up a go-routine for trie hash re-generation
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		generatorFn(db, in, out)
+	}()
+	// Spin up a go-routine for progress logging
+	if report {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			runReport(stats, stoplog)
+		}()
+	}
+	// stop is a helper function to shutdown the background threads
+	// and return the re-generated trie hash.
+	stop := func(fail error) (common.Hash, error) {
+		close(in)
+		result := <-out
+		stoplog <- fail == nil
+
+		wg.Wait()
+		return result, fail
+	}
+	var (
+		logged    = time.Now()
+		processed = uint64(0)
+		leaf      TrieKV
+	)
+	// Start to feed leaves
+	for it.Next() {
+		var (
+			err  error
+			data []byte
+		)
+		raw := it.Leaf()
+		data, err = FullAccountRLP(raw)
+		if err != nil {
+			// Warning: hacky code incoming
+			// If couldn't decode as an account then must
+			// be a slot.
+			data = common.CopyBytes(raw)
+		}
+		leaf = TrieKV{it.Hash(), data}
+		in <- leaf
+
+		// Accumulate the generation statistic if it's required.
+		processed++
+		if time.Since(logged) > 3*time.Second && stats != nil {
+			stats.progressAccounts(it.Hash(), processed)
+			logged, processed = time.Now(), 0
+		}
+	}
+	// Commit the last part statistic.
+	if processed > 0 && stats != nil {
+		stats.finishAccounts(processed)
+	}
+	return stop(nil)
+}

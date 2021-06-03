@@ -138,7 +138,9 @@ func computeCommitment(ctx *cli.Context) error {
 		return err
 	}
 
-	if err := t.ComputeVerkleCommitment(root, verkleGenerate); err != nil {
+	it := verkle.NewLeafIterator(verkledb)
+	defer it.Release()
+	if err := t.ComputeVerkleCommitment(root, verkleGenerate, it); err != nil {
 		log.Error("Failed to compute verkle commitment", "error", err)
 	}
 	log.Info("Number of nodes written to DB\n", "nodes", nodesCount)

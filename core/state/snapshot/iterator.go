@@ -67,6 +67,11 @@ type StorageIterator interface {
 	Slot() []byte
 }
 
+type LeafIterator interface {
+	Iterator
+	Leaf() []byte
+}
+
 // diffAccountIterator is an account iterator that steps over the accounts (both
 // live and deleted) contained within a single diff layer. Higher order iterators
 // will use the deleted accounts to skip deeper iterators.

@@ -99,5 +99,5 @@ func storageKey(accountHash, storageHash common.Hash) []byte {
 	skeyHi := storageHash.Bytes()[:30]
 	skeyLo := storageHash.Bytes()[30:]
 	h := sha256.Sum256(append(append(accountHash.Bytes(), byte(1)), skeyHi...))
-	return append(append(accountHash.Bytes()[:3], h[:]...), skeyLo...)
+	return append(append(accountHash.Bytes()[:3], h[:27]...), skeyLo...)
 }

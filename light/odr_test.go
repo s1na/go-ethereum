@@ -122,7 +122,7 @@ func odrGetReceipts(ctx context.Context, db ethdb.Database, bc *core.BlockChain,
 	if bc != nil {
 		number := rawdb.ReadHeaderNumber(db, bhash)
 		if number != nil {
-			receipts = rawdb.ReadReceipts(db, bhash, *number, bc.Config())
+			receipts = rawdb.ReadReceipts(db, bhash, *number, bc.Config(), true)
 		}
 	} else {
 		number := rawdb.ReadHeaderNumber(db, bhash)

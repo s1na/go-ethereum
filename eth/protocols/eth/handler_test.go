@@ -563,7 +563,7 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 		block := backend.chain.GetBlockByNumber(i)
 
 		hashes = append(hashes, block.Hash())
-		receipts = append(receipts, backend.chain.GetReceiptsByHash(block.Hash()))
+		receipts = append(receipts, backend.chain.GetReceiptsByHash(block.Hash(), true))
 	}
 	// Send the hash request and verify the response
 	if protocol <= ETH65 {

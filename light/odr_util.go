@@ -151,7 +151,7 @@ func GetBlock(ctx context.Context, odr OdrBackend, hash common.Hash, number uint
 // in a block given by its hash.
 func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, number uint64) (types.Receipts, error) {
 	// Assume receipts are already stored locally and attempt to retrieve.
-	receipts := rawdb.ReadRawReceipts(odr.Database(), hash, number)
+	receipts := rawdb.ReadRawReceipts(odr.Database(), hash, number, true)
 	if receipts == nil {
 		header, err := GetHeaderByNumber(ctx, odr, number)
 		if err != nil {
@@ -204,7 +204,7 @@ func GetBlockLogs(ctx context.Context, odr OdrBackend, hash common.Hash, number 
 func GetUntrustedBlockLogs(ctx context.Context, odr OdrBackend, header *types.Header) ([][]*types.Log, error) {
 	// Retrieve the potentially incomplete receipts from disk or network
 	hash, number := header.Hash(), header.Number.Uint64()
-	receipts := rawdb.ReadRawReceipts(odr.Database(), hash, number)
+	receipts := rawdb.ReadRawReceipts(odr.Database(), hash, number, true)
 	if receipts == nil {
 		r := &ReceiptsRequest{Hash: hash, Number: number, Header: header, Untrusted: true}
 		if err := odr.Retrieve(ctx, r); err != nil {

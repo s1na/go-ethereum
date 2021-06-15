@@ -2094,7 +2094,7 @@ func verifyNoGaps(t *testing.T, chain *BlockChain, canonical bool, inserted type
 	}
 	end = 0
 	for i := uint64(1); i <= uint64(len(inserted)); i++ {
-		receipts := chain.GetReceiptsByHash(inserted[i-1].Hash())
+		receipts := chain.GetReceiptsByHash(inserted[i-1].Hash(), true)
 		if receipts == nil && end == 0 {
 			end = i
 		}
@@ -2130,7 +2130,7 @@ func verifyCutoff(t *testing.T, chain *BlockChain, canonical bool, inserted type
 					t.Errorf("Sidechain block    #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
 				}
 			}
-			if receipts := chain.GetReceiptsByHash(inserted[i-1].Hash()); receipts == nil {
+			if receipts := chain.GetReceiptsByHash(inserted[i-1].Hash(), true); receipts == nil {
 				if canonical {
 					t.Errorf("Canonical receipts #%2d [%x...] missing before cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
 				} else {
@@ -2152,7 +2152,7 @@ func verifyCutoff(t *testing.T, chain *BlockChain, canonical bool, inserted type
 					t.Errorf("Sidechain block    #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
 				}
 			}
-			if receipts := chain.GetReceiptsByHash(inserted[i-1].Hash()); receipts != nil {
+			if receipts := chain.GetReceiptsByHash(inserted[i-1].Hash(), true); receipts != nil {
 				if canonical {
 					t.Errorf("Canonical receipts #%2d [%x...] present after cap %d", inserted[i-1].Number(), inserted[i-1].Hash().Bytes()[:3], head)
 				} else {

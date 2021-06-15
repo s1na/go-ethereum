@@ -582,6 +582,26 @@ func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64) types.Rec
 	return receipts
 }
 
+func ReadRawLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types.Log {
+	// Retrieve the flattened receipt slice
+	data := ReadReceiptsRLP(db, hash, number)
+	if len(data) == 0 {
+		return nil
+	}
+	// Convert the receipts from their storage form to their internal representation
+	receipts := []*types.ReceiptForStorage{}
+	if err := rlp.DecodeBytes(data, &receipts); err != nil {
+		log.Error("Invalid receipt array RLP", "hash", hash, "err", err)
+		return nil
+	}
+
+	logs := make([][]*types.Log, len(receipts))
+	for i, receipt := range receipts {
+		logs[i] = receipt.Logs
+	}
+	return logs
+}
+
 // ReadReceipts retrieves all the transaction receipts belonging to a block, including
 // its correspoinding metadata fields. If it is unable to populate these metadata
 // fields then nil is returned.

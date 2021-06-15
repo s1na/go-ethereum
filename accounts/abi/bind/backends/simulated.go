@@ -768,6 +768,10 @@ func (fb *filterBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*ty
 	return logs, nil
 }
 
+func (fb *filterBackend) GetRawLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
+	return make([][]*types.Log, 0), nil
+}
+
 func (fb *filterBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
 	return nullSubscription()
 }

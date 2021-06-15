@@ -188,6 +188,19 @@ func (b *EthAPIBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*typ
 	return logs, nil
 }
 
+func (b *EthAPIBackend) GetRawLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
+	db := b.eth.ChainDb()
+	number := rawdb.ReadHeaderNumber(db, hash)
+	if number == nil {
+		return nil, errors.New("block hash number not found")
+	}
+	logs := rawdb.ReadRawLogs(db, hash, *number)
+	if logs == nil {
+		return nil, errors.New("failed to find logs for block")
+	}
+	return logs, nil
+}
+
 func (b *EthAPIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	return b.eth.blockchain.GetTdByHash(hash)
 }

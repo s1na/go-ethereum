@@ -46,6 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/tyler-smith/go-bip39"
+	"golang.org/x/net/trace"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -617,6 +618,8 @@ func (api *PublicBlockChainAPI) ChainId() (*hexutil.Big, error) {
 
 // BlockNumber returns the block number of the chain head.
 func (s *PublicBlockChainAPI) BlockNumber() hexutil.Uint64 {
+	tr := trace.New("publicBlockchainAPI", "BlockNumber")
+	defer tr.Finish()
 	header, _ := s.b.HeaderByNumber(context.Background(), rpc.LatestBlockNumber) // latest header should always be available
 	return hexutil.Uint64(header.Number.Uint64())
 }

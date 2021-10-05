@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -121,6 +122,9 @@ func TestTracer(t *testing.T) {
 		}, { // tests too deep object / serialization crash
 			code: "{step: function() {}, fault: function() {}, result: function() { var o={}; var x=o; for (var i=0; i<1000; i++){	o.foo={}; o=o.foo; } return x; }}",
 			fail: "RangeError: json encode recursion limit    in server-side tracer function 'result'",
+		}, { // tests deepest possible recursion
+			code: "{step: function() {}, fault: function() {}, result: function() { var o={}; var x=o; for (var i=0; i<999; i++){ o.foo={}; o=o.foo; } return x; }}",
+			want: strings.Repeat(`{"foo":`, 999) + "{" + strings.Repeat("}", 1000),
 		},
 	} {
 		if have, err := execTracer(tt.code); tt.want != string(have) || tt.fail != err {
@@ -276,10 +280,14 @@ func TestDeeplyNestedResult(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = runTrace(tracer, &vmContext{
+	res, err := runTrace(tracer, &vmContext{
 		blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1)},
 		txCtx:    vm.TxContext{GasPrice: big.NewInt(100000)},
 	}, params.TestChainConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = json.Marshal(res)
 	if err != nil {
 		t.Fatal(err)
 	}

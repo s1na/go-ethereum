@@ -268,3 +268,19 @@ func TestEnterExit(t *testing.T) {
 		t.Errorf("Number of invocations of enter() and exit() is wrong. Have %s, want %s\n", have, want)
 	}
 }
+
+func TestDeeplyNestedResult(t *testing.T) {
+	// recursion limit is 1000, test the last permitted value
+	code := `{step: function() {}, fault: function() {}, result: function() { var o={}; var x=o; for (var i=0; i<999; i++){o.foo={}; o=o.foo; } return x; }}`
+	tracer, err := New(code, new(Context))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = runTrace(tracer, &vmContext{
+		blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1)},
+		txCtx:    vm.TxContext{GasPrice: big.NewInt(100000)},
+	}, params.TestChainConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+}

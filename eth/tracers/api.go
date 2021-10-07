@@ -869,6 +869,12 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 				if err != nil {
 					return nil, err
 				}
+			case "native_call":
+				plugin := plugins.NewCallTracer()
+				tracer, err = NewNativeTracer(plugin)
+				if err != nil {
+					return nil, err
+				}
 			default:
 				return nil, errors.New("non-existent native tracer")
 			}

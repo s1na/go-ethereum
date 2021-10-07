@@ -1,29 +1,28 @@
-package main
+package plugins
 
 import (
 	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 )
 
-type Tracer struct {
+type UnigramTracer struct {
 	hist map[vm.OpCode]int
 }
 
-func New() tracers.PluginAPI {
-	return &Tracer{
+func NewUnigramTracer() *UnigramTracer {
+	return &UnigramTracer{
 		hist: make(map[vm.OpCode]int),
 	}
 }
 
-func (t *Tracer) Step(op vm.OpCode) {
+func (t *UnigramTracer) Step(op vm.OpCode) {
 	if _, ok := t.hist[op]; !ok {
 		t.hist[op] = 0
 	}
 	t.hist[op]++
 }
 
-func (t *Tracer) Result() (json.RawMessage, error) {
+func (t *UnigramTracer) Result() (json.RawMessage, error) {
 	return json.Marshal(t.hist)
 }

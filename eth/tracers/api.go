@@ -25,6 +25,7 @@ import (
 	"io/ioutil"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/plugins"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
@@ -859,7 +861,18 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 				return nil, err
 			}
 		}
-		if *config.Tracer == "pluginTracer" {
+		if strings.HasPrefix(*config.Tracer, "native_") {
+			switch *config.Tracer {
+			case "native_unigram":
+				plugin := plugins.NewUnigramTracer()
+				tracer, err = NewNativeTracer(plugin)
+				if err != nil {
+					return nil, err
+				}
+			default:
+				return nil, errors.New("non-existent native tracer")
+			}
+		} else if *config.Tracer == "pluginTracer" {
 			if tracer, err = NewPluginTracer("plugins/unigram.so"); err != nil {
 				return nil, err
 			}
@@ -873,7 +886,8 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
 		go func() {
 			<-deadlineCtx.Done()
-			if *config.Tracer != "pluginTracer" {
+			// TODO(s1na): deadlines should apply to plugin/native tracers too
+			if *config.Tracer != "pluginTracer" && !strings.HasPrefix(*config.Tracer, "native_") {
 				if deadlineCtx.Err() == context.DeadlineExceeded {
 					tracer.(*Tracer).Stop(errors.New("execution timeout"))
 				}
@@ -914,6 +928,9 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 		}, nil
 
 	case *Tracer:
+		return tracer.GetResult()
+
+	case *NativeTracer:
 		return tracer.GetResult()
 
 	case *PluginTracer:

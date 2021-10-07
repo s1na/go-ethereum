@@ -159,6 +159,7 @@ type TraceConfig struct {
 	Tracer  *string
 	Timeout *string
 	Reexec  *uint64
+	Plugin  *string
 }
 
 // TraceCallConfig is the config for traceCall API. It holds one more
@@ -858,16 +859,24 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 				return nil, err
 			}
 		}
-		// Constuct the JavaScript tracer to execute with
-		if tracer, err = New(*config.Tracer, txctx); err != nil {
-			return nil, err
+		if *config.Tracer == "pluginTracer" {
+			if tracer, err = NewPluginTracer("plugins/unigram.so"); err != nil {
+				return nil, err
+			}
+		} else {
+			// Constuct the JavaScript tracer to execute with
+			if tracer, err = New(*config.Tracer, txctx); err != nil {
+				return nil, err
+			}
 		}
 		// Handle timeouts and RPC cancellations
 		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
 		go func() {
 			<-deadlineCtx.Done()
-			if deadlineCtx.Err() == context.DeadlineExceeded {
-				tracer.(*Tracer).Stop(errors.New("execution timeout"))
+			if *config.Tracer != "pluginTracer" {
+				if deadlineCtx.Err() == context.DeadlineExceeded {
+					tracer.(*Tracer).Stop(errors.New("execution timeout"))
+				}
 			}
 		}()
 		defer cancel()
@@ -905,6 +914,9 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 		}, nil
 
 	case *Tracer:
+		return tracer.GetResult()
+
+	case *PluginTracer:
 		return tracer.GetResult()
 
 	default:

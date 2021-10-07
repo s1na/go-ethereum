@@ -16,24 +16,24 @@ type NewFunc = func() PluginAPI
 
 type PluginAPI interface {
 	Step(op vm.OpCode)
-    Enter()
-    Exit()
+	Enter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
+	Exit(output []byte, gasUsed uint64, err error)
 	Result() (json.RawMessage, error)
 }
 
 type StepLog struct {
-    Pc uint
-    Gas uint
-    Cost uint
-    Depth uint
-    Refund uint
-    Memory PluginMemoryWrapper
-    Contract PluginContractWrapper
-    Stack PluginStackWrapper
+	Pc       uint
+	Gas      uint
+	Cost     uint
+	Depth    uint
+	Refund   uint
+	Memory   PluginMemoryWrapper
+	Contract PluginContractWrapper
+	Stack    PluginStackWrapper
 }
 
 type PluginMemoryWrapper struct {
-    memory *vm.Memory
+	memory *vm.Memory
 }
 
 func (p *PluginMemoryWrapper) Slice(begin, end int64) []byte {
@@ -45,7 +45,6 @@ func (p *PluginMemoryWrapper) GetUint(addr uint64) *big.Int {
 }
 
 type PluginStackWrapper struct {
-
 }
 
 func (s *PluginStackWrapper) Peek(idx int) *big.Int {
@@ -53,7 +52,6 @@ func (s *PluginStackWrapper) Peek(idx int) *big.Int {
 }
 
 type PluginContractWrapper struct {
-
 }
 
 func (c *PluginContractWrapper) Caller() common.Address {

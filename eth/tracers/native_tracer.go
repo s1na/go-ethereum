@@ -33,9 +33,17 @@ func (t *NativeTracer) CaptureEnd(output []byte, gasUsed uint64, t_ time.Duratio
 }
 
 func (t *NativeTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	input = common.CopyBytes(input)
+	if value != nil {
+		value = common.CopyBig(value)
+	}
+	t.tracer.Enter(typ, from, to, input, gas, value)
 }
 
-func (t *NativeTracer) CaptureExit(output []byte, gasUsed uint64, err error) {}
+func (t *NativeTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
+	output = common.CopyBytes(output)
+	t.tracer.Exit(output, gasUsed, err)
+}
 
 func (t *NativeTracer) GetResult() (json.RawMessage, error) {
 	return t.tracer.Result()

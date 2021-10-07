@@ -16,7 +16,60 @@ type NewFunc = func() PluginAPI
 
 type PluginAPI interface {
 	Step(op vm.OpCode)
+    Enter()
+    Exit()
 	Result() (json.RawMessage, error)
+}
+
+type StepLog struct {
+    Pc uint
+    Gas uint
+    Cost uint
+    Depth uint
+    Refund uint
+    Memory PluginMemoryWrapper
+    Contract PluginContractWrapper
+    Stack PluginStackWrapper
+}
+
+type PluginMemoryWrapper struct {
+    memory *vm.Memory
+}
+
+func (p *PluginMemoryWrapper) Slice(begin, end int64) []byte {
+
+}
+
+func (p *PluginMemoryWrapper) GetUint(addr uint64) *big.Int {
+
+}
+
+type PluginStackWrapper struct {
+
+}
+
+func (s *PluginStackWrapper) Peek(idx int) *big.Int {
+
+}
+
+type PluginContractWrapper struct {
+
+}
+
+func (c *PluginContractWrapper) Caller() common.Address {
+
+}
+
+func (c *PluginContractWrapper) Address() common.Address {
+
+}
+
+func (c *PluginContractWrapper) Value() *big.Int {
+
+}
+
+func (c *PluginContractWrapper) Input() []byte {
+
 }
 
 type PluginTracer struct {

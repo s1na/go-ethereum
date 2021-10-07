@@ -33,6 +33,6 @@ func (t *UnigramTracer) Exit(output []byte, gasUsed uint64, err error) {
 	return
 }
 
-func (t *UnigramTracer) Result() (json.RawMessage, error) {
+func (t *UnigramTracer) Result(_ *PluginContext) (json.RawMessage, error) {
 	return json.Marshal(t.hist)
 }

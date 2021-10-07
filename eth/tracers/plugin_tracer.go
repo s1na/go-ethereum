@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/plugins"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -18,7 +19,7 @@ type PluginAPI interface {
 	Step(op vm.OpCode)
 	Enter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
 	Exit(output []byte, gasUsed uint64, err error)
-	Result() (json.RawMessage, error)
+	Result(ctx *plugins.PluginContext) (json.RawMessage, error)
 }
 
 type StepLog struct {
@@ -30,16 +31,6 @@ type StepLog struct {
 	Memory   PluginMemoryWrapper
 	Contract PluginContractWrapper
 	Stack    PluginStackWrapper
-}
-
-// transaction context
-type PluginContext struct {
-    From common.Address
-    To common.Address
-    Input []byte
-    Gas uint64
-    GasPrice *big.Int
-    Value *big.Int
 }
 
 type PluginMemoryWrapper struct {
@@ -124,5 +115,5 @@ func (t *PluginTracer) CaptureEnter(typ vm.OpCode, from common.Address, to commo
 func (t *PluginTracer) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
 func (t *PluginTracer) GetResult() (json.RawMessage, error) {
-	return t.tracer.Result()
+	return t.tracer.Result(&plugins.PluginContext{})
 }

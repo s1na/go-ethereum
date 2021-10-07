@@ -32,6 +32,16 @@ type StepLog struct {
     Stack PluginStackWrapper
 }
 
+// transaction context
+type PluginContext struct {
+    From common.Address
+    To common.Address
+    Input []byte
+    Gas uint64
+    GasPrice *big.Int
+    Value *big.Int
+}
+
 type PluginMemoryWrapper struct {
     memory *vm.Memory
 }

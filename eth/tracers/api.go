@@ -878,10 +878,6 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 			default:
 				return nil, errors.New("non-existent native tracer")
 			}
-		} else if *config.Tracer == "pluginTracer" {
-			if tracer, err = NewPluginTracer("plugins/unigram.so"); err != nil {
-				return nil, err
-			}
 		} else {
 			// Constuct the JavaScript tracer to execute with
 			if tracer, err = New(*config.Tracer, txctx); err != nil {
@@ -937,9 +933,6 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 		return tracer.GetResult()
 
 	case *NativeTracer:
-		return tracer.GetResult()
-
-	case *PluginTracer:
 		return tracer.GetResult()
 
 	default:

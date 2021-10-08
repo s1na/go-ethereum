@@ -18,13 +18,6 @@ func NewUnigramTracer() *UnigramTracer {
 	}
 }
 
-func (t *UnigramTracer) Step(op vm.OpCode) {
-	if _, ok := t.hist[op]; !ok {
-		t.hist[op] = 0
-	}
-	t.hist[op]++
-}
-
 func (t *UnigramTracer) Enter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	return
 }
@@ -35,4 +28,14 @@ func (t *UnigramTracer) Exit(output []byte, gasUsed uint64, err error) {
 
 func (t *UnigramTracer) Result(_ *PluginContext) (json.RawMessage, error) {
 	return json.Marshal(t.hist)
+}
+
+func (t *UnigramTracer) Step(log *StepLog) {
+	if _, ok := t.hist[log.Op]; !ok {
+		t.hist[log.Op] = 0
+	}
+	t.hist[log.Op]++
+}
+
+func (t *UnigramTracer) Start(ctx *PluginContext, db vm.StateReader) {
 }

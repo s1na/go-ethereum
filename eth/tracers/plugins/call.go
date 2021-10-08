@@ -33,8 +33,11 @@ func NewCallTracer() *CallTracer {
 	return t
 }
 
-func (t *CallTracer) Step(_ vm.OpCode) {
+func (t *CallTracer) Step(log *StepLog) {
 	return
+}
+
+func (t *CallTracer) Start(ctx *PluginContext, db vm.StateReader) {
 }
 
 func (t *CallTracer) Enter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {

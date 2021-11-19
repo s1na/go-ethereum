@@ -69,6 +69,7 @@ Remove blockchain and state databases`,
 			dbPutCmd,
 			dbGetSlotsCmd,
 			dbDumpFreezerIndex,
+			dbFreezerCompare,
 			dbImportCmd,
 			dbExportCmd,
 			dbMetadataCmd,
@@ -205,6 +206,22 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.GoerliFlag,
 		},
 		Description: "This command displays information about the freezer index.",
+	}
+	dbFreezerCompare = cli.Command{
+		Action:    utils.MigrateFlags(freezerCompare),
+		Name:      "freezer-compare",
+		Usage:     "Compares content of a freezer table against another",
+		ArgsUsage: "<ancientsdir> <type> <start (int)> <end (int)>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.MainnetFlag,
+			utils.RopstenFlag,
+			utils.SepoliaFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+		},
+		Description: "The freezer-compare command verifies the contents of a freezer table in the datadir match those of a second ancients dir.",
 	}
 	dbImportCmd = cli.Command{
 		Action:    utils.MigrateFlags(importLDBdata),
@@ -748,5 +765,72 @@ func showMetaData(ctx *cli.Context) error {
 	table.SetHeader([]string{"Field", "Value"})
 	table.AppendBulk(data)
 	table.Render()
+	return nil
+}
+
+func freezerCompare(ctx *cli.Context) error {
+	if ctx.NArg() < 2 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, false)
+	defer db.Close()
+
+	// Open second freezer
+	datadir2 := ctx.Args().Get(0)
+	root2 := filepath.Join(datadir2, "geth", "chaindata")
+	freezerPath2 := filepath.Join(root2, "ancient")
+	cache := ctx.GlobalInt(utils.CacheFlag.Name) * ctx.GlobalInt(utils.CacheDatabaseFlag.Name) / 100
+	db2, err := rawdb.NewLevelDBDatabaseWithFreezer(root2, cache, utils.MakeDatabaseHandles(0), freezerPath2, "", true)
+	if err != nil {
+		return err
+	}
+
+	kind := ctx.Args().Get(1)
+
+	// Check first block for legacy receipt format
+	numAncients, err := db.Ancients()
+	if err != nil {
+		return err
+	}
+	if numAncients < 1 {
+		log.Info("No blocks in freezer to migrate")
+		return nil
+	}
+	numAncients2, err := db2.Ancients()
+	if err != nil {
+		return err
+	}
+
+	num := numAncients
+	if numAncients2 < num {
+		num = numAncients2
+	}
+	log.Info("Starting comparison", "ancients", numAncients, "ancients2", numAncients2, "kind", kind)
+	start := time.Now()
+
+	for i := uint64(0); i < num; i++ {
+		el, err := db.Ancient(kind, i)
+		if err != nil {
+			return err
+		}
+		el2, err := db2.Ancient(kind, i)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(el, el2) {
+			return fmt.Errorf("element mismatch at index %d", i)
+		}
+	}
+
+	if err := db.Close(); err != nil {
+		return err
+	}
+	if err := db2.Close(); err != nil {
+		return err
+	}
+	log.Info("Comparison finished", "duration", time.Since(start))
 	return nil
 }

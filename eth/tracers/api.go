@@ -907,7 +907,7 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 
 // logTx executes the given message and logs the steps of the execution
 // using a StructLogger.
-func (api *API) logTx(message core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig, txContext vm.TxContext, tracer *logger.StructLogger) (*ethapi.ExecutionResult, error) {
+func (api *API) logTx(message core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig, txContext vm.TxContext, tracer *logger.StructLogger) (*logger.ExecutionResult, error) {
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
 	// Call Prepare to clear out the statedb access list
@@ -922,11 +922,11 @@ func (api *API) logTx(message core.Message, txctx *Context, vmctx vm.BlockContex
 	if len(result.Revert()) > 0 {
 		returnVal = fmt.Sprintf("%x", result.Revert())
 	}
-	return &ethapi.ExecutionResult{
+	return &logger.ExecutionResult{
 		Gas:         result.UsedGas,
 		Failed:      result.Failed(),
 		ReturnValue: returnVal,
-		StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
+		StructLogs:  logger.FormatLogs(tracer.StructLogs()),
 	}, nil
 }
 

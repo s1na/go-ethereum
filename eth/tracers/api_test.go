@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
@@ -213,11 +214,11 @@ func TestTraceCall(t *testing.T) {
 			},
 			config:    nil,
 			expectErr: nil,
-			expect: &ethapi.ExecutionResult{
+			expect: &logger.ExecutionResult{
 				Gas:         params.TxGas,
 				Failed:      false,
 				ReturnValue: "",
-				StructLogs:  []ethapi.StructLogRes{},
+				StructLogs:  []logger.StructLogRes{},
 			},
 		},
 		// Standard JSON trace upon the head, plain transfer.
@@ -230,11 +231,11 @@ func TestTraceCall(t *testing.T) {
 			},
 			config:    nil,
 			expectErr: nil,
-			expect: &ethapi.ExecutionResult{
+			expect: &logger.ExecutionResult{
 				Gas:         params.TxGas,
 				Failed:      false,
 				ReturnValue: "",
-				StructLogs:  []ethapi.StructLogRes{},
+				StructLogs:  []logger.StructLogRes{},
 			},
 		},
 		// Standard JSON trace upon the non-existent block, error expects
@@ -259,11 +260,11 @@ func TestTraceCall(t *testing.T) {
 			},
 			config:    nil,
 			expectErr: nil,
-			expect: &ethapi.ExecutionResult{
+			expect: &logger.ExecutionResult{
 				Gas:         params.TxGas,
 				Failed:      false,
 				ReturnValue: "",
-				StructLogs:  []ethapi.StructLogRes{},
+				StructLogs:  []logger.StructLogRes{},
 			},
 		},
 		// Standard JSON trace upon the pending block
@@ -276,11 +277,11 @@ func TestTraceCall(t *testing.T) {
 			},
 			config:    nil,
 			expectErr: nil,
-			expect: &ethapi.ExecutionResult{
+			expect: &logger.ExecutionResult{
 				Gas:         params.TxGas,
 				Failed:      false,
 				ReturnValue: "",
-				StructLogs:  []ethapi.StructLogRes{},
+				StructLogs:  []logger.StructLogRes{},
 			},
 		},
 	}
@@ -329,11 +330,11 @@ func TestTraceTransaction(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to trace transaction %v", err)
 	}
-	if !reflect.DeepEqual(result, &ethapi.ExecutionResult{
+	if !reflect.DeepEqual(result, &logger.ExecutionResult{
 		Gas:         params.TxGas,
 		Failed:      false,
 		ReturnValue: "",
-		StructLogs:  []ethapi.StructLogRes{},
+		StructLogs:  []logger.StructLogRes{},
 	}) {
 		t.Error("Transaction tracing result is different")
 	}

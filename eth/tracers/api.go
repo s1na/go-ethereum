@@ -897,8 +897,7 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
 	// Call Prepare to clear out the statedb access list
 	statedb.Prepare(txctx.TxHash, txctx.TxIndex)
-	_, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()))
-	if err != nil {
+	if _, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas())); err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}
 

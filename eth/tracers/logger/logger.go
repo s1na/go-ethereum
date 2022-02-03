@@ -18,6 +18,7 @@ package logger
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/big"
@@ -27,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
@@ -112,6 +114,7 @@ type StructLogger struct {
 	logs    []StructLog
 	output  []byte
 	err     error
+	result  *core.ExecutionResult
 }
 
 // NewStructLogger returns a new logger
@@ -221,7 +224,27 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 func (l *StructLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }
 
-func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
+func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {
+	l.result = &core.ExecutionResult{
+		UsedGas:    gasUsed,
+		Err:        err,
+		ReturnData: output,
+	}
+}
+
+func (l *StructLogger) GetResult() (json.RawMessage, error) {
+	// If the result contains a revert reason, return it.
+	returnVal := fmt.Sprintf("%x", l.result.Return())
+	if len(l.result.Revert()) > 0 {
+		returnVal = fmt.Sprintf("%x", l.result.Revert())
+	}
+	return json.Marshal(&ExecutionResult{
+		Gas:         l.result.UsedGas,
+		Failed:      l.result.Failed(),
+		ReturnValue: returnVal,
+		StructLogs:  FormatLogs(l.StructLogs()),
+	})
+}
 
 func (*StructLogger) CaptureTxStart(_ uint64)        {}
 func (*StructLogger) CaptureTxEnd(_ uint64, _ error) {}

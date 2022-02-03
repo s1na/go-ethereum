@@ -900,33 +900,20 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 	if _, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas())); err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}
-
 	return tracer.GetResult()
 }
 
 // logTx executes the given message and logs the steps of the execution
 // using a StructLogger.
-func (api *API) logTx(message core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig, txContext vm.TxContext, tracer *logger.StructLogger) (*logger.ExecutionResult, error) {
+func (api *API) logTx(message core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig, txContext vm.TxContext, tracer *logger.StructLogger) (interface{}, error) {
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
 	// Call Prepare to clear out the statedb access list
 	statedb.Prepare(txctx.TxHash, txctx.TxIndex)
-	result, err := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()))
-	if err != nil {
+	if _, err := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas())); err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}
-
-	// If the result contains a revert reason, return it.
-	returnVal := fmt.Sprintf("%x", result.Return())
-	if len(result.Revert()) > 0 {
-		returnVal = fmt.Sprintf("%x", result.Revert())
-	}
-	return &logger.ExecutionResult{
-		Gas:         result.UsedGas,
-		Failed:      result.Failed(),
-		ReturnValue: returnVal,
-		StructLogs:  logger.FormatLogs(tracer.StructLogs()),
-	}, nil
+	return tracer.GetResult()
 }
 
 // APIs return the collection of RPC services the tracer package offers.

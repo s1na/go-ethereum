@@ -862,17 +862,19 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
 func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
-	var (
-		err       error
-		txContext = core.NewEVMTxContext(message)
-	)
+	txContext := core.NewEVMTxContext(message)
 	// Use struct logger
-	if config == nil || config.Tracer == nil {
-		return api.logTx(message, txctx, vmctx, statedb, config, txContext)
+	if config == nil {
+		return api.logTx(message, txctx, vmctx, statedb, config, txContext, logger.NewStructLogger(nil))
+	} else if config.Tracer == nil {
+		return api.logTx(message, txctx, vmctx, statedb, config, txContext, logger.NewStructLogger(config.Config))
 	}
 
 	// Define a meaningful timeout of a single transaction trace
-	timeout := defaultTraceTimeout
+	var (
+		err     error
+		timeout = defaultTraceTimeout
+	)
 	if config.Timeout != nil {
 		if timeout, err = time.ParseDuration(*config.Timeout); err != nil {
 			return nil, err
@@ -906,14 +908,7 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 
 // logTx executes the given message and logs the steps of the execution
 // using a StructLogger.
-func (api *API) logTx(message core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig, txContext vm.TxContext) (*ethapi.ExecutionResult, error) {
-	var tracer *logger.StructLogger
-	if config == nil {
-		tracer = logger.NewStructLogger(nil)
-	} else {
-		tracer = logger.NewStructLogger(config.Config)
-	}
-
+func (api *API) logTx(message core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig, txContext vm.TxContext, tracer *logger.StructLogger) (*ethapi.ExecutionResult, error) {
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
 	// Call Prepare to clear out the statedb access list

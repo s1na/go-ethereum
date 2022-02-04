@@ -219,17 +219,18 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 			fmt.Printf(" error: %v\n", err)
 		}
 	}
+	// TODO: duplicate info, re-use existing vars
+	l.result = &core.ExecutionResult{
+		UsedGas:    gasUsed,
+		Err:        err,
+		ReturnData: output,
+	}
 }
 
 func (l *StructLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }
 
 func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {
-	l.result = &core.ExecutionResult{
-		UsedGas:    gasUsed,
-		Err:        err,
-		ReturnData: output,
-	}
 }
 
 func (l *StructLogger) GetResult() (json.RawMessage, error) {

@@ -242,7 +242,7 @@ func (l *StructLogger) GetResult() (json.RawMessage, error) {
 		Gas:         l.result.UsedGas,
 		Failed:      l.result.Failed(),
 		ReturnValue: returnVal,
-		StructLogs:  FormatLogs(l.StructLogs()),
+		StructLogs:  formatLogs(l.StructLogs()),
 	})
 }
 
@@ -401,8 +401,8 @@ type StructLogRes struct {
 	Storage *map[string]string `json:"storage,omitempty"`
 }
 
-// FormatLogs formats EVM returned structured logs for json output
-func FormatLogs(logs []StructLog) []StructLogRes {
+// formatLogs formats EVM returned structured logs for json output
+func formatLogs(logs []StructLog) []StructLogRes {
 	formatted := make([]StructLogRes, len(logs))
 	for index, trace := range logs {
 		formatted[index] = StructLogRes{

@@ -110,11 +110,12 @@ type StructLogger struct {
 	cfg Config
 	env *vm.EVM
 
-	storage map[common.Address]Storage
-	logs    []StructLog
-	output  []byte
-	err     error
-	result  *core.ExecutionResult
+	storage      map[common.Address]Storage
+	logs         []StructLog
+	output       []byte
+	err          error
+	intrinsicGas uint64
+	result       *core.ExecutionResult
 }
 
 // NewStructLogger returns a new logger
@@ -139,6 +140,15 @@ func (l *StructLogger) Reset() {
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (l *StructLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	l.env = env
+	// Compute intrinsic gas
+	isHomestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
+	isIstanbul := env.ChainConfig().IsIstanbul(env.Context.BlockNumber)
+	intrinsicGas, err := core.IntrinsicGas(input, nil, create, isHomestead, isIstanbul)
+	if err != nil {
+		return
+	}
+	l.intrinsicGas = intrinsicGas
+
 }
 
 // CaptureState logs a new structured log message and pushes it out to the environment
@@ -221,7 +231,7 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 	}
 	// TODO: duplicate info, re-use existing vars
 	l.result = &core.ExecutionResult{
-		UsedGas:    gasUsed,
+		UsedGas:    gasUsed + l.intrinsicGas,
 		Err:        err,
 		ReturnData: output,
 	}

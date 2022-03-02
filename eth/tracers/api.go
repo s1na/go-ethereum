@@ -862,27 +862,28 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
 func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
-	txContext := core.NewEVMTxContext(message)
-	// Use struct logger
-	if config == nil {
-		return api.logTx(message, txctx, vmctx, statedb, config, txContext, logger.NewStructLogger(nil))
-	} else if config.Tracer == nil {
-		return api.logTx(message, txctx, vmctx, statedb, config, txContext, logger.NewStructLogger(config.Config))
-	}
-
-	// Define a meaningful timeout of a single transaction trace
 	var (
-		err     error
-		timeout = defaultTraceTimeout
+		tracer    Tracer
+		err       error
+		timeout   = defaultTraceTimeout
+		txContext = core.NewEVMTxContext(message)
 	)
+	if config == nil {
+		config = &TraceConfig{}
+	}
+	// Default tracer is the struct logger
+	tracer = logger.NewStructLogger(config.Config)
+	if config.Tracer != nil {
+		tracer, err = New(*config.Tracer, txctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// Define a meaningful timeout of a single transaction trace
 	if config.Timeout != nil {
 		if timeout, err = time.ParseDuration(*config.Timeout); err != nil {
 			return nil, err
 		}
-	}
-	tracer, err := New(*config.Tracer, txctx)
-	if err != nil {
-		return nil, err
 	}
 	deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
 	go func() {
@@ -898,19 +899,6 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 	// Call Prepare to clear out the statedb access list
 	statedb.Prepare(txctx.TxHash, txctx.TxIndex)
 	if _, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas())); err != nil {
-		return nil, fmt.Errorf("tracing failed: %w", err)
-	}
-	return tracer.GetResult()
-}
-
-// logTx executes the given message and logs the steps of the execution
-// using a StructLogger.
-func (api *API) logTx(message core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig, txContext vm.TxContext, tracer *logger.StructLogger) (interface{}, error) {
-	// Run the transaction with tracing enabled.
-	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
-	// Call Prepare to clear out the statedb access list
-	statedb.Prepare(txctx.TxHash, txctx.TxIndex)
-	if _, err := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas())); err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}
 	return tracer.GetResult()

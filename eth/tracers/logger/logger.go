@@ -23,6 +23,7 @@ import (
 	"io"
 	"math/big"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -116,6 +117,9 @@ type StructLogger struct {
 	err          error
 	intrinsicGas uint64
 	result       *core.ExecutionResult
+
+	interrupt uint32 // Atomic flag to signal execution interruption
+	reason    error  // Textual reason for the interruption
 }
 
 // NewStructLogger returns a new logger
@@ -155,6 +159,12 @@ func (l *StructLogger) CaptureStart(env *vm.EVM, from common.Address, to common.
 //
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
 func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+	// If tracing was interrupted, set the error and stop
+	if atomic.LoadUint32(&l.interrupt) > 0 {
+		l.env.Cancel()
+		return
+	}
+
 	memory := scope.Memory
 	stack := scope.Stack
 	contract := scope.Contract
@@ -244,6 +254,10 @@ func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
 func (l *StructLogger) GetResult() (json.RawMessage, error) {
+	// Tracing aborted
+	if l.reason != nil {
+		return nil, l.reason
+	}
 	// If the result contains a revert reason, return it.
 	returnVal := fmt.Sprintf("%x", l.result.Return())
 	if len(l.result.Revert()) > 0 {
@@ -259,6 +273,12 @@ func (l *StructLogger) GetResult() (json.RawMessage, error) {
 
 func (*StructLogger) CaptureTxStart(_ uint64)        {}
 func (*StructLogger) CaptureTxEnd(_ uint64, _ error) {}
+
+// Stop terminates execution of the tracer at the first opportune moment.
+func (l *StructLogger) Stop(err error) {
+	l.reason = err
+	atomic.StoreUint32(&l.interrupt, 1)
+}
 
 // StructLogs returns the captured log entries.
 func (l *StructLogger) StructLogs() []StructLog { return l.logs }

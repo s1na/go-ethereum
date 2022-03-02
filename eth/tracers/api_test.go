@@ -334,7 +334,11 @@ func TestTraceTransaction(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to trace transaction %v", err)
 	}
-	if !reflect.DeepEqual(result, &logger.ExecutionResult{
+	var have *logger.ExecutionResult
+	if err := json.Unmarshal(result.(json.RawMessage), &have); err != nil {
+		t.Errorf("failed to unmarshal result %v", err)
+	}
+	if !reflect.DeepEqual(have, &logger.ExecutionResult{
 		Gas:         params.TxGas,
 		Failed:      false,
 		ReturnValue: "",

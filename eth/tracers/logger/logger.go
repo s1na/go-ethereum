@@ -117,6 +117,7 @@ type StructLogger struct {
 	err          error
 	intrinsicGas uint64
 	result       *core.ExecutionResult
+	london       bool
 
 	interrupt uint32 // Atomic flag to signal execution interruption
 	reason    error  // Textual reason for the interruption
@@ -145,14 +146,14 @@ func (l *StructLogger) Reset() {
 func (l *StructLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	l.env = env
 	// Compute intrinsic gas
-	isHomestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
-	isIstanbul := env.ChainConfig().IsIstanbul(env.Context.BlockNumber)
-	intrinsicGas, err := core.IntrinsicGas(input, nil, create, isHomestead, isIstanbul)
+	homestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
+	istanbul := env.ChainConfig().IsIstanbul(env.Context.BlockNumber)
+	l.london = env.ChainConfig().IsLondon(env.Context.BlockNumber)
+	intrinsicGas, err := core.IntrinsicGas(input, nil, create, homestead, istanbul)
 	if err != nil {
 		return
 	}
 	l.intrinsicGas = intrinsicGas
-
 }
 
 // CaptureState logs a new structured log message and pushes it out to the environment
@@ -239,9 +240,18 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 			fmt.Printf(" error: %v\n", err)
 		}
 	}
-	// TODO: duplicate info, re-use existing vars
+	// UsedGas = (intrinsicGas + evmGasUsed) - refund
+	totalGasUsed := gasUsed + l.intrinsicGas
+	quotient := params.RefundQuotient
+	if l.london {
+		quotient = params.RefundQuotientEIP3529
+	}
+	refund := totalGasUsed / quotient
+	if l.env.StateDB.GetRefund() < refund {
+		refund = l.env.StateDB.GetRefund()
+	}
 	l.result = &core.ExecutionResult{
-		UsedGas:    gasUsed + l.intrinsicGas,
+		UsedGas:    totalGasUsed - refund,
 		Err:        err,
 		ReturnData: output,
 	}

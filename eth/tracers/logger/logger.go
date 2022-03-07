@@ -115,6 +115,7 @@ type StructLogger struct {
 	logs         []StructLog
 	output       []byte
 	err          error
+	gasLimit     uint64
 	intrinsicGas uint64
 	result       *core.ExecutionResult
 	london       bool
@@ -240,18 +241,7 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 			fmt.Printf(" error: %v\n", err)
 		}
 	}
-	// UsedGas = (intrinsicGas + evmGasUsed) - refund
-	totalGasUsed := gasUsed + l.intrinsicGas
-	quotient := params.RefundQuotient
-	if l.london {
-		quotient = params.RefundQuotientEIP3529
-	}
-	refund := totalGasUsed / quotient
-	if l.env.StateDB.GetRefund() < refund {
-		refund = l.env.StateDB.GetRefund()
-	}
 	l.result = &core.ExecutionResult{
-		UsedGas:    totalGasUsed - refund,
 		Err:        err,
 		ReturnData: output,
 	}
@@ -281,8 +271,13 @@ func (l *StructLogger) GetResult() (json.RawMessage, error) {
 	})
 }
 
-func (*StructLogger) CaptureTxStart(_ uint64)        {}
-func (*StructLogger) CaptureTxEnd(_ uint64, _ error) {}
+func (l *StructLogger) CaptureTxStart(gasLimit uint64) {
+	l.gasLimit = gasLimit
+}
+
+func (l *StructLogger) CaptureTxEnd(remainingGas uint64, _ error) {
+	l.result.UsedGas = l.gasLimit - remainingGas
+}
 
 // Stop terminates execution of the tracer at the first opportune moment.
 func (l *StructLogger) Stop(err error) {

@@ -156,6 +156,11 @@ func (db *nofreezedb) MigrateTable(kind string, convert convertLegacyFn) error {
 	return errNotSupported
 }
 
+// BumpTableVersion increments the given table's version.
+func (db *nofreezedb) BumpTableVersion(kind string) error {
+	return errNotSupported
+}
+
 // NewDatabase creates a high level database on top of a given key-value data
 // store without a freezer moving immutable chain segments into cold storage.
 func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {

@@ -119,10 +119,16 @@ func (t *table) Sync() error {
 	return t.db.Sync()
 }
 
-// MigrateTable processes the entries in a given table in sequence
-// converting them to a new format if they're of an old format.
+// MigrateTable is a noop passthrough that just forwards the request to the underlying
+// database.
 func (t *table) MigrateTable(kind string, convert convertLegacyFn) error {
 	return t.db.MigrateTable(kind, convert)
+}
+
+// BumpTableVersion processes the entries in a given table in sequence
+// converting them to a new format if they're of an old format.
+func (t *table) BumpTableVersion(kind string) error {
+	return t.db.BumpTableVersion(kind)
 }
 
 // Put inserts the given value into the database at a prefixed version of the

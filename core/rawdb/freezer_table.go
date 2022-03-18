@@ -474,7 +474,7 @@ func (t *freezerTable) truncateTail(items uint64) error {
 	}
 	// Update the virtual tail marker and hidden these entries in table.
 	atomic.StoreUint64(&t.itemHidden, items)
-	if err := writeMetadata(t.meta, newMetadata(items)); err != nil {
+	if err := writeMetadata(t.meta, newMetadata(freezerVersion, items)); err != nil {
 		return err
 	}
 	// Hidden items still fall in the current tail file, no data file
@@ -923,4 +923,12 @@ func (t *freezerTable) version() (uint16, error) {
 		return 0, err
 	}
 	return meta.Version, nil
+}
+
+func (t *freezerTable) bumpVersion() error {
+	meta, err := readMetadata(t.meta)
+	if err != nil {
+		return err
+	}
+	return writeMetadata(t.meta, newMetadata(meta.Version+1, meta.VirtualTail))
 }

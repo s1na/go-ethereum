@@ -39,9 +39,9 @@ type freezerTableMeta struct {
 }
 
 // newMetadata initializes the metadata object with the given virtual tail.
-func newMetadata(tail uint64) *freezerTableMeta {
+func newMetadata(version uint16, tail uint64) *freezerTableMeta {
 	return &freezerTableMeta{
-		Version:     freezerVersion,
+		Version:     version,
 		VirtualTail: tail,
 	}
 }
@@ -85,7 +85,7 @@ func loadMetadata(file *os.File, tail uint64) (*freezerTableMeta, error) {
 	// In both cases, write the meta into the file with the actual tail
 	// as the virtual tail.
 	if stat.Size() == 0 {
-		m := newMetadata(tail)
+		m := newMetadata(freezerVersion, tail)
 		if err := writeMetadata(file, m); err != nil {
 			return nil, err
 		}

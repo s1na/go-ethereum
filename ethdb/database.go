@@ -132,6 +132,9 @@ type AncientWriter interface {
 	// The second argument is a function that takes a raw entry and returns it
 	// in the newest format.
 	MigrateTable(string, func([]byte) ([]byte, error)) error
+
+	// BumpTableVersion increments the given table's version.
+	BumpTableVersion(string) error
 }
 
 // AncientWriteOp is given to the function argument of ModifyAncients.

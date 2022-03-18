@@ -732,3 +732,12 @@ func (f *freezer) AncientVersion(kind string) (uint16, error) {
 	}
 	return table.version()
 }
+
+// BumpTableVersion increments the given table's version.
+func (f *freezer) BumpTableVersion(kind string) error {
+	table, ok := f.tables[kind]
+	if !ok {
+		return errUnknownTable
+	}
+	return table.bumpVersion()
+}

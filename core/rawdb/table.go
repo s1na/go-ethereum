@@ -86,6 +86,12 @@ func (t *table) AncientSize(kind string) (uint64, error) {
 	return t.db.AncientSize(kind)
 }
 
+// AncientVersion is a noop passthrough that just forwards the request to the underlying
+// database.
+func (t *table) AncientVersion(kind string) (uint16, error) {
+	return t.db.AncientVersion(kind)
+}
+
 // ModifyAncients runs an ancient write operation on the underlying database.
 func (t *table) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (int64, error) {
 	return t.db.ModifyAncients(fn)

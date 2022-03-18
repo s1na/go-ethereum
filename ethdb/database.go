@@ -93,6 +93,9 @@ type AncientReader interface {
 
 	// AncientSize returns the ancient size of the specified category.
 	AncientSize(kind string) (uint64, error)
+
+	// AncientVersion returns the version of the given table.
+	AncientVersion(kind string) (uint16, error)
 }
 
 // AncientBatchReader is the interface for 'batched' or 'atomic' reading.

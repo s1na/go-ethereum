@@ -109,6 +109,11 @@ func (db *nofreezedb) AncientSize(kind string) (uint64, error) {
 	return 0, errNotSupported
 }
 
+// AncientVersion returns the version of the given table.
+func (db *nofreezedb) AncientVersion(kind string) (uint16, error) {
+	return 0, errNotSupported
+}
+
 // ModifyAncients is not supported.
 func (db *nofreezedb) ModifyAncients(func(ethdb.AncientWriteOp) error) (int64, error) {
 	return 0, errNotSupported

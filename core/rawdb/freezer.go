@@ -723,3 +723,12 @@ func (f *freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 
 	return nil
 }
+
+// AncientVersion returns the version of the given table.
+func (f *freezer) AncientVersion(kind string) (uint16, error) {
+	table, ok := f.tables[kind]
+	if !ok {
+		return 0, errUnknownTable
+	}
+	return table.version()
+}

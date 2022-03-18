@@ -916,3 +916,11 @@ func (t *freezerTable) dumpIndex(w io.Writer, start, stop int64) {
 	}
 	fmt.Fprintf(w, "|--------------------------|\n")
 }
+
+func (t *freezerTable) version() (uint16, error) {
+	meta, err := readMetadata(t.meta)
+	if err != nil {
+		return 0, err
+	}
+	return meta.Version, nil
+}

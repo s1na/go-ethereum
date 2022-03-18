@@ -165,19 +165,32 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
 	// Warn users to migrate if they have a legacy freezer format.
 	if eth != nil {
-		firstIdx := uint64(0)
-		// Hack to speed up check for mainnet because we know
-		// the first non-empty block.
-		ghash := rawdb.ReadCanonicalHash(eth.ChainDb(), 0)
-		if cfg.Eth.NetworkId == 1 && ghash == params.MainnetGenesisHash {
-			firstIdx = 46147
-		}
-		isLegacy, _, err := dbHasLegacyReceipts(eth.ChainDb(), firstIdx)
+		db := eth.ChainDb()
+		// Check receipts table's version
+		version, err := db.AncientVersion("receipts")
 		if err != nil {
-			utils.Fatalf("Failed to check db for legacy receipts: %v", err)
+			utils.Fatalf("Failed to check version of freezer receipts table: %v", err)
 		}
-		if isLegacy {
-			log.Warn("Database has receipts with a legacy format. Please run `geth db freezer-migrate`.")
+		if version == 1 {
+			firstIdx := uint64(0)
+			// Hack to speed up check for mainnet because we know
+			// the first non-empty block.
+			ghash := rawdb.ReadCanonicalHash(db, 0)
+			if cfg.Eth.NetworkId == 1 && ghash == params.MainnetGenesisHash {
+				firstIdx = 46147
+			}
+			isLegacy, _, err := dbHasLegacyReceipts(db, firstIdx)
+			if err != nil {
+				utils.Fatalf("Failed to check db for legacy receipts: %v", err)
+			}
+			if isLegacy {
+				log.Warn("Database has receipts with a legacy format. Please run `geth db freezer-migrate`.")
+			} else {
+				// First time we check for legacy receipts, bump version.
+				if err := db.BumpTableVersion("receipts"); err != nil {
+					utils.Fatalf("Failed to bump receipts table version: %v", err)
+				}
+			}
 		}
 	}
 

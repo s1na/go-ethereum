@@ -786,6 +786,13 @@ func freezerMigrate(ctx *cli.Context) error {
 		log.Info("No receipts in freezer to migrate")
 		return nil
 	}
+	version, err := db.AncientVersion("receipts")
+	if err != nil {
+		return err
+	}
+	if version == 2 {
+		log.Info("Nothing to migrate", "version", version)
+	}
 
 	isFirstLegacy, firstIdx, err := dbHasLegacyReceipts(db, 0)
 	if err != nil {

@@ -721,7 +721,7 @@ func (f *freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 		return err
 	}
 
-	return nil
+	return table.bumpVersion()
 }
 
 // AncientVersion returns the version of the given table.

@@ -790,8 +790,9 @@ func freezerMigrate(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if version == 2 {
+	if version >= 2 {
 		log.Info("Nothing to migrate", "version", version)
+		return nil
 	}
 
 	isFirstLegacy, firstIdx, err := dbHasLegacyReceipts(db, 0)
@@ -799,7 +800,8 @@ func freezerMigrate(ctx *cli.Context) error {
 		return err
 	}
 	if !isFirstLegacy {
-		log.Info("No legacy receipts to migrate")
+		db.BumpTableVersion("receipts")
+		log.Info("No legacy receipts to migrate. Bumping version", "currentVersion", version)
 		return nil
 	}
 

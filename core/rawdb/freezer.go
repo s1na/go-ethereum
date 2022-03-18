@@ -673,6 +673,9 @@ func (f *freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 	if err != nil {
 		return err
 	}
+	if err := newTable.bumpVersion(); err != nil {
+		return err
+	}
 	var (
 		batch  = newTable.newBatch()
 		out    []byte
@@ -721,7 +724,7 @@ func (f *freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 		return err
 	}
 
-	return table.bumpVersion()
+	return nil
 }
 
 // AncientVersion returns the version of the given table.

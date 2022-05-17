@@ -145,6 +145,17 @@ func (l *StructLogger) CaptureStart(env *vm.EVM, from common.Address, to common.
 	l.env = env
 }
 
+func memoryAccessOp(op vm.OpCode) bool {
+	switch op {
+	case vm.KECCAK256, vm.MLOAD, vm.MSIZE, vm.CREATE, vm.CREATE2, vm.CALL, vm.CALLCODE, vm.DELEGATECALL,
+		vm.STATICCALL, vm.RETURN, vm.REVERT, vm.LOG0, vm.LOG1, vm.LOG2, vm.LOG3, vm.LOG4, vm.CALLDATACOPY, vm.RETURNDATACOPY,
+		vm.CODECOPY, vm.EXTCODECOPY, vm.MSTORE, vm.MSTORE8:
+		return true
+	default:
+		return false
+	}
+}
+
 // CaptureState logs a new structured log message and pushes it out to the environment
 //
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
@@ -164,7 +175,7 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 	contract := scope.Contract
 	// Copy a snapshot of the current memory state to a new buffer
 	var mem []byte
-	if l.cfg.EnableMemory {
+	if l.cfg.EnableMemory && memoryAccessOp(op) {
 		mem = make([]byte, len(memory.Data()))
 		copy(mem, memory.Data())
 	}

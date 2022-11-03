@@ -67,17 +67,24 @@ func stateTestCmd(ctx *cli.Context) error {
 	var (
 		tracer   vm.EVMLogger
 		debugger *logger.StructLogger
+		err      error
 	)
 	switch {
 	case ctx.Bool(MachineFlag.Name):
 		tracer = logger.NewJSONLogger(config, os.Stderr)
 
 	case ctx.Bool(DebugFlag.Name):
-		debugger = logger.NewStructLogger(config)
+		debugger, err = logger.NewStructLogger(config, nil)
+		if err != nil {
+			return err
+		}
 		tracer = debugger
 
 	default:
-		debugger = logger.NewStructLogger(config)
+		debugger, err = logger.NewStructLogger(config, nil)
+		if err != nil {
+			return err
+		}
 	}
 	// Load the test content from the input file
 	src, err := os.ReadFile(ctx.Args().First())

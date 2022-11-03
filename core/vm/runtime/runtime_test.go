@@ -665,7 +665,10 @@ func TestColdAccountAccessCost(t *testing.T) {
 			want: 7600,
 		},
 	} {
-		tracer := logger.NewStructLogger(nil)
+		tracer, err := logger.NewStructLogger(nil, nil)
+		if err != nil {
+			t.Fatalf("failed to instantiate structlogger: %v\n", err)
+		}
 		Execute(tc.code, nil, &Config{
 			EVMConfig: vm.Config{
 				Debug:  true,

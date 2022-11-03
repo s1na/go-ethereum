@@ -119,6 +119,7 @@ func runCmd(ctx *cli.Context) error {
 
 	var (
 		tracer        vm.EVMLogger
+		err           error
 		debugLogger   *logger.StructLogger
 		statedb       *state.StateDB
 		chainConfig   *params.ChainConfig
@@ -129,10 +130,18 @@ func runCmd(ctx *cli.Context) error {
 	if ctx.Bool(MachineFlag.Name) {
 		tracer = logger.NewJSONLogger(logconfig, os.Stdout)
 	} else if ctx.Bool(DebugFlag.Name) {
-		debugLogger = logger.NewStructLogger(logconfig)
+		debugLogger, err = logger.NewStructLogger(logconfig, nil)
+		if err != nil {
+			fmt.Printf("Could not instantiate sturctlogger: %v\n", err)
+			os.Exit(1)
+		}
 		tracer = debugLogger
 	} else {
-		debugLogger = logger.NewStructLogger(logconfig)
+		debugLogger, err = logger.NewStructLogger(logconfig, nil)
+		if err != nil {
+			fmt.Printf("Could not instantiate sturctlogger: %v\n", err)
+			os.Exit(1)
+		}
 	}
 	if ctx.String(GenesisFlag.Name) != "" {
 		gen := readGenesis(ctx.String(GenesisFlag.Name))

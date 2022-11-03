@@ -904,7 +904,10 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 		config = &TraceConfig{}
 	}
 	// Default tracer is the struct logger
-	tracer = logger.NewStructLogger(config.Config)
+	tracer, err = logger.NewStructLogger(config.Config, config.TracerConfig)
+	if err != nil {
+		return nil, err
+	}
 	if config.Tracer != nil {
 		tracer, err = New(*config.Tracer, txctx, config.TracerConfig)
 		if err != nil {

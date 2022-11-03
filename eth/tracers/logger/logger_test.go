@@ -53,15 +53,18 @@ func (*dummyStatedb) GetState(_ common.Address, _ common.Hash) common.Hash    { 
 func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash) {}
 
 func TestStoreCapture(t *testing.T) {
+	logger, err := NewStructLogger(nil, nil)
+	if err != nil {
+		t.Fatalf("failed to instantiate logger: %v\n", err)
+	}
 	var (
-		logger   = NewStructLogger(nil)
 		env      = vm.NewEVM(vm.BlockContext{}, vm.TxContext{}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Debug: true, Tracer: logger})
 		contract = vm.NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 100000)
 	)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x0, byte(vm.SSTORE)}
 	var index common.Hash
 	logger.CaptureStart(env, common.Address{}, contract.Address(), false, nil, 0, nil)
-	_, err := env.Interpreter().Run(contract, []byte{}, false)
+	_, err = env.Interpreter().Run(contract, []byte{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

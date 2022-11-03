@@ -47,7 +47,8 @@ func (s Storage) Copy() Storage {
 	return cpy
 }
 
-// Config are the configuration options for structured logger the EVM
+// Config are the configuration options for structured logger the EVM.
+// TODO: deprecate in favor of LoggerConfig.
 type Config struct {
 	EnableMemory     bool // enable memory capture
 	DisableStack     bool // disable stack capture
@@ -57,6 +58,45 @@ type Config struct {
 	Limit            int  // maximum length of output, but zero means unlimited
 	// Chain overrides, can be used to execute a trace using future fork rules
 	Overrides *params.ChainConfig `json:"overrides,omitempty"`
+}
+
+// LoggerConfig are the configuration options for the opcode logger.
+// These override the legacy `Config` fields.
+// TODO (s1na): switch to non-pointer fields after deprecating `Config`.
+type LoggerConfig struct {
+	EnableMemory     *bool // enable memory capture
+	DisableStack     *bool // disable stack capture
+	DisableStorage   *bool // disable storage capture
+	EnableReturnData *bool // enable return data capture
+	Debug            *bool // print output during capture end
+	Limit            *int  // maximum length of output, but zero means unlimited
+	// Chain overrides, can be used to execute a trace using future fork rules
+	Overrides *params.ChainConfig `json:"overrides,omitempty"`
+}
+
+// setDefaults takes the default values from legacy `Config` object.
+func (c *LoggerConfig) setDefaults(cfg *Config) {
+	if c.EnableMemory == nil {
+		c.EnableMemory = &cfg.EnableMemory
+	}
+	if c.DisableStack == nil {
+		c.DisableStack = &cfg.DisableStack
+	}
+	if c.DisableStorage == nil {
+		c.DisableStorage = &cfg.DisableStorage
+	}
+	if c.EnableReturnData == nil {
+		c.EnableReturnData = &cfg.EnableReturnData
+	}
+	if c.Debug == nil {
+		c.Debug = &cfg.Debug
+	}
+	if c.Limit == nil {
+		c.Limit = &cfg.Limit
+	}
+	if c.Overrides == nil && cfg.Overrides != nil {
+		c.Overrides = cfg.Overrides
+	}
 }
 
 //go:generate go run github.com/fjl/gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
@@ -107,7 +147,7 @@ func (s *StructLog) ErrorString() string {
 // a track record of modified storage which is used in reporting snapshots of the
 // contract their storage.
 type StructLogger struct {
-	cfg Config
+	cfg LoggerConfig
 	env *vm.EVM
 
 	storage  map[common.Address]Storage
@@ -122,14 +162,23 @@ type StructLogger struct {
 }
 
 // NewStructLogger returns a new logger
-func NewStructLogger(cfg *Config) *StructLogger {
+func NewStructLogger(cfg *Config, loggerConfig json.RawMessage) (*StructLogger, error) {
 	logger := &StructLogger{
 		storage: make(map[common.Address]Storage),
 	}
-	if cfg != nil {
-		logger.cfg = *cfg
+	if cfg == nil {
+		cfg = &Config{}
 	}
-	return logger
+	// Standard way to pass in config to tracers
+	var config LoggerConfig
+	if loggerConfig != nil {
+		if err := json.Unmarshal(loggerConfig, &config); err != nil {
+			return nil, err
+		}
+	}
+	config.setDefaults(cfg)
+	logger.cfg = config
+	return logger, nil
 }
 
 // Reset clears the data held by the logger.
@@ -155,7 +204,7 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 		return
 	}
 	// check if already accumulated the specified number of logs
-	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
+	if *l.cfg.Limit != 0 && *l.cfg.Limit <= len(l.logs) {
 		return
 	}
 
@@ -164,13 +213,13 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 	contract := scope.Contract
 	// Copy a snapshot of the current memory state to a new buffer
 	var mem []byte
-	if l.cfg.EnableMemory {
+	if *l.cfg.EnableMemory {
 		mem = make([]byte, len(memory.Data()))
 		copy(mem, memory.Data())
 	}
 	// Copy a snapshot of the current stack state to a new buffer
 	var stck []uint256.Int
-	if !l.cfg.DisableStack {
+	if !*l.cfg.DisableStack {
 		stck = make([]uint256.Int, len(stack.Data()))
 		for i, item := range stack.Data() {
 			stck[i] = item
@@ -180,7 +229,7 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 	stackLen := len(stackData)
 	// Copy a snapshot of the current storage to a new container
 	var storage Storage
-	if !l.cfg.DisableStorage && (op == vm.SLOAD || op == vm.SSTORE) {
+	if !*l.cfg.DisableStorage && (op == vm.SLOAD || op == vm.SSTORE) {
 		// initialise new changed values storage container for this contract
 		// if not present.
 		if l.storage[contract.Address()] == nil {
@@ -205,7 +254,7 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 		}
 	}
 	var rdata []byte
-	if l.cfg.EnableReturnData {
+	if *l.cfg.EnableReturnData {
 		rdata = make([]byte, len(rData))
 		copy(rdata, rData)
 	}
@@ -223,7 +272,7 @@ func (l *StructLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, s
 func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
 	l.output = output
 	l.err = err
-	if l.cfg.Debug {
+	if *l.cfg.Debug {
 		fmt.Printf("%#x\n", output)
 		if err != nil {
 			fmt.Printf(" error: %v\n", err)

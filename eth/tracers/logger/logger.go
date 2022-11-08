@@ -63,12 +63,13 @@ type Config struct {
 // These override the legacy `Config` fields.
 // TODO (s1na): switch to non-pointer fields after deprecating `Config`.
 type LoggerConfig struct {
-	EnableMemory     *bool // enable memory capture
-	DisableStack     *bool // disable stack capture
-	DisableStorage   *bool // disable storage capture
-	EnableReturnData *bool // enable return data capture
-	Debug            *bool // print output during capture end
-	Limit            *int  // maximum length of output, but zero means unlimited
+	EnableMemory     *bool   // enable memory capture
+	MemoryMode       *string // "full", "dedup"
+	DisableStack     *bool   // disable stack capture
+	DisableStorage   *bool   // disable storage capture
+	EnableReturnData *bool   // enable return data capture
+	Debug            *bool   // print output during capture end
+	Limit            *int    // maximum length of output, but zero means unlimited
 	// Chain overrides, can be used to execute a trace using future fork rules
 	Overrides *params.ChainConfig `json:"overrides,omitempty"`
 }
@@ -77,6 +78,10 @@ type LoggerConfig struct {
 func (c *LoggerConfig) setDefaults(cfg *Config) {
 	if c.EnableMemory == nil {
 		c.EnableMemory = &cfg.EnableMemory
+	}
+	if c.MemoryMode == nil {
+		mode := "full"
+		c.MemoryMode = &mode
 	}
 	if c.DisableStack == nil {
 		c.DisableStack = &cfg.DisableStack
@@ -211,11 +216,7 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 	stack := scope.Stack
 	contract := scope.Contract
 	// Copy a snapshot of the current memory state to a new buffer
-	var mem []byte
-	if *l.cfg.EnableMemory {
-		mem = make([]byte, len(memory.Data()))
-		copy(mem, memory.Data())
-	}
+	mem := l.captureMemory(memory, op)
 	// Copy a snapshot of the current stack state to a new buffer
 	var stck []uint256.Int
 	if !*l.cfg.DisableStack {
@@ -328,6 +329,19 @@ func (l *StructLogger) Error() error { return l.err }
 // Output returns the VM return value captured by the trace.
 func (l *StructLogger) Output() []byte { return l.output }
 
+func (l *StructLogger) captureMemory(memory *vm.Memory, op vm.OpCode) []byte {
+	var mem []byte
+	if *l.cfg.EnableMemory {
+		// TODO: THIS DOES NOT WORK.
+		// In mode "dedup" memory of the memory-modifying-opcode is pre-modification. We need post-modification mem.
+		if *l.cfg.MemoryMode == "full" || (*l.cfg.MemoryMode == "dedup" && memoryAccessOp(op)) {
+			mem = make([]byte, len(memory.Data()))
+			copy(mem, memory.Data())
+		}
+	}
+	return mem
+}
+
 // WriteTrace writes a formatted trace to the given writer
 func WriteTrace(writer io.Writer, logs []StructLog) {
 	for _, log := range logs {
@@ -436,4 +450,15 @@ func formatLogs(logs []StructLog) []StructLogRes {
 		}
 	}
 	return formatted
+}
+
+func memoryAccessOp(op vm.OpCode) bool {
+	switch op {
+	case vm.KECCAK256, vm.MLOAD, vm.MSIZE, vm.CREATE, vm.CREATE2, vm.CALL, vm.CALLCODE, vm.DELEGATECALL,
+		vm.STATICCALL, vm.RETURN, vm.REVERT, vm.LOG0, vm.LOG1, vm.LOG2, vm.LOG3, vm.LOG4, vm.CALLDATACOPY, vm.RETURNDATACOPY,
+		vm.CODECOPY, vm.EXTCODECOPY, vm.MSTORE, vm.MSTORE8:
+		return true
+	default:
+		return false
+	}
 }

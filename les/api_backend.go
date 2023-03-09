@@ -177,6 +177,22 @@ func (b *LesApiBackend) GetLogs(ctx context.Context, hash common.Hash, number ui
 	return light.GetBlockLogs(ctx, b.eth.odr, hash, number)
 }
 
+func (b *LesApiBackend) GetLogsRange(ctx context.Context, start, count uint64) ([][][]*types.Log, error) {
+	logs := make([][][]*types.Log, 0, count)
+	for i := start; i < start+count; i++ {
+		hash, err := light.GetCanonicalHash(ctx, b.eth.odr, i)
+		if err != nil {
+			return nil, err
+		}
+		blockLogs, err := light.GetBlockLogs(ctx, b.eth.odr, hash, i)
+		if err != nil {
+			return nil, err
+		}
+		logs = append(logs, blockLogs)
+	}
+	return logs, nil
+}
+
 func (b *LesApiBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
 		return b.eth.blockchain.GetTdOdr(ctx, hash, *number)

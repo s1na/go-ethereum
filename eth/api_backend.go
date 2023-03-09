@@ -221,6 +221,10 @@ func (b *EthAPIBackend) GetLogs(ctx context.Context, hash common.Hash, number ui
 	return rawdb.ReadLogs(b.eth.chainDb, hash, number, b.ChainConfig()), nil
 }
 
+func (b *EthAPIBackend) GetLogsRange(ctx context.Context, start, count uint64) ([][][]*types.Log, error) {
+	return rawdb.ReadLogsRange(b.eth.chainDb, start, count), nil
+}
+
 func (b *EthAPIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	if header := b.eth.blockchain.GetHeaderByHash(hash); header != nil {
 		return b.eth.blockchain.GetTd(hash, header.Number.Uint64())

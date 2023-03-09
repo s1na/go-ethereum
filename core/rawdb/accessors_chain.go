@@ -743,6 +743,46 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64, config *params.C
 	return logs
 }
 
+func ReadLogsRange(db ethdb.Reader, start, count uint64) [][][]*types.Log {
+	raw := ReadReceiptsRange(db, start, count)
+	if uint64(len(raw)) != count {
+		return nil
+	}
+
+	result := make([][][]*types.Log, len(raw))
+	for i, r := range raw {
+		receipts := []*receiptLogs{}
+		if err := rlp.DecodeBytes(r, &receipts); err != nil {
+			log.Error("Invalid receipt array RLP", "num", start+uint64(i), "err", err)
+			return nil
+		}
+
+		logs := make([][]*types.Log, len(receipts))
+		for j, receipt := range receipts {
+			logs[j] = receipt.Logs
+		}
+		result[i] = logs
+	}
+	return result
+}
+
+func ReadReceiptsRange(db ethdb.Reader, start, count uint64) []rlp.RawValue {
+	var result []rlp.RawValue
+	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+		// Assume everything is in freezer
+		max := count * 524288
+		data, err := db.AncientRange(ChainFreezerReceiptTable, start, count, max)
+		fmt.Printf("receiptsrange len %v, count %v, lendata %v, err %v\n", len(data), count, len(data[0]), err)
+		if err == nil && uint64(len(data)) == count {
+			for i := range data {
+				result = append(result, data[i])
+			}
+		}
+		return nil
+	})
+	return result
+}
+
 // ReadBlock retrieves an entire block corresponding to the hash, assembling it
 // back from the stored header and body. If either the header or body could not
 // be retrieved nil is returned.

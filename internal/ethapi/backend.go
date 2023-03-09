@@ -92,6 +92,7 @@ type Backend interface {
 	// it must also be included here.
 	GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error)
 	GetLogs(ctx context.Context, blockHash common.Hash, number uint64) ([][]*types.Log, error)
+	GetLogsRange(ctx context.Context, start, count uint64) ([][][]*types.Log, error)
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription

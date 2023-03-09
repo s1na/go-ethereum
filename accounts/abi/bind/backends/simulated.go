@@ -896,6 +896,11 @@ func (fb *filterBackend) GetLogs(ctx context.Context, hash common.Hash, number u
 	return logs, nil
 }
 
+func (fb *filterBackend) GetLogsRange(ctx context.Context, start, count uint64) ([][][]*types.Log, error) {
+	logs := rawdb.ReadLogsRange(fb.db, start, count)
+	return logs, nil
+}
+
 func (fb *filterBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
 	return nullSubscription()
 }

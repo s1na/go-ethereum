@@ -19,6 +19,7 @@ package filters
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -155,11 +156,11 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	}
 	// Gather all indexed logs, and finish with non indexed ones
 	var (
-		logs           []*types.Log
-		end            = uint64(f.end)
-		size, sections = f.sys.backend.BloomStatus()
+		logs []*types.Log
+		end  = uint64(f.end)
+		//size, sections = f.sys.backend.BloomStatus()
 	)
-	if indexed := sections * size; indexed > uint64(f.begin) {
+	/*if indexed := sections * size; indexed > uint64(f.begin) {
 		if indexed > end {
 			logs, err = f.indexedLogs(ctx, end)
 		} else {
@@ -170,7 +171,11 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		}
 	}
 	rest, err := f.unindexedLogs(ctx, end)
-	logs = append(logs, rest...)
+	logs = append(logs, rest...)*/
+	logs, err = f.simpleLogs(ctx, end)
+	if err != nil {
+		return nil, err
+	}
 	if pending {
 		pendingLogs, err := f.pendingLogs()
 		if err != nil {
@@ -246,6 +251,43 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, e
 			return logs, err
 		}
 		logs = append(logs, found...)
+	}
+	return logs, nil
+}
+
+func (f *Filter) simpleLogs(ctx context.Context, end uint64) ([]*types.Log, error) {
+	var logs []*types.Log
+	// Retrieve all receipts in batch.
+	// Bounds are both inclusive.
+	batch, err := f.sys.backend.GetLogsRange(ctx, uint64(f.begin), end-uint64(f.begin)+1)
+	if err != nil {
+		return nil, err
+	}
+	if batch == nil {
+		return nil, fmt.Errorf("failed to get logs for block range #%d-#%d)", f.begin, end)
+	}
+	for _, blockLogs := range batch {
+		// Database logs are un-derived.
+		// Fill in whatever we can (txHash is inaccessible at this point).
+		flattened := make([]*types.Log, 0)
+		var logIdx uint
+		for i, txLogs := range blockLogs {
+			for _, log := range txLogs {
+				// TODO: fetch header
+				//log.BlockHash = blockHash
+				//log.BlockNumber = number
+				log.TxIndex = uint(i)
+				log.Index = logIdx
+				logIdx++
+				flattened = append(flattened, log)
+			}
+		}
+		filtered := filterLogs(flattened, nil, nil, f.addresses, f.topics)
+		if len(filtered) == 0 {
+			continue
+		}
+		// TODO: fill in txHash
+		logs = append(filtered, logs...)
 	}
 	return logs, nil
 }

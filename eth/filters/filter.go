@@ -32,8 +32,9 @@ import (
 type Filter struct {
 	sys *FilterSystem
 
-	addresses []common.Address
-	topics    [][]common.Hash
+	addresses  []common.Address
+	addressMap map[common.Address]struct{}
+	topics     [][]common.Hash
 
 	block      *common.Hash // Block hash if filtering a single block
 	begin, end int64        // Range interval if filtering multiple blocks
@@ -154,6 +155,11 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	if f.end, err = resolveSpecial(f.end); err != nil {
 		return nil, err
 	}
+	// convert addresses to map
+	f.addressMap = make(map[common.Address]struct{})
+	for _, a := range f.addresses {
+		f.addressMap[a] = struct{}{}
+	}
 	// Gather all indexed logs, and finish with non indexed ones
 	var (
 		logs []*types.Log
@@ -256,6 +262,7 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, e
 }
 
 func (f *Filter) simpleLogs(ctx context.Context, end uint64) ([]*types.Log, error) {
+
 	var logs []*types.Log
 	// Retrieve all receipts in batch.
 	// Bounds are both inclusive.
@@ -282,7 +289,7 @@ func (f *Filter) simpleLogs(ctx context.Context, end uint64) ([]*types.Log, erro
 				flattened = append(flattened, log)
 			}
 		}
-		filtered := filterLogs(flattened, nil, nil, f.addresses, f.topics)
+		filtered := filterLogs(flattened, nil, nil, f.addressMap, f.topics)
 		if len(filtered) == 0 {
 			continue
 		}
@@ -313,7 +320,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 	if err != nil {
 		return nil, err
 	}
-	logs := filterLogs(cached.logs, nil, nil, f.addresses, f.topics)
+	logs := filterLogs(cached.logs, nil, nil, f.addressMap, f.topics)
 	if len(logs) == 0 {
 		return nil, nil
 	}
@@ -343,23 +350,18 @@ func (f *Filter) pendingLogs() ([]*types.Log, error) {
 		for _, r := range receipts {
 			unfiltered = append(unfiltered, r.Logs...)
 		}
-		return filterLogs(unfiltered, nil, nil, f.addresses, f.topics), nil
+		return filterLogs(unfiltered, nil, nil, f.addressMap, f.topics), nil
 	}
 	return nil, nil
 }
 
-func includes(addresses []common.Address, a common.Address) bool {
-	for _, addr := range addresses {
-		if addr == a {
-			return true
-		}
-	}
-
-	return false
+func includes(addresses map[common.Address]struct{}, a common.Address) bool {
+	_, ok := addresses[a]
+	return ok
 }
 
 // filterLogs creates a slice of logs matching the given criteria.
-func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*types.Log {
+func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses map[common.Address]struct{}, topics [][]common.Hash) []*types.Log {
 	var ret []*types.Log
 Logs:
 	for _, log := range logs {
@@ -370,7 +372,53 @@ Logs:
 			continue
 		}
 
-		if len(addresses) > 0 && !includes(addresses, log.Address) {
+		if len(addresses) > 0 && includes(addresses, log.Address) {
+			continue
+		}
+		// If the to filtered topics is greater than the amount of topics in logs, skip.
+		if len(topics) > len(log.Topics) {
+			continue
+		}
+		for i, sub := range topics {
+			match := len(sub) == 0 // empty rule set == wildcard
+			for _, topic := range sub {
+				if log.Topics[i] == topic {
+					match = true
+					break
+				}
+			}
+			if !match {
+				continue Logs
+			}
+		}
+		ret = append(ret, log)
+	}
+	return ret
+}
+
+func includes2(addresses []common.Address, a common.Address) bool {
+	for _, addr := range addresses {
+		if addr == a {
+			return true
+		}
+	}
+
+	return false
+}
+
+// filterLogs creates a slice of logs matching the given criteria.
+func filterLogs2(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*types.Log {
+	var ret []*types.Log
+Logs:
+	for _, log := range logs {
+		if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > log.BlockNumber {
+			continue
+		}
+		if toBlock != nil && toBlock.Int64() >= 0 && toBlock.Uint64() < log.BlockNumber {
+			continue
+		}
+
+		if len(addresses) > 0 && includes2(addresses, log.Address) {
 			continue
 		}
 		// If the to filtered topics is greater than the amount of topics in logs, skip.

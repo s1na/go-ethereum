@@ -164,6 +164,8 @@ const (
 	BlocksSubscription
 	// LastIndexSubscription keeps track of the last index
 	LastIndexSubscription
+	// TracesSubscription keeps track of the normal chain processing operations
+	TracesSubscription
 )
 
 const (
@@ -185,6 +187,7 @@ type subscription struct {
 	logsCrit  ethereum.FilterQuery
 	logs      chan []*types.Log
 	txs       chan []*types.Transaction
+	traces    chan *types.Trace
 	headers   chan *types.Header
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
@@ -411,6 +414,23 @@ func (es *EventSystem) SubscribePendingTxs(txs chan []*types.Transaction) *Subsc
 		created:   time.Now(),
 		logs:      make(chan []*types.Log),
 		txs:       txs,
+		headers:   make(chan *types.Header),
+		installed: make(chan struct{}),
+		err:       make(chan error),
+	}
+	return es.subscribe(sub)
+}
+
+// SubscribePendingTxs creates a subscription that writes transactions for
+// transactions that enter the transaction pool.
+func (es *EventSystem) SubscribeTraces(traces chan *types.Trace) *Subscription {
+	sub := &subscription{
+		id:        rpc.NewID(),
+		typ:       TracesSubscription,
+		created:   time.Now(),
+		logs:      make(chan []*types.Log),
+		txs:       make(chan []*types.Transaction),
+		traces:    traces,
 		headers:   make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),

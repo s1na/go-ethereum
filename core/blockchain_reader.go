@@ -409,3 +409,8 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
 }
+
+// SubscribeTracesEvent registers a subscription of TracesEvent.
+func (bc *BlockChain) SubscribeTracesEvent(ch chan<- *types.Trace) event.Subscription {
+	return bc.scope.Track(bc.tracesFeed.Subscribe(ch))
+}

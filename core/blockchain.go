@@ -205,6 +205,7 @@ type BlockChain struct {
 	chainHeadFeed event.Feed
 	logsFeed      event.Feed
 	blockProcFeed event.Feed
+	tracesFeed    event.Feed
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
 
@@ -254,13 +255,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		Preimages: cacheConfig.Preimages,
 	})
 	var logger BlockchainLogger
-	if vmConfig.Tracer != nil {
-		l, ok := vmConfig.Tracer.(BlockchainLogger)
-		if !ok {
-			return nil, fmt.Errorf("only extended tracers are supported for live mode")
-		}
-		logger = l
-	}
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the
 	// stored one from database.
@@ -293,7 +287,14 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		futureBlocks:  lru.NewCache[common.Hash, *types.Block](maxFutureBlocks),
 		engine:        engine,
 		vmConfig:      vmConfig,
-		logger:        logger,
+	}
+	if vmConfig.Tracer != nil {
+		l, ok := vmConfig.Tracer.(BlockchainLogger)
+		if !ok {
+			return nil, fmt.Errorf("only extended tracers are supported for live mode")
+		}
+		bc.logger = l
+		go vmConfig.Tracer.EventLoop(bc)
 	}
 	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
 	bc.forker = NewForkChoice(bc, shouldPreserve)

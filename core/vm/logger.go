@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/"
 )
 
 // EVMLogger is used to collect execution traces from an EVM transaction
@@ -44,4 +45,5 @@ type EVMLogger interface {
 	CaptureKeccakPreimage(hash common.Hash, data []byte)
 	// Misc
 	OnGasConsumed(gas, amount uint64)
+	EventLoop(bc core.BlockChain)
 }

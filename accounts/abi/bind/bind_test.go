@@ -29,17 +29,18 @@ import (
 )
 
 var bindTests = []struct {
-	name     string
-	contract string
-	bytecode []string
-	abi      []string
-	imports  string
-	tester   string
-	v2tester string
-	fsigs    []map[string]string
-	libs     map[string]string
-	aliases  map[string]string
-	types    []string
+	name      string
+	contract  string
+	bytecode  []string
+	abi       []string
+	imports   string
+	tester    string
+	v2imports string
+	v2tester  string
+	fsigs     []map[string]string
+	libs      map[string]string
+	aliases   map[string]string
+	types     []string
 }{
 	// Test that the binding is available in combined and separate forms too
 	{
@@ -47,9 +48,9 @@ var bindTests = []struct {
 		`contract NilContract {}`,
 		[]string{`606060405260068060106000396000f3606060405200`},
 		[]string{`[]`},
-		`"bytes"
-		 "github.com/ethereum/go-ethereum/common"
+		`"github.com/ethereum/go-ethereum/common"
 		`,
+
 		`
 			if b, err := NewEmpty(common.Address{}, nil); b == nil || err != nil {
 				t.Fatalf("combined binding (%v) nil or error (%v) not nil", b, nil)
@@ -61,9 +62,8 @@ var bindTests = []struct {
 				t.Fatalf("transactor binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		`"bytes"`,
 		`
-			var _ = common.Address{} // This is just to silence "unused import" error
-
 			e, err := NewEmpty();
 
 			if (e == nil || err != nil) {
@@ -97,6 +97,7 @@ var bindTests = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		``,
 		`
 			if b, err := NewToken(common.Address{}, nil); b == nil || err != nil {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
@@ -111,17 +112,18 @@ var bindTests = []struct {
 
 // these tests skipped for now
 var _ = []struct {
-	name     string
-	contract string
-	bytecode []string
-	abi      []string
-	imports  string
-	tester   string
-	v2tester string
-	fsigs    []map[string]string
-	libs     map[string]string
-	aliases  map[string]string
-	types    []string
+	name      string
+	contract  string
+	bytecode  []string
+	abi       []string
+	imports   string
+	tester    string
+	v2imports string
+	v2tester  string
+	fsigs     []map[string]string
+	libs      map[string]string
+	aliases   map[string]string
+	types     []string
 }{
 	{
 		`Crowdsale`,
@@ -134,6 +136,7 @@ var _ = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		``,
 		``,
 		nil,
 		nil,
@@ -151,6 +154,7 @@ var _ = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		``,
 		``,
 		nil,
 		nil,
@@ -189,6 +193,7 @@ var _ = []struct {
 
 			 fmt.Println(err)
 		 }`,
+		``,
 		``,
 		nil,
 		nil,
@@ -230,6 +235,7 @@ var _ = []struct {
 
 			 fmt.Println(str1, str2, res.Str1, res.Str2, err)
 		 }`,
+		``,
 		``,
 		nil,
 		nil,
@@ -308,6 +314,7 @@ var _ = []struct {
 		 	t.Errorf("binding has disallowed method (FilterAnonymous)")
 		 }`,
 		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -371,6 +378,7 @@ var _ = []struct {
 			}
 		`,
 		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -418,6 +426,7 @@ var _ = []struct {
 			}
 		`,
 		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -464,6 +473,7 @@ var _ = []struct {
 				t.Fatalf("Retrieved value mismatch: have %v/%v, want %v/%v", res.A, res.B, "Hi", 1)
 			}
 		`,
+		``,
 		``,
 		nil,
 		nil,
@@ -524,6 +534,7 @@ var _ = []struct {
 			}
 		`,
 		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -575,6 +586,7 @@ var _ = []struct {
 				t.Fatalf("Address mismatch: have %v, want %v", caller, auth.From)
 			}
 		`,
+		``,
 		``,
 		nil,
 		nil,
@@ -641,6 +653,7 @@ var _ = []struct {
 			}
 		`,
 		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -682,6 +695,7 @@ var _ = []struct {
 			}
 		`,
 		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -721,6 +735,7 @@ var _ = []struct {
 				t.Fatalf("Error mismatch: have %v, want %v", err, bind.ErrNoCode)
 			}
 		`,
+		``,
 		``,
 		nil,
 		nil,
@@ -779,6 +794,7 @@ var _ = []struct {
 			}
 		`,
 		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -833,6 +849,7 @@ var _ = []struct {
 				}
 			}
 		`,
+		``,
 		``,
 		nil,
 		nil,
@@ -914,6 +931,7 @@ var _ = []struct {
 
 			fmt.Println(a, b, err)
 		`,
+		``,
 		``,
 		nil,
 		nil,
@@ -1138,6 +1156,7 @@ var _ = []struct {
 			}
 		`,
 		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1220,6 +1239,7 @@ var _ = []struct {
 			}
 		`,
 		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1258,6 +1278,7 @@ var _ = []struct {
 				t.Fatalf("")
 			}
 		`,
+		``,
 		``,
 		[]map[string]string{
 			{
@@ -1408,6 +1429,7 @@ var _ = []struct {
 			}
 		`,
 		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1476,6 +1498,7 @@ var _ = []struct {
 				t.Fatalf("Add did not return the correct result: %d != %d", res, 3)
 			}
 		`,
+		``,
 		``,
 		nil,
 		map[string]string{
@@ -1574,6 +1597,7 @@ var _ = []struct {
 		close(stopCh)
 		`,
 		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1617,6 +1641,7 @@ var _ = []struct {
 			t.Fatalf("failed to deploy contract: %v", err)
 		}
 		`,
+		``,
 		``,
 		nil,
 		nil,
@@ -1701,6 +1726,7 @@ var _ = []struct {
 		}
         `,
 		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1756,6 +1782,7 @@ var _ = []struct {
 				t.Fatalf("Retrieved value mismatch: have %v, want %v", num, 1)
 			}
 		`,
+		``,
 		``,
 		nil,
 		nil,
@@ -1848,6 +1875,7 @@ var _ = []struct {
 			}
 	   `,
 		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1920,6 +1948,7 @@ var _ = []struct {
 			}
 			`,
 		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1975,6 +2004,7 @@ var _ = []struct {
 			// TODO (MariusVanDerWijden unpack error using abigen
 			// once that is implemented
 	   `,
+		``,
 		``,
 		nil,
 		nil,
@@ -2190,7 +2220,7 @@ func TestBindings(t *testing.T) {
 						func Test%s(t *testing.T) {
 							%s
 						}
-					`, tt.imports, tt.name, tt.v2tester)
+					`, tt.v2imports, tt.name, tt.v2tester)
 			if err := os.WriteFile(filepath.Join(pkg2, strings.ToLower(tt.name)+"_test.go"), []byte(v2code), 0600); err != nil {
 				t.Fatalf("test %d: failed to write v2 tests: %v", i, err)
 			}

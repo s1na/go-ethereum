@@ -60,7 +60,7 @@ var (
 	}
 
 	func New{{.Type}}Instance(c *{{.Type}}, address common.Address, backend bind.ContractBackend) *{{.Type}}Instance {
-		return &{{.Type}}Instance{Db: *c, address: address, backend: backend}
+		return &{{.Type}}Instance{*c,address,backend}
 	}
 
 	func (i *{{$contract.Type}}Instance) Address() common.Address {
@@ -91,7 +91,11 @@ var (
 		return _{{$contract.Type}}.deployCode
 	}
 
-	func (_{{$contract.Type}} *{{$contract.Type}}) PackConstructor({{range .Constructor.Inputs}}, {{.Name}} {{bindtype .Type $structs}} {{end}}) ([]byte, error) {
+	func (_{{$contract.Type}} *{{$contract.Type}}) PackConstructor(
+		{{ range $index, $element := .Constructor.Inputs}}
+			{{.Name}} {{bindtype .Type $structs}},
+		{{end}}
+		) ([]byte, error) {
 		return _{{$contract.Type}}.abi.Pack("" {{range .Constructor.Inputs}}, {{.Name}}{{end}})
 	}
 

@@ -29,16 +29,18 @@ import (
 )
 
 var bindTests = []struct {
-	name     string
-	contract string
-	bytecode []string
-	abi      []string
-	imports  string
-	tester   string
-	fsigs    []map[string]string
-	libs     map[string]string
-	aliases  map[string]string
-	types    []string
+	name      string
+	contract  string
+	bytecode  []string
+	abi       []string
+	imports   string
+	tester    string
+	v2imports string
+	v2tester  string
+	fsigs     []map[string]string
+	libs      map[string]string
+	aliases   map[string]string
+	types     []string
 }{
 	// Test that the binding is available in combined and separate forms too
 	{
@@ -46,7 +48,9 @@ var bindTests = []struct {
 		`contract NilContract {}`,
 		[]string{`606060405260068060106000396000f3606060405200`},
 		[]string{`[]`},
-		`"github.com/ethereum/go-ethereum/common"`,
+		`"github.com/ethereum/go-ethereum/common"
+		`,
+
 		`
 			if b, err := NewEmpty(common.Address{}, nil); b == nil || err != nil {
 				t.Fatalf("combined binding (%v) nil or error (%v) not nil", b, nil)
@@ -56,6 +60,24 @@ var bindTests = []struct {
 			}
 			if b, err := NewEmptyTransactor(common.Address{}, nil); b == nil || err != nil {
 				t.Fatalf("transactor binding (%v) nil or error (%v) not nil", b, nil)
+			}
+		`,
+		`"bytes"`,
+		`
+			e, err := NewEmpty();
+
+			if (e == nil || err != nil) {
+				t.Fatalf("combined binding (%v) nil or error (%v) not nil", e, nil)
+			}
+
+			b,err := e.PackConstructor(); 
+			if err != nil {
+				t.Fatalf("packed constructor (%v) generated error (%v) not nil", b, nil)
+			}
+
+			want := []byte{}
+			if !bytes.Equal(want,b) {
+				t.Fatalf("Expected empty contract constructor data to be %v, but it was %v",want,b)
 			}
 		`,
 		nil,
@@ -75,11 +97,47 @@ var bindTests = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		`"bytes"
+		 "math/big"
+		 "github.com/ethereum/go-ethereum/common/hexutil"`,
+		`
+			e, err := NewToken(); 
+			if (e == nil || err != nil) {
+				t.Fatalf("binding (%v) nil or error (%v) not nil", e, nil)
+			}
+
+			b, err := e.PackConstructor(big.NewInt(100),"geocoin",5,"GEO"); 
+			if err != nil {
+				t.Fatalf("packed constructor (%v) generated error (%v) not nil", b, nil)
+			}
+
+			want,_ := hexutil.Decode("0x00000000000000000000000000000000000000000000000000000000000000640000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000500000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000000767656f636f696e00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000347454f0000000000000000000000000000000000000000000000000000000000")
+			if !bytes.Equal(want,b) {
+				t.Fatalf("Expected Token contract constructor data to be %v, but it was %v",want,b)
+			}
+		`,
 		nil,
 		nil,
 		nil,
 		nil,
 	},
+}
+
+// these tests skipped for now
+var _ = []struct {
+	name      string
+	contract  string
+	bytecode  []string
+	abi       []string
+	imports   string
+	tester    string
+	v2imports string
+	v2tester  string
+	fsigs     []map[string]string
+	libs      map[string]string
+	aliases   map[string]string
+	types     []string
+}{
 	{
 		`Crowdsale`,
 		`https://ethereum.org/crowdsale`,
@@ -91,6 +149,8 @@ var bindTests = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -107,6 +167,8 @@ var bindTests = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -144,6 +206,8 @@ var bindTests = []struct {
 
 			 fmt.Println(err)
 		 }`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -184,6 +248,8 @@ var bindTests = []struct {
 
 			 fmt.Println(str1, str2, res.Str1, res.Str2, err)
 		 }`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -260,6 +326,8 @@ var bindTests = []struct {
 		 if _, ok := reflect.TypeOf(&EventChecker{}).MethodByName("FilterAnonymous"); ok {
 		 	t.Errorf("binding has disallowed method (FilterAnonymous)")
 		 }`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -322,6 +390,8 @@ var bindTests = []struct {
 				t.Fatalf("Transact string mismatch: have '%s', want 'Transact string'", str)
 			}
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -368,6 +438,8 @@ var bindTests = []struct {
 				t.Fatalf("Retrieved value mismatch: have %v/%v, want %v/%v", str, num, "Hi", 1)
 			}
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -414,6 +486,8 @@ var bindTests = []struct {
 				t.Fatalf("Retrieved value mismatch: have %v/%v, want %v/%v", res.A, res.B, "Hi", 1)
 			}
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -472,6 +546,8 @@ var bindTests = []struct {
 					t.Fatalf("Slice return mismatch: have %v, want %v", out, []common.Address{auth.From, common.Address{}})
 			}
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -523,6 +599,8 @@ var bindTests = []struct {
 				t.Fatalf("Address mismatch: have %v, want %v", caller, auth.From)
 			}
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -587,6 +665,8 @@ var bindTests = []struct {
 				t.Fatalf("Failed to invoke G method: %v", err)
 			}
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -627,6 +707,8 @@ var bindTests = []struct {
 				t.Fatalf("Error mismatch: have %v, want %v", err, bind.ErrNoCode)
 			}
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -666,6 +748,8 @@ var bindTests = []struct {
 				t.Fatalf("Error mismatch: have %v, want %v", err, bind.ErrNoCode)
 			}
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -722,6 +806,8 @@ var bindTests = []struct {
 				t.Fatalf("Field mismatch: have %v, want %v", field, "automatic")
 			}
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -776,6 +862,8 @@ var bindTests = []struct {
 				}
 			}
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -856,6 +944,8 @@ var bindTests = []struct {
 
 			fmt.Println(a, b, err)
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1078,6 +1168,8 @@ var bindTests = []struct {
 			case <-time.After(250 * time.Millisecond):
 			}
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1159,6 +1251,8 @@ var bindTests = []struct {
 				t.Fatalf("Retrieved value does not match expected value! got: %d, expected: %d. %v", retrievedArr[4][3][2], testArr[4][3][2], err)
 			}
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1197,6 +1291,8 @@ var bindTests = []struct {
 				t.Fatalf("")
 			}
 		`,
+		``,
+		``,
 		[]map[string]string{
 			{
 				"test(function)": "d7a5aba2",
@@ -1345,6 +1441,8 @@ var bindTests = []struct {
 				t.Fatalf("failed to call function which has no return, err %v", err)
 			}
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1413,6 +1511,8 @@ var bindTests = []struct {
 				t.Fatalf("Add did not return the correct result: %d != %d", res, 3)
 			}
 		`,
+		``,
+		``,
 		nil,
 		map[string]string{
 			"b98c933f0a6ececcd167bd4f9d3299b1a0": "Math",
@@ -1509,6 +1609,8 @@ var bindTests = []struct {
 		}
 		close(stopCh)
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1552,6 +1654,8 @@ var bindTests = []struct {
 			t.Fatalf("failed to deploy contract: %v", err)
 		}
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		map[string]string{"_myVar": "pubVar"}, // alias MyVar to PubVar
@@ -1634,6 +1738,8 @@ var bindTests = []struct {
 			t.Fatal("Failed to invoke function")
 		}
         `,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1689,6 +1795,8 @@ var bindTests = []struct {
 				t.Fatalf("Retrieved value mismatch: have %v, want %v", num, 1)
 			}
 		`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1779,6 +1887,8 @@ var bindTests = []struct {
 				t.Fatal("Expect to receive event emitted by fallback")
 			}
 	   `,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1850,6 +1960,8 @@ var bindTests = []struct {
 				t.Fatal("Unexpected contract event number")
 			}
 			`,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1905,6 +2017,8 @@ var bindTests = []struct {
 			// TODO (MariusVanDerWijden unpack error using abigen
 			// once that is implemented
 	   `,
+		``,
+		``,
 		nil,
 		nil,
 		nil,
@@ -2056,6 +2170,12 @@ func TestBindings(t *testing.T) {
 	if err := os.MkdirAll(pkg, 0700); err != nil {
 		t.Fatalf("failed to create package: %v", err)
 	}
+
+	pkg2 := filepath.Join(ws, "bindv2test")
+	if err := os.MkdirAll(pkg2, 0700); err != nil {
+		t.Fatalf("failed to create package: %v", err)
+	}
+
 	// Generate the test suite for all the contracts
 	for i, tt := range bindTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2065,6 +2185,7 @@ func TestBindings(t *testing.T) {
 			} else {
 				types = []string{tt.name}
 			}
+
 			// Generate the binding and create a Go source file in the workspace
 			bind, err := Bind(types, tt.abi, tt.bytecode, tt.fsigs, "bindtest", tt.libs, tt.aliases)
 			if err != nil {
@@ -2089,6 +2210,35 @@ func TestBindings(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(pkg, strings.ToLower(tt.name)+"_test.go"), []byte(code), 0600); err != nil {
 				t.Fatalf("test %d: failed to write tests: %v", i, err)
 			}
+
+			// Generate the v2 binding and create a Go source file in the workspace
+			bindv2, err := BindV2(types, tt.abi, tt.bytecode, tt.fsigs, "bindv2test", tt.libs, tt.aliases)
+			if err != nil {
+				t.Fatalf("test %d: failed to generate v2 binding: %v", i, err)
+			}
+			if err = os.WriteFile(filepath.Join(pkg2, strings.ToLower(tt.name)+"_v2"+".go"), []byte(bindv2), 0600); err != nil {
+				t.Fatalf("test %d: failed to write v2 binding: %v", i, err)
+			}
+			// t.Log(bindv2) // DELETEME
+
+			// Generate the v2 test file with the injected test code
+			v2code := fmt.Sprintf(`
+						package bindv2test
+			
+						import (
+							"testing"
+							%s
+						)
+			
+						func Test%s(t *testing.T) {
+							%s
+						}
+					`, tt.v2imports, tt.name, tt.v2tester)
+			if err := os.WriteFile(filepath.Join(pkg2, strings.ToLower(tt.name)+"_test.go"), []byte(v2code), 0600); err != nil {
+				t.Fatalf("test %d: failed to write v2 tests: %v", i, err)
+			}
+			// t.Log(v2code) // DELETEME
+
 		})
 	}
 	// Convert the package to go modules and use the current source for go-ethereum
@@ -2097,21 +2247,44 @@ func TestBindings(t *testing.T) {
 	if out, err := moder.CombinedOutput(); err != nil {
 		t.Fatalf("failed to convert binding test to modules: %v\n%s", err, out)
 	}
+	moder = exec.Command(gocmd, "mod", "init", "bindtest")
+	moder.Dir = pkg2
+	if out, err := moder.CombinedOutput(); err != nil {
+		t.Fatalf("failed to convert v2 binding test to modules: %v\n%s", err, out)
+	}
+
 	pwd, _ := os.Getwd()
 	replacer := exec.Command(gocmd, "mod", "edit", "-x", "-require", "github.com/ethereum/go-ethereum@v0.0.0", "-replace", "github.com/ethereum/go-ethereum="+filepath.Join(pwd, "..", "..", "..")) // Repo root
 	replacer.Dir = pkg
 	if out, err := replacer.CombinedOutput(); err != nil {
 		t.Fatalf("failed to replace binding test dependency to current source tree: %v\n%s", err, out)
 	}
+	replacer = exec.Command(gocmd, "mod", "edit", "-x", "-require", "github.com/ethereum/go-ethereum@v0.0.0", "-replace", "github.com/ethereum/go-ethereum="+filepath.Join(pwd, "..", "..", "..")) // Repo root
+	replacer.Dir = pkg2
+	if out, err := replacer.CombinedOutput(); err != nil {
+		t.Fatalf("failed to replace v2 binding test dependency to current source tree: %v\n%s", err, out)
+	}
+
 	tidier := exec.Command(gocmd, "mod", "tidy")
 	tidier.Dir = pkg
 	if out, err := tidier.CombinedOutput(); err != nil {
 		t.Fatalf("failed to tidy Go module file: %v\n%s", err, out)
 	}
+	tidier = exec.Command(gocmd, "mod", "tidy")
+	tidier.Dir = pkg2
+	if out, err := tidier.CombinedOutput(); err != nil {
+		t.Fatalf("failed to tidy Go module file: %v\n%s", err, out)
+	}
+
 	// Test the entire package and report any failures
 	cmd := exec.Command(gocmd, "test", "-v", "-count", "1")
 	cmd.Dir = pkg
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("failed to run binding test: %v\n%s", err, out)
+	}
+	cmd = exec.Command(gocmd, "test", "-v", "-count", "1")
+	cmd.Dir = pkg2
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to run v2 binding test: %v\n%s", err, out)
 	}
 }

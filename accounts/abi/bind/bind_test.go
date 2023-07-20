@@ -77,7 +77,7 @@ var bindTests = []struct {
 
 			want := []byte{}
 			if !bytes.Equal(want,b) {
-				t.Fatalf("Expected empty contract constructor to be %v, but it was %v",want,b)
+				t.Fatalf("Expected empty contract constructor data to be %v, but it was %v",want,b)
 			}
 		`,
 		nil,
@@ -97,10 +97,23 @@ var bindTests = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
-		``,
+		`"bytes"
+		 "math/big"
+		 "github.com/ethereum/go-ethereum/common/hexutil"`,
 		`
-			if b, err := NewToken(common.Address{}, nil); b == nil || err != nil {
-				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
+			e, err := NewToken(); 
+			if (e == nil || err != nil) {
+				t.Fatalf("binding (%v) nil or error (%v) not nil", e, nil)
+			}
+
+			b, err := e.PackConstructor(big.NewInt(100),"geocoin",5,"GEO"); 
+			if err != nil {
+				t.Fatalf("packed constructor (%v) generated error (%v) not nil", b, nil)
+			}
+
+			want,_ := hexutil.Decode("0x00000000000000000000000000000000000000000000000000000000000000640000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000500000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000000767656f636f696e00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000347454f0000000000000000000000000000000000000000000000000000000000")
+			if !bytes.Equal(want,b) {
+				t.Fatalf("Expected Token contract constructor data to be %v, but it was %v",want,b)
 			}
 		`,
 		nil,

@@ -35,6 +35,7 @@ var bindTests = []struct {
 	abi      []string
 	imports  string
 	tester   string
+	v2tester string
 	fsigs    []map[string]string
 	libs     map[string]string
 	aliases  map[string]string
@@ -58,6 +59,7 @@ var bindTests = []struct {
 				t.Fatalf("transactor binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -75,6 +77,7 @@ var bindTests = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -91,6 +94,7 @@ var bindTests = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -107,6 +111,7 @@ var bindTests = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -144,6 +149,7 @@ var bindTests = []struct {
 
 			 fmt.Println(err)
 		 }`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -184,6 +190,7 @@ var bindTests = []struct {
 
 			 fmt.Println(str1, str2, res.Str1, res.Str2, err)
 		 }`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -260,6 +267,7 @@ var bindTests = []struct {
 		 if _, ok := reflect.TypeOf(&EventChecker{}).MethodByName("FilterAnonymous"); ok {
 		 	t.Errorf("binding has disallowed method (FilterAnonymous)")
 		 }`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -322,6 +330,7 @@ var bindTests = []struct {
 				t.Fatalf("Transact string mismatch: have '%s', want 'Transact string'", str)
 			}
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -368,6 +377,7 @@ var bindTests = []struct {
 				t.Fatalf("Retrieved value mismatch: have %v/%v, want %v/%v", str, num, "Hi", 1)
 			}
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -414,6 +424,7 @@ var bindTests = []struct {
 				t.Fatalf("Retrieved value mismatch: have %v/%v, want %v/%v", res.A, res.B, "Hi", 1)
 			}
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -472,6 +483,7 @@ var bindTests = []struct {
 					t.Fatalf("Slice return mismatch: have %v, want %v", out, []common.Address{auth.From, common.Address{}})
 			}
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -523,6 +535,7 @@ var bindTests = []struct {
 				t.Fatalf("Address mismatch: have %v, want %v", caller, auth.From)
 			}
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -587,6 +600,7 @@ var bindTests = []struct {
 				t.Fatalf("Failed to invoke G method: %v", err)
 			}
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -627,6 +641,7 @@ var bindTests = []struct {
 				t.Fatalf("Error mismatch: have %v, want %v", err, bind.ErrNoCode)
 			}
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -666,6 +681,7 @@ var bindTests = []struct {
 				t.Fatalf("Error mismatch: have %v, want %v", err, bind.ErrNoCode)
 			}
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -722,6 +738,7 @@ var bindTests = []struct {
 				t.Fatalf("Field mismatch: have %v, want %v", field, "automatic")
 			}
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -776,6 +793,7 @@ var bindTests = []struct {
 				}
 			}
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -856,6 +874,7 @@ var bindTests = []struct {
 
 			fmt.Println(a, b, err)
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1078,6 +1097,7 @@ var bindTests = []struct {
 			case <-time.After(250 * time.Millisecond):
 			}
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1159,6 +1179,7 @@ var bindTests = []struct {
 				t.Fatalf("Retrieved value does not match expected value! got: %d, expected: %d. %v", retrievedArr[4][3][2], testArr[4][3][2], err)
 			}
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1197,6 +1218,7 @@ var bindTests = []struct {
 				t.Fatalf("")
 			}
 		`,
+		``,
 		[]map[string]string{
 			{
 				"test(function)": "d7a5aba2",
@@ -1345,6 +1367,7 @@ var bindTests = []struct {
 				t.Fatalf("failed to call function which has no return, err %v", err)
 			}
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1413,6 +1436,7 @@ var bindTests = []struct {
 				t.Fatalf("Add did not return the correct result: %d != %d", res, 3)
 			}
 		`,
+		``,
 		nil,
 		map[string]string{
 			"b98c933f0a6ececcd167bd4f9d3299b1a0": "Math",
@@ -1509,6 +1533,7 @@ var bindTests = []struct {
 		}
 		close(stopCh)
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1552,6 +1577,7 @@ var bindTests = []struct {
 			t.Fatalf("failed to deploy contract: %v", err)
 		}
 		`,
+		``,
 		nil,
 		nil,
 		map[string]string{"_myVar": "pubVar"}, // alias MyVar to PubVar
@@ -1634,6 +1660,7 @@ var bindTests = []struct {
 			t.Fatal("Failed to invoke function")
 		}
         `,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1689,6 +1716,7 @@ var bindTests = []struct {
 				t.Fatalf("Retrieved value mismatch: have %v, want %v", num, 1)
 			}
 		`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1779,6 +1807,7 @@ var bindTests = []struct {
 				t.Fatal("Expect to receive event emitted by fallback")
 			}
 	   `,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1850,6 +1879,7 @@ var bindTests = []struct {
 				t.Fatal("Unexpected contract event number")
 			}
 			`,
+		``,
 		nil,
 		nil,
 		nil,
@@ -1905,6 +1935,7 @@ var bindTests = []struct {
 			// TODO (MariusVanDerWijden unpack error using abigen
 			// once that is implemented
 	   `,
+		``,
 		nil,
 		nil,
 		nil,
@@ -2056,6 +2087,12 @@ func TestBindings(t *testing.T) {
 	if err := os.MkdirAll(pkg, 0700); err != nil {
 		t.Fatalf("failed to create package: %v", err)
 	}
+
+	pkg2 := filepath.Join(ws, "bindv2test")
+	if err := os.MkdirAll(pkg2, 0700); err != nil {
+		t.Fatalf("failed to create package: %v", err)
+	}
+
 	// Generate the test suite for all the contracts
 	for i, tt := range bindTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2065,6 +2102,7 @@ func TestBindings(t *testing.T) {
 			} else {
 				types = []string{tt.name}
 			}
+
 			// Generate the binding and create a Go source file in the workspace
 			bind, err := Bind(types, tt.abi, tt.bytecode, tt.fsigs, "bindtest", tt.libs, tt.aliases)
 			if err != nil {
@@ -2086,8 +2124,34 @@ func TestBindings(t *testing.T) {
 				%s
 			}
 		`, tt.imports, tt.name, tt.tester)
-			if err := os.WriteFile(filepath.Join(pkg, strings.ToLower(tt.name)+"_test.go"), []byte(code), 0600); err != nil {
+			if err := os.WriteFile(filepath.Join(pkg2, strings.ToLower(tt.name)+"_test.go"), []byte(code), 0600); err != nil {
 				t.Fatalf("test %d: failed to write tests: %v", i, err)
+			}
+
+			// Generate the v2 binding and create a Go source file in the workspace
+			bindv2, err := BindV2(types, tt.abi, tt.bytecode, tt.fsigs, "bindv2test", tt.libs, tt.aliases)
+			if err != nil {
+				t.Fatalf("test %d: failed to generate v2 binding: %v", i, err)
+			}
+			if err = os.WriteFile(filepath.Join(pkg2, strings.ToLower(tt.name)+"_v2"+".go"), []byte(bindv2), 0600); err != nil {
+				t.Fatalf("test %d: failed to write v2 binding: %v", i, err)
+			}
+
+			// Generate the v2 test file with the injected test code
+			v2code := fmt.Sprintf(`
+						package bindv2test
+			
+						import (
+							"testing"
+							%s
+						)
+			
+						func Test%s(t *testing.T) {
+							%s
+						}
+					`, tt.imports, tt.name, tt.v2tester)
+			if err := os.WriteFile(filepath.Join(pkg2, strings.ToLower(tt.name)+"_test.go"), []byte(v2code), 0600); err != nil {
+				t.Fatalf("test %d: failed to write v2 tests: %v", i, err)
 			}
 		})
 	}

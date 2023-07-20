@@ -60,7 +60,7 @@ var (
 	}
 
 	func New{{.Type}}Instance(c *{{.Type}}, address common.Address, backend bind.ContractBackend) *{{.Type}}Instance {
-		return &{{.Type}}Instance{Db: *c, address: address, backend: backend}
+		return &{{.Type}}Instance{*c,address,backend}
 	}
 
 	func (i *{{$contract.Type}}Instance) Address() common.Address {

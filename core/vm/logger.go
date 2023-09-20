@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"errors"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -34,6 +36,19 @@ type EVMLogger interface {
 	CaptureTxEnd(receipt *types.Receipt, err error)
 	// Top call frame
 	CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
+	// PR: I left the signature as-is, code can be retrieved using `if v := (*vm.CallError); errors.As(err, &v) { v.Code() })`.
+	//     This avoids signature change but brings two cons, `err == vm.ErrOutOfGas` doesn't work anymore (errors.Is(err, vm.ErrOutOfGas) still works),
+	//     second the "CallError" is hidden and you need to explicitly cast to it to get the code.
+	//
+	// Other possibilities we could do
+	//  - `CaptureEnd(output []byte, gasUsed uint64, err *CallError)`
+	//  - `CaptureEnd(output []byte, gasUsed uint64, err error, errCode CallErrorCode)`
+	//
+	// Other wilder possibilities would be to add `Code()` straight to `vm.ErrXYZ` errors with the introduction
+	// of a `VMErr` interface, internally this would mean also `err == vm.ErrOutOfGas` wouldn't work anymore (would need
+	// to ne converted to `errors.Is(...)`).
+	//
+	// The comment above about the signature change also applies to `CaptureExit`, `CaptureState` and `CaptureFault`.
 	CaptureEnd(output []byte, gasUsed uint64, err error)
 	// Rest of call frames
 	CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
@@ -44,6 +59,115 @@ type EVMLogger interface {
 	CaptureKeccakPreimage(hash common.Hash, data []byte)
 	// Misc
 	OnGasChange(old, new uint64, reason GasChangeReason)
+}
+
+// PR: Maybe this should be tied from explicitely to "tracer" like `EVMLoggerCallError`
+// alternatives
+//
+// PR2: Need to decide where we put all those new stuff
+type CallError struct {
+	error
+	code CallErrorCode
+}
+
+func CallErrorFromErr(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	return &CallError{
+		error: err,
+		code:  callErrorCodeFromErr(err),
+	}
+}
+
+func (e *CallError) Error() string {
+	return e.error.Error()
+}
+
+func (e *CallError) Unwrap() error {
+	return errors.Unwrap(e.error)
+}
+
+func (e *CallError) Code() CallErrorCode {
+	return e.code
+}
+
+type CallErrorCode int
+
+const (
+	CallErrorCodeUnspecified CallErrorCode = iota
+
+	CallErrorCodeOutOfGas
+	CallErrorCodeCodeStoreOutOfGas
+	CallErrorCodeDepth
+	CallErrorCodeInsufficientBalance
+	CallErrorCodeContractAddressCollision
+	CallErrorCodeExecutionReverted
+	CallErrorCodeMaxInitCodeSizeExceeded
+	CallErrorCodeMaxCodeSizeExceeded
+	CallErrorCodeInvalidJump
+	CallErrorCodeWriteProtection
+	CallErrorCodeReturnDataOutOfBounds
+	CallErrorCodeGasUintOverflow
+	CallErrorCodeInvalidCode
+	CallErrorCodeNonceUintOverflow
+	CallErrorCodeStackUnderflow
+	CallErrorCodeStackOverflow
+	CallErrorCodeInvalidOpCode
+
+	// CallErrorCodeUnknown explicitly marks an error as unknown, this is useful when error is converted
+	// from an actual `error` in which case if the mapping is not known, we can use this value to indicate that.
+	CallErrorCodeUnknown = math.MaxInt - 1
+)
+
+func callErrorCodeFromErr(err error) CallErrorCode {
+	switch {
+	case errors.Is(err, ErrOutOfGas):
+		return CallErrorCodeOutOfGas
+	case errors.Is(err, ErrCodeStoreOutOfGas):
+		return CallErrorCodeCodeStoreOutOfGas
+	case errors.Is(err, ErrDepth):
+		return CallErrorCodeDepth
+	case errors.Is(err, ErrInsufficientBalance):
+		return CallErrorCodeInsufficientBalance
+	case errors.Is(err, ErrContractAddressCollision):
+		return CallErrorCodeContractAddressCollision
+	case errors.Is(err, ErrExecutionReverted):
+		return CallErrorCodeExecutionReverted
+	case errors.Is(err, ErrMaxInitCodeSizeExceeded):
+		return CallErrorCodeMaxInitCodeSizeExceeded
+	case errors.Is(err, ErrMaxCodeSizeExceeded):
+		return CallErrorCodeMaxCodeSizeExceeded
+	case errors.Is(err, ErrInvalidJump):
+		return CallErrorCodeInvalidJump
+	case errors.Is(err, ErrWriteProtection):
+		return CallErrorCodeWriteProtection
+	case errors.Is(err, ErrReturnDataOutOfBounds):
+		return CallErrorCodeReturnDataOutOfBounds
+	case errors.Is(err, ErrGasUintOverflow):
+		return CallErrorCodeGasUintOverflow
+	case errors.Is(err, ErrInvalidCode):
+		return CallErrorCodeInvalidCode
+	case errors.Is(err, ErrNonceUintOverflow):
+		return CallErrorCodeNonceUintOverflow
+
+	default:
+		// Dynamic errors
+		if v := (*ErrStackUnderflow)(nil); errors.As(err, &v) {
+			return CallErrorCodeStackUnderflow
+		}
+
+		if v := (*ErrStackOverflow)(nil); errors.As(err, &v) {
+			return CallErrorCodeStackOverflow
+		}
+
+		if v := (*ErrInvalidOpCode)(nil); errors.As(err, &v) {
+			return CallErrorCodeInvalidOpCode
+		}
+
+		return CallErrorCodeUnknown
+	}
 }
 
 // GasChangeReason is used to indicate the reason for a gas change, useful

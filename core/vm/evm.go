@@ -534,8 +534,8 @@ func (evm *EVM) captureEnd(isRoot bool, typ OpCode, startGas uint64, leftOverGas
 	}
 
 	if isRoot {
-		tracer.CaptureEnd(ret, startGas-leftOverGas, CallErrorFromErr(err))
+		tracer.CaptureEnd(ret, startGas-leftOverGas, VMErrorFromErr(err))
 	} else {
-		tracer.CaptureExit(ret, startGas-leftOverGas, CallErrorFromErr(err))
+		tracer.CaptureExit(ret, startGas-leftOverGas, VMErrorFromErr(err))
 	}
 }

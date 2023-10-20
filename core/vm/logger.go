@@ -36,19 +36,6 @@ type EVMLogger interface {
 	CaptureTxEnd(receipt *types.Receipt, err error)
 	// Top call frame
 	CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
-	// PR: I left the signature as-is, code can be retrieved using `if v := (*vm.CallError); errors.As(err, &v) { v.Code() })`.
-	//     This avoids signature change but brings two cons, `err == vm.ErrOutOfGas` doesn't work anymore (errors.Is(err, vm.ErrOutOfGas) still works),
-	//     second the "CallError" is hidden and you need to explicitly cast to it to get the code.
-	//
-	// Other possibilities we could do
-	//  - `CaptureEnd(output []byte, gasUsed uint64, err *CallError)`
-	//  - `CaptureEnd(output []byte, gasUsed uint64, err error, errCode CallErrorCode)`
-	//
-	// Other wilder possibilities would be to add `Code()` straight to `vm.ErrXYZ` errors with the introduction
-	// of a `VMErr` interface, internally this would mean also `err == vm.ErrOutOfGas` wouldn't work anymore (would need
-	// to ne converted to `errors.Is(...)`).
-	//
-	// The comment above about the signature change also applies to `CaptureExit`, `CaptureState` and `CaptureFault`.
 	CaptureEnd(output []byte, gasUsed uint64, err error)
 	// Rest of call frames
 	CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
@@ -61,112 +48,108 @@ type EVMLogger interface {
 	OnGasChange(old, new uint64, reason GasChangeReason)
 }
 
-// PR: Maybe this should be tied from explicitely to "tracer" like `EVMLoggerCallError`
-// alternatives
-//
-// PR2: Need to decide where we put all those new stuff
-type CallError struct {
+type VMError struct {
 	error
-	code CallErrorCode
+	code VMErrorCode
 }
 
-func CallErrorFromErr(err error) error {
+func VMErrorFromErr(err error) error {
 	if err == nil {
 		return nil
 	}
 
-	return &CallError{
+	return &VMError{
 		error: err,
-		code:  callErrorCodeFromErr(err),
+		code:  vmErrorCodeFromErr(err),
 	}
 }
 
-func (e *CallError) Error() string {
+func (e *VMError) Error() string {
 	return e.error.Error()
 }
 
-func (e *CallError) Unwrap() error {
+func (e *VMError) Unwrap() error {
 	return errors.Unwrap(e.error)
 }
 
-func (e *CallError) Code() CallErrorCode {
+func (e *VMError) ErrorCode() VMErrorCode {
 	return e.code
 }
 
-type CallErrorCode int
+type VMErrorCode int
 
 const (
-	CallErrorCodeUnspecified CallErrorCode = iota
+	VMErrorCodeUnspecified VMErrorCode = iota
 
-	CallErrorCodeOutOfGas
-	CallErrorCodeCodeStoreOutOfGas
-	CallErrorCodeDepth
-	CallErrorCodeInsufficientBalance
-	CallErrorCodeContractAddressCollision
-	CallErrorCodeExecutionReverted
-	CallErrorCodeMaxInitCodeSizeExceeded
-	CallErrorCodeMaxCodeSizeExceeded
-	CallErrorCodeInvalidJump
-	CallErrorCodeWriteProtection
-	CallErrorCodeReturnDataOutOfBounds
-	CallErrorCodeGasUintOverflow
-	CallErrorCodeInvalidCode
-	CallErrorCodeNonceUintOverflow
-	CallErrorCodeStackUnderflow
-	CallErrorCodeStackOverflow
-	CallErrorCodeInvalidOpCode
+	VMErrorCodeOutOfGas
+	VMErrorCodeCodeStoreOutOfGas
+	VMErrorCodeDepth
+	VMErrorCodeInsufficientBalance
+	VMErrorCodeContractAddressCollision
+	VMErrorCodeExecutionReverted
+	VMErrorCodeMaxInitCodeSizeExceeded
+	VMErrorCodeMaxCodeSizeExceeded
+	VMErrorCodeInvalidJump
+	VMErrorCodeWriteProtection
+	VMErrorCodeReturnDataOutOfBounds
+	VMErrorCodeGasUintOverflow
+	VMErrorCodeInvalidCode
+	VMErrorCodeNonceUintOverflow
+	VMErrorCodeStackUnderflow
+	VMErrorCodeStackOverflow
+	VMErrorCodeInvalidOpCode
 
-	// CallErrorCodeUnknown explicitly marks an error as unknown, this is useful when error is converted
+	// VMErrorCodeUnknown explicitly marks an error as unknown, this is useful when error is converted
 	// from an actual `error` in which case if the mapping is not known, we can use this value to indicate that.
-	CallErrorCodeUnknown = math.MaxInt - 1
+	VMErrorCodeUnknown = math.MaxInt - 1
 )
 
-func callErrorCodeFromErr(err error) CallErrorCode {
+func vmErrorCodeFromErr(err error) VMErrorCode {
 	switch {
 	case errors.Is(err, ErrOutOfGas):
-		return CallErrorCodeOutOfGas
+		return VMErrorCodeOutOfGas
 	case errors.Is(err, ErrCodeStoreOutOfGas):
-		return CallErrorCodeCodeStoreOutOfGas
+		return VMErrorCodeCodeStoreOutOfGas
 	case errors.Is(err, ErrDepth):
-		return CallErrorCodeDepth
+		return VMErrorCodeDepth
 	case errors.Is(err, ErrInsufficientBalance):
-		return CallErrorCodeInsufficientBalance
+		return VMErrorCodeInsufficientBalance
 	case errors.Is(err, ErrContractAddressCollision):
-		return CallErrorCodeContractAddressCollision
+		return VMErrorCodeContractAddressCollision
 	case errors.Is(err, ErrExecutionReverted):
-		return CallErrorCodeExecutionReverted
+		return VMErrorCodeExecutionReverted
 	case errors.Is(err, ErrMaxInitCodeSizeExceeded):
-		return CallErrorCodeMaxInitCodeSizeExceeded
+		return VMErrorCodeMaxInitCodeSizeExceeded
 	case errors.Is(err, ErrMaxCodeSizeExceeded):
-		return CallErrorCodeMaxCodeSizeExceeded
+		return VMErrorCodeMaxCodeSizeExceeded
 	case errors.Is(err, ErrInvalidJump):
-		return CallErrorCodeInvalidJump
+		return VMErrorCodeInvalidJump
 	case errors.Is(err, ErrWriteProtection):
-		return CallErrorCodeWriteProtection
+		return VMErrorCodeWriteProtection
 	case errors.Is(err, ErrReturnDataOutOfBounds):
-		return CallErrorCodeReturnDataOutOfBounds
+		return VMErrorCodeReturnDataOutOfBounds
 	case errors.Is(err, ErrGasUintOverflow):
-		return CallErrorCodeGasUintOverflow
+		return VMErrorCodeGasUintOverflow
 	case errors.Is(err, ErrInvalidCode):
-		return CallErrorCodeInvalidCode
+		return VMErrorCodeInvalidCode
 	case errors.Is(err, ErrNonceUintOverflow):
-		return CallErrorCodeNonceUintOverflow
+		return VMErrorCodeNonceUintOverflow
 
 	default:
 		// Dynamic errors
 		if v := (*ErrStackUnderflow)(nil); errors.As(err, &v) {
-			return CallErrorCodeStackUnderflow
+			return VMErrorCodeStackUnderflow
 		}
 
 		if v := (*ErrStackOverflow)(nil); errors.As(err, &v) {
-			return CallErrorCodeStackOverflow
+			return VMErrorCodeStackOverflow
 		}
 
 		if v := (*ErrInvalidOpCode)(nil); errors.As(err, &v) {
-			return CallErrorCodeInvalidOpCode
+			return VMErrorCodeInvalidOpCode
 		}
 
-		return CallErrorCodeUnknown
+		return VMErrorCodeUnknown
 	}
 }
 

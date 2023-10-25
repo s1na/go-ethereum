@@ -17,8 +17,6 @@
 package vm
 
 import (
-	"errors"
-	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -46,111 +44,6 @@ type EVMLogger interface {
 	CaptureKeccakPreimage(hash common.Hash, data []byte)
 	// Misc
 	OnGasChange(old, new uint64, reason GasChangeReason)
-}
-
-type VMError struct {
-	error
-	code VMErrorCode
-}
-
-func VMErrorFromErr(err error) error {
-	if err == nil {
-		return nil
-	}
-
-	return &VMError{
-		error: err,
-		code:  vmErrorCodeFromErr(err),
-	}
-}
-
-func (e *VMError) Error() string {
-	return e.error.Error()
-}
-
-func (e *VMError) Unwrap() error {
-	return errors.Unwrap(e.error)
-}
-
-func (e *VMError) ErrorCode() VMErrorCode {
-	return e.code
-}
-
-type VMErrorCode int
-
-const (
-	VMErrorCodeUnspecified VMErrorCode = iota
-
-	VMErrorCodeOutOfGas
-	VMErrorCodeCodeStoreOutOfGas
-	VMErrorCodeDepth
-	VMErrorCodeInsufficientBalance
-	VMErrorCodeContractAddressCollision
-	VMErrorCodeExecutionReverted
-	VMErrorCodeMaxInitCodeSizeExceeded
-	VMErrorCodeMaxCodeSizeExceeded
-	VMErrorCodeInvalidJump
-	VMErrorCodeWriteProtection
-	VMErrorCodeReturnDataOutOfBounds
-	VMErrorCodeGasUintOverflow
-	VMErrorCodeInvalidCode
-	VMErrorCodeNonceUintOverflow
-	VMErrorCodeStackUnderflow
-	VMErrorCodeStackOverflow
-	VMErrorCodeInvalidOpCode
-
-	// VMErrorCodeUnknown explicitly marks an error as unknown, this is useful when error is converted
-	// from an actual `error` in which case if the mapping is not known, we can use this value to indicate that.
-	VMErrorCodeUnknown = math.MaxInt - 1
-)
-
-func vmErrorCodeFromErr(err error) VMErrorCode {
-	switch {
-	case errors.Is(err, ErrOutOfGas):
-		return VMErrorCodeOutOfGas
-	case errors.Is(err, ErrCodeStoreOutOfGas):
-		return VMErrorCodeCodeStoreOutOfGas
-	case errors.Is(err, ErrDepth):
-		return VMErrorCodeDepth
-	case errors.Is(err, ErrInsufficientBalance):
-		return VMErrorCodeInsufficientBalance
-	case errors.Is(err, ErrContractAddressCollision):
-		return VMErrorCodeContractAddressCollision
-	case errors.Is(err, ErrExecutionReverted):
-		return VMErrorCodeExecutionReverted
-	case errors.Is(err, ErrMaxInitCodeSizeExceeded):
-		return VMErrorCodeMaxInitCodeSizeExceeded
-	case errors.Is(err, ErrMaxCodeSizeExceeded):
-		return VMErrorCodeMaxCodeSizeExceeded
-	case errors.Is(err, ErrInvalidJump):
-		return VMErrorCodeInvalidJump
-	case errors.Is(err, ErrWriteProtection):
-		return VMErrorCodeWriteProtection
-	case errors.Is(err, ErrReturnDataOutOfBounds):
-		return VMErrorCodeReturnDataOutOfBounds
-	case errors.Is(err, ErrGasUintOverflow):
-		return VMErrorCodeGasUintOverflow
-	case errors.Is(err, ErrInvalidCode):
-		return VMErrorCodeInvalidCode
-	case errors.Is(err, ErrNonceUintOverflow):
-		return VMErrorCodeNonceUintOverflow
-
-	default:
-		// Dynamic errors
-		if v := (*ErrStackUnderflow)(nil); errors.As(err, &v) {
-			return VMErrorCodeStackUnderflow
-		}
-
-		if v := (*ErrStackOverflow)(nil); errors.As(err, &v) {
-			return VMErrorCodeStackOverflow
-		}
-
-		if v := (*ErrInvalidOpCode)(nil); errors.As(err, &v) {
-			return VMErrorCodeInvalidOpCode
-		}
-
-		return VMErrorCodeUnknown
-	}
 }
 
 // GasChangeReason is used to indicate the reason for a gas change, useful

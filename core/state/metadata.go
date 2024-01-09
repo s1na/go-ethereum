@@ -66,3 +66,42 @@ const (
 	// Note it doesn't account for a self-destruct which appoints itself as recipient.
 	BalanceDecreaseSelfdestructBurn BalanceChangeReason = 14
 )
+
+// TODO: to be removed, it's useful for logs while developing
+// String returns a string representation of the reason.
+func (r BalanceChangeReason) String() string {
+	switch r {
+	case BalanceChangeUnspecified:
+		return "BalanceChangeUnspecified"
+	case BalanceIncreaseRewardMineUncle:
+		return "BalanceIncreaseRewardMineUncle"
+	case BalanceIncreaseRewardMineBlock:
+		return "BalanceIncreaseRewardMineBlock"
+	case BalanceChangeWithdrawal:
+		return "BalanceChangeWithdrawal"
+	case BalanceIncreaseGenesisBalance:
+		return "BalanceIncreaseGenesisBalance"
+	case BalanceIncreaseRewardTransactionFee:
+		return "BalanceIncreaseRewardTransactionFee"
+	case BalanceDecreaseGasBuy:
+		return "BalanceDecreaseGasBuy"
+	case BalanceIncreaseGasReturn:
+		return "BalanceIncreaseGasReturn"
+	case BalanceIncreaseDaoContract:
+		return "BalanceIncreaseDaoContract"
+	case BalanceDecreaseDaoAccount:
+		return "BalanceDecreaseDaoAccount"
+	case BalanceChangeTransfer:
+		return "BalanceChangeTransfer"
+	case BalanceChangeTouchAccount:
+		return "BalanceChangeTouchAccount"
+	case BalanceIncreaseSelfdestruct:
+		return "BalanceIncreaseSelfdestruct"
+	case BalanceDecreaseSelfdestruct:
+		return "BalanceDecreaseSelfdestruct"
+	case BalanceDecreaseSelfdestructBurn:
+		return "BalanceDecreaseSelfdestructBurn"
+	default:
+		return "unknown"
+	}
+}

@@ -1,6 +1,7 @@
 package live
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -17,111 +18,70 @@ func init() {
 	directory.LiveDirectory.Register("supply", newSupply)
 }
 
-// rewards, withdrawals := supply.Issuance(block, config)
-// burn := supply.Burn(block.Header())
-
-// // Calculate the difference between the "calculated" and "crawled" supply delta
-// var diff *big.Int
-// if crawled != nil {
-// 	diff = new(big.Int).Set(crawled)
-// 	diff.Sub(diff, rewards)
-// 	diff.Sub(diff, withdrawals)
-// 	diff.Add(diff, burn)
-// }
-
-// burn := new(big.Int)
-// if header.BaseFee != nil {
-// 	burn = new(big.Int).Mul(new(big.Int).SetUint64(header.GasUsed), header.BaseFee)
-// }
-
 type SupplyInfo struct {
-	// TODO: rename JSON from supplyDelta to supply
-	Delta       *big.Int `json:"supplyDelta"`
+	Delta       *big.Int `json:"delta"`
 	Reward      *big.Int `json:"reward"`
 	Withdrawals *big.Int `json:"withdrawals"`
 	Burn        *big.Int `json:"burn"`
-	// TODO: to be removed
-	Destruct *big.Int `json:"destruct"`
-}
 
-type SupplyDelta struct {
-	SupplyInfo
-
+	// Block info
 	Number     uint64      `json:"block"`
 	Hash       common.Hash `json:"hash"`
 	ParentHash common.Hash `json:"parentHash"`
 }
 
-type SupplyTotal struct {
-	SupplyInfo
-
-	FromNumber uint64 `json:"fromBlock"`
-	ToNumber   uint64 `json:"toBlock"`
-}
-
 type Supply struct {
-	supply *big.Int
-	total  SupplyTotal
-	// TODO: rename, delta is not accurate
-	delta SupplyDelta
+	delta SupplyInfo
 
 	// Check if genesis has been processed
 	hasGenesisProcessed bool
 }
 
 func newSupply() (core.BlockchainLogger, error) {
-	supplyDelta := newSupplyDelta()
+	supplyInfo := newSupplyInfo()
 
 	return &Supply{
-		supply: big.NewInt(0),
-		total: SupplyTotal{
-			SupplyInfo: SupplyInfo{
-				Delta:       big.NewInt(0),
-				Reward:      big.NewInt(0),
-				Withdrawals: big.NewInt(0),
-				Burn:        big.NewInt(0),
-				Destruct:    big.NewInt(0),
-			},
-			FromNumber: 0,
-			ToNumber:   0,
-		},
-		delta: supplyDelta,
+		delta: supplyInfo,
 	}, nil
 }
 
-func newSupplyDelta() SupplyDelta {
-	return SupplyDelta{
-		SupplyInfo: SupplyInfo{
-			Delta:       big.NewInt(0),
-			Reward:      big.NewInt(0),
-			Withdrawals: big.NewInt(0),
-			Burn:        big.NewInt(0),
-			Destruct:    big.NewInt(0),
-		},
+func newSupplyInfo() SupplyInfo {
+	return SupplyInfo{
+		Delta:       big.NewInt(0),
+		Reward:      big.NewInt(0),
+		Withdrawals: big.NewInt(0),
+		Burn:        big.NewInt(0),
+
 		Number:     0,
 		Hash:       common.Hash{},
 		ParentHash: common.Hash{},
 	}
 }
 
-func (p *Supply) SetStartBlock(number uint64) {
-	if p.total.FromNumber == 0 && p.supply.Cmp(big.NewInt(0)) == 0 {
-		p.total.FromNumber = number
-	}
+func (p *Supply) resetDelta() {
+	p.delta = newSupplyInfo()
 }
 
 func (p *Supply) OnBlockStart(b *types.Block, td *big.Int, finalized, safe *types.Header, _ *params.ChainConfig) {
-	p.SetStartBlock(b.NumberU64())
+	p.resetDelta()
 
-	// reset supply delta
-	supplyDelta := newSupplyDelta()
-	p.delta = supplyDelta
+	p.delta.Number = b.NumberU64()
+	p.delta.Hash = b.Hash()
+	p.delta.ParentHash = b.ParentHash()
 
-	p.total.ToNumber = b.NumberU64()
+	// Calculate Burn for this block
+	if b.BaseFee() != nil {
+		burn := new(big.Int).Mul(new(big.Int).SetUint64(b.GasUsed()), b.BaseFee())
+		p.delta.Burn.Add(p.delta.Burn, burn)
+
+		p.delta.Delta.Sub(p.delta.Delta, burn)
+	}
 }
 
 func (p *Supply) OnBlockEnd(err error) {
-	fmt.Printf("OnBlockEnd: err=%v,\t supply=%v\n\t-- delta\t Delta=%v,\t Reward=%v,\t Withdrawals=%v,\t Burn=%v,\t Destruct=%v\n\t-- total\t Delta=%v,\t Reward=%v,\t Withdrawals=%v,\t Burn=%v,\t Destruct=%v\n", err, p.supply, p.delta.Delta, p.delta.Reward, p.delta.Withdrawals, p.delta.Burn, p.delta.Destruct, p.total.Delta, p.total.Reward, p.total.Withdrawals, p.total.Burn, p.total.Destruct)
+
+	out, _ := json.Marshal(p.delta)
+	fmt.Printf("OnBlockEnd: err=%v,\n\t --[supply] %s\n\n", err, out)
 
 	fmt.Printf("------------------------------\n\n")
 }
@@ -131,45 +91,50 @@ func (p *Supply) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
 		return
 	}
 
-	p.SetStartBlock(b.NumberU64())
+	p.resetDelta()
+
+	p.delta.Number = b.NumberU64()
+	p.delta.Hash = b.Hash()
+	p.delta.ParentHash = b.ParentHash()
+
+	delta := big.NewInt(0)
 
 	// Initialize supply with total allocation in genesis block
 	for _, account := range alloc {
-		p.supply.Add(p.supply, account.Balance)
+		delta.Add(delta, account.Balance)
 	}
+
+	p.delta.Delta = delta
 
 	p.hasGenesisProcessed = true
 
-	fmt.Printf("-- OnGenesisBlock: allocLength=%d, supply=%v\n", len(alloc), p.supply)
+	out, _ := json.Marshal(p.delta)
+	fmt.Printf("OnGenesisBlock:\n\t --[supply] %s\n\n", out)
 }
 
 func (p *Supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.Int, reason state.BalanceChangeReason) {
 	diff := new(big.Int).Sub(newBalance, prevBalance)
 
-	fmt.Printf("OnBalanceChange: a=%v, prev=%v, new=%v, \n--\tdiff=%v, reason=%v\n\n", a, prevBalance, newBalance, diff, reason)
-
 	switch reason {
 	case state.BalanceIncreaseGenesisBalance:
 		p.delta.Delta.Add(p.delta.Delta, diff)
-		p.total.Delta.Add(p.total.Delta, diff)
 	case state.BalanceIncreaseRewardMineUncle:
 	case state.BalanceIncreaseRewardMineBlock:
 		p.delta.Reward.Add(p.delta.Reward, diff)
-		p.total.Reward.Add(p.total.Reward, diff)
 	case state.BalanceChangeWithdrawal:
 		p.delta.Withdrawals.Add(p.delta.Withdrawals, diff)
-		p.total.Withdrawals.Add(p.total.Withdrawals, diff)
 	case state.BalanceDecreaseSelfdestructBurn:
 		// TODO: check if diff is not negative and needs Sub, which will affect Delta and Supply as well
 		p.delta.Burn.Add(p.delta.Burn, diff)
-		p.total.Burn.Add(p.total.Burn, diff)
 	default:
-		fmt.Printf("No need to take action. Change reason: %v\n", reason)
+		// fmt.Printf("~~\tNo need to take action. Change reason: %v\n\n", reason)
 		return
 	}
 
 	// TODO: We might need to check if diff is negative and needs Sub
-	p.supply.Add(p.supply, diff)
+	p.delta.Delta.Add(p.delta.Delta, diff)
+
+	fmt.Printf("\nOnBalanceChange: a=%v, prev=%v, new=%v, \n--\tdiff=%v, reason=%v\n", a, prevBalance, newBalance, diff, reason)
 }
 
 // Following methods are not used, but are required to implement the BlockchainLogger interface
@@ -194,6 +159,18 @@ func (p *Supply) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (p *Supply) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+
+	// TODO:
+	// ------------------
+	// Sina, [12/1/24 15:48]
+	// - selfdestructing contract names itself as the recipient of funds
+
+	// Sina, [12/1/24 15:48]
+	// in this case the ether will be considered burnt
+
+	// Sina, [12/1/24 15:48]
+	// This is not captured by any of the balance reasons. Just there is a BalanceIncreaseSelfdestruct but no corresponding BalanceDecreaseSelfdestruct
+	// ------------------
 }
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't

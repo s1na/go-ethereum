@@ -3,7 +3,10 @@ package live
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/big"
+	"os"
+	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -25,23 +28,38 @@ type SupplyInfo struct {
 	Burn        *big.Int `json:"burn"`
 
 	// Block info
-	Number     uint64      `json:"block"`
+	Number     uint64      `json:"blockNumber"`
 	Hash       common.Hash `json:"hash"`
 	ParentHash common.Hash `json:"parentHash"`
 }
 
 type Supply struct {
-	delta SupplyInfo
+	delta  SupplyInfo
+	logger *log.Logger
 
 	// Check if genesis has been processed
 	hasGenesisProcessed bool
 }
 
 func newSupply() (core.BlockchainLogger, error) {
+	// TODO: file writing has been used for the test and we have to consider if we will write in a file or replace this mechanism at all
+	file, err := os.OpenFile("supply.txt", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
+	// file, err := os.OpenFile("supply.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// TODO: better handling of file close
+	runtime.SetFinalizer(file, func(f *os.File) {
+		f.Close()
+	})
+
+	logger := log.New(file, "", 0)
+
 	supplyInfo := newSupplyInfo()
 
 	return &Supply{
-		delta: supplyInfo,
+		delta:  supplyInfo,
+		logger: logger,
 	}, nil
 }
 
@@ -83,6 +101,8 @@ func (p *Supply) OnBlockEnd(err error) {
 	out, _ := json.Marshal(p.delta)
 	fmt.Printf("OnBlockEnd: err=%v,\n\t --[supply] %s\n\n", err, out)
 
+	p.logger.Println(string(out))
+
 	fmt.Printf("------------------------------\n\n")
 }
 
@@ -110,6 +130,8 @@ func (p *Supply) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
 
 	out, _ := json.Marshal(p.delta)
 	fmt.Printf("OnGenesisBlock:\n\t --[supply] %s\n\n", out)
+
+	p.logger.Println(string(out))
 }
 
 func (p *Supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.Int, reason state.BalanceChangeReason) {

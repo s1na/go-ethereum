@@ -137,6 +137,9 @@ func (p *Supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.
 	fmt.Printf("\nOnBalanceChange: a=%v, prev=%v, new=%v, \n--\tdiff=%v, reason=%v\n", a, prevBalance, newBalance, diff, reason)
 }
 
+// TODO: edge case
+// that covers when: contract a selfdestructs, but a receives funds after the selfdestruct opcode executes. Because a is removed only at the end of the transaction the ether sent in between is burnt
+
 // Following methods are not used, but are required to implement the BlockchainLogger interface
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.

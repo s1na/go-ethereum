@@ -143,7 +143,7 @@ func (p *Supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.
 	case state.BalanceIncreaseRewardMineUncle:
 	case state.BalanceIncreaseRewardMineBlock:
 		p.delta.Reward.Add(p.delta.Reward, diff)
-	case state.BalanceChangeWithdrawal:
+	case state.BalanceIncreaseWithdrawal:
 		p.delta.Withdrawals.Add(p.delta.Withdrawals, diff)
 	case state.BalanceDecreaseSelfdestructBurn:
 		// TODO: check if diff is not negative and needs Sub, which will affect Delta and Supply as well

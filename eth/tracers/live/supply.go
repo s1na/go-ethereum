@@ -76,46 +76,46 @@ func newSupplyInfo() SupplyInfo {
 	}
 }
 
-func (p *Supply) resetDelta() {
-	p.delta = newSupplyInfo()
+func (s *Supply) resetDelta() {
+	s.delta = newSupplyInfo()
 }
 
-func (p *Supply) OnBlockStart(b *types.Block, td *big.Int, finalized, safe *types.Header, _ *params.ChainConfig) {
-	p.resetDelta()
+func (s *Supply) OnBlockStart(b *types.Block, td *big.Int, finalized, safe *types.Header, _ *params.ChainConfig) {
+	s.resetDelta()
 
-	p.delta.Number = b.NumberU64()
-	p.delta.Hash = b.Hash()
-	p.delta.ParentHash = b.ParentHash()
+	s.delta.Number = b.NumberU64()
+	s.delta.Hash = b.Hash()
+	s.delta.ParentHash = b.ParentHash()
 
 	// Calculate Burn for this block
 	if b.BaseFee() != nil {
 		burn := new(big.Int).Mul(new(big.Int).SetUint64(b.GasUsed()), b.BaseFee())
-		p.delta.Burn.Add(p.delta.Burn, burn)
+		s.delta.Burn.Add(s.delta.Burn, burn)
 
-		p.delta.Delta.Sub(p.delta.Delta, burn)
+		s.delta.Delta.Sub(s.delta.Delta, burn)
 	}
 }
 
-func (p *Supply) OnBlockEnd(err error) {
+func (s *Supply) OnBlockEnd(err error) {
 
-	out, _ := json.Marshal(p.delta)
+	out, _ := json.Marshal(s.delta)
 	fmt.Printf("OnBlockEnd: err=%v,\n\t --[supply] %s\n\n", err, out)
 
-	p.logger.Println(string(out))
+	s.logger.Println(string(out))
 
 	fmt.Printf("------------------------------\n\n")
 }
 
-func (p *Supply) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
-	if p.hasGenesisProcessed {
+func (s *Supply) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
+	if s.hasGenesisProcessed {
 		return
 	}
 
-	p.resetDelta()
+	s.resetDelta()
 
-	p.delta.Number = b.NumberU64()
-	p.delta.Hash = b.Hash()
-	p.delta.ParentHash = b.ParentHash()
+	s.delta.Number = b.NumberU64()
+	s.delta.Hash = b.Hash()
+	s.delta.ParentHash = b.ParentHash()
 
 	delta := big.NewInt(0)
 
@@ -124,37 +124,37 @@ func (p *Supply) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
 		delta.Add(delta, account.Balance)
 	}
 
-	p.delta.Delta = delta
+	s.delta.Delta = delta
 
-	p.hasGenesisProcessed = true
+	s.hasGenesisProcessed = true
 
-	out, _ := json.Marshal(p.delta)
+	out, _ := json.Marshal(s.delta)
 	fmt.Printf("OnGenesisBlock:\n\t --[supply] %s\n\n", out)
 
-	p.logger.Println(string(out))
+	s.logger.Println(string(out))
 }
 
-func (p *Supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.Int, reason state.BalanceChangeReason) {
+func (s *Supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.Int, reason state.BalanceChangeReason) {
 	diff := new(big.Int).Sub(newBalance, prevBalance)
 
 	switch reason {
 	case state.BalanceIncreaseGenesisBalance:
-		p.delta.Delta.Add(p.delta.Delta, diff)
+		s.delta.Delta.Add(s.delta.Delta, diff)
 	case state.BalanceIncreaseRewardMineUncle:
 	case state.BalanceIncreaseRewardMineBlock:
-		p.delta.Reward.Add(p.delta.Reward, diff)
+		s.delta.Reward.Add(s.delta.Reward, diff)
 	case state.BalanceIncreaseWithdrawal:
-		p.delta.Withdrawals.Add(p.delta.Withdrawals, diff)
+		s.delta.Withdrawals.Add(s.delta.Withdrawals, diff)
 	case state.BalanceDecreaseSelfdestructBurn:
 		// TODO: check if diff is not negative and needs Sub, which will affect Delta and Supply as well
-		p.delta.Burn.Add(p.delta.Burn, diff)
+		s.delta.Burn.Add(s.delta.Burn, diff)
 	default:
 		// fmt.Printf("~~\tNo need to take action. Change reason: %v\n\n", reason)
 		return
 	}
 
 	// TODO: We might need to check if diff is negative and needs Sub
-	p.delta.Delta.Add(p.delta.Delta, diff)
+	s.delta.Delta.Add(s.delta.Delta, diff)
 
 	fmt.Printf("\nOnBalanceChange: a=%v, prev=%v, new=%v, \n--\tdiff=%v, reason=%v\n", a, prevBalance, newBalance, diff, reason)
 }
@@ -165,25 +165,25 @@ func (p *Supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.
 // Following methods are not used, but are required to implement the BlockchainLogger interface
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (p *Supply) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (s *Supply) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (p *Supply) CaptureEnd(output []byte, gasUsed uint64, err error) {}
+func (s *Supply) CaptureEnd(output []byte, gasUsed uint64, err error, reverted bool) {}
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (p *Supply) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+func (s *Supply) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (p *Supply) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
+func (s *Supply) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
 }
 
 // CaptureKeccakPreimage is called during the KECCAK256 opcode.
-func (p *Supply) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
+func (s *Supply) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (p *Supply) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (s *Supply) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 
 	// TODO:
 	// ------------------
@@ -200,24 +200,24 @@ func (p *Supply) CaptureEnter(typ vm.OpCode, from common.Address, to common.Addr
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (p *Supply) CaptureExit(output []byte, gasUsed uint64, err error) {}
+func (s *Supply) CaptureExit(output []byte, gasUsed uint64, err error, reverted bool) {}
 
-func (p *Supply) OnBeaconBlockRootStart(root common.Hash) {}
-func (p *Supply) OnBeaconBlockRootEnd()                   {}
+func (s *Supply) OnBeaconBlockRootStart(root common.Hash) {}
+func (s *Supply) OnBeaconBlockRootEnd()                   {}
 
-func (p *Supply) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {}
+func (s *Supply) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {}
 
-func (p *Supply) CaptureTxEnd(receipt *types.Receipt, err error) {}
+func (s *Supply) CaptureTxEnd(receipt *types.Receipt, err error) {}
 
-func (p *Supply) OnNonceChange(a common.Address, prev, new uint64) {}
+func (s *Supply) OnNonceChange(a common.Address, prev, new uint64) {}
 
-func (p *Supply) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
+func (s *Supply) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
 }
 
-func (p *Supply) OnStorageChange(a common.Address, k, prev, new common.Hash) {}
+func (s *Supply) OnStorageChange(a common.Address, k, prev, new common.Hash) {}
 
-func (p *Supply) OnLog(l *types.Log) {}
+func (s *Supply) OnLog(l *types.Log) {}
 
-func (p *Supply) OnNewAccount(a common.Address) {}
+func (s *Supply) OnNewAccount(a common.Address) {}
 
-func (p *Supply) OnGasChange(old, new uint64, reason vm.GasChangeReason) {}
+func (s *Supply) OnGasChange(old, new uint64, reason vm.GasChangeReason) {}

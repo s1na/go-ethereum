@@ -360,10 +360,10 @@ func (s *StateDB) GetCodeSize(addr common.Address) int {
 
 func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 	stateObject := s.getStateObject(addr)
-	if stateObject == nil {
-		return common.Hash{}
+	if stateObject != nil {
+		return common.BytesToHash(stateObject.CodeHash())
 	}
-	return common.BytesToHash(stateObject.CodeHash())
+	return common.Hash{}
 }
 
 // GetState retrieves a value from the given account's storage trie.
@@ -485,7 +485,7 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 		prev:        stateObject.selfDestructed,
 		prevbalance: prev,
 	})
-	if s.logger != nil {
+	if s.logger != nil && prev.Sign() > 0 {
 		s.logger.OnBalanceChange(addr, prev, n, BalanceDecreaseSelfdestruct)
 	}
 	stateObject.markSelfdestructed()

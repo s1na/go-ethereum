@@ -146,14 +146,12 @@ func (s *Supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.
 	case state.BalanceIncreaseWithdrawal:
 		s.delta.Withdrawals.Add(s.delta.Withdrawals, diff)
 	case state.BalanceDecreaseSelfdestructBurn:
-		// TODO: check if diff is not negative and needs Sub, which will affect Delta and Supply as well
-		s.delta.Burn.Add(s.delta.Burn, diff)
+		s.delta.Burn.Sub(s.delta.Burn, diff)
 	default:
 		// fmt.Printf("~~\tNo need to take action. Change reason: %v\n\n", reason)
 		return
 	}
 
-	// TODO: We might need to check if diff is negative and needs Sub
 	s.delta.Delta.Add(s.delta.Delta, diff)
 
 	fmt.Printf("\nOnBalanceChange: a=%v, prev=%v, new=%v, \n--\tdiff=%v, reason=%v\n", a, prevBalance, newBalance, diff, reason)

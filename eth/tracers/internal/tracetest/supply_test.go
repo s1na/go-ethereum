@@ -122,6 +122,7 @@ func TestSupplyEip1559Burn(t *testing.T) {
 		// A sender who makes transactions, has some funds
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		gwei5   = new(big.Int).Mul(big.NewInt(5), big.NewInt(params.GWei))
 		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
 
 		gspec = &core.Genesis{
@@ -158,7 +159,7 @@ func TestSupplyEip1559Burn(t *testing.T) {
 			Nonce:      0,
 			To:         &aa,
 			Gas:        30000,
-			GasFeeCap:  new(big.Int).Mul(big.NewInt(5), big.NewInt(params.GWei)),
+			GasFeeCap:  gwei5,
 			GasTipCap:  big.NewInt(2),
 			AccessList: accesses,
 			Data:       []byte{},
@@ -241,6 +242,11 @@ func TestSupplyWithdrawals(t *testing.T) {
 	}
 }
 
+// Tests fund retrieval after contract's selfdestruct.
+// Contract A calls contract B which selfdestructs, but B receives funds
+// after the selfdestruct opcode executes from Contract A.
+// Because Contract B is removed only at the end of the transaction
+// the ether sent in between is burnt before Cancun hard fork.
 func TestSupplySelfdestruct(t *testing.T) {
 	var (
 		merger = consensus.NewMerger(rawdb.NewMemoryDatabase())
@@ -251,6 +257,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 		dad     = common.HexToAddress("0x0000000000000000000000000000000000000dad")
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		gwei5   = new(big.Int).Mul(big.NewInt(5), big.NewInt(params.GWei))
 		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
 
 		gspec = &core.Genesis{
@@ -287,9 +294,9 @@ func TestSupplySelfdestruct(t *testing.T) {
 		txdata := &types.LegacyTx{
 			Nonce:    0,
 			To:       &aa,
-			Value:    new(big.Int).Mul(big.NewInt(5), big.NewInt(params.GWei)),
+			Value:    gwei5,
 			Gas:      150000,
-			GasPrice: new(big.Int).Mul(big.NewInt(5), big.NewInt(params.GWei)),
+			GasPrice: gwei5,
 			Data:     []byte{},
 		}
 
@@ -302,12 +309,12 @@ func TestSupplySelfdestruct(t *testing.T) {
 	// 1. Test pre Cancun
 	preCancunOutput, preCancunChain, err := testSupplyTracer(gspec, testBlockGenerationFunc)
 	if err != nil {
-		t.Fatalf("failed to test supply tracer: %v", err)
+		t.Fatalf("Pre-cancun failed to test supply tracer: %v", err)
 	}
 
 	// Check balance at state:
 	// 1. 0x0000...000dad has 1 ether
-	// 3. A has 0 ether
+	// 2. A has 0 ether
 	// 3. B has 0 ether
 	statedb, _ := preCancunChain.State()
 	if got, exp := statedb.GetBalance(dad), funds; got.Cmp(exp) != 0 {
@@ -334,7 +341,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 	actual := preCancunOutput[expected.Number]
 
 	if !reflect.DeepEqual(actual, expected) {
-		t.Fatalf("incorrect supply info: expected %+v, got %+v", expected, actual)
+		t.Fatalf("Pre-cancun incorrect supply info: expected %+v, got %+v", expected, actual)
 	}
 
 	// 2. Test post Cancun
@@ -344,7 +351,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 
 	postCancunOutput, postCancunChain, err := testSupplyTracer(gspec, testBlockGenerationFunc)
 	if err != nil {
-		t.Fatalf("failed to test supply tracer: %v", err)
+		t.Fatalf("Post-cancun failed to test supply tracer: %v", err)
 	}
 
 	// Check balance at state:
@@ -358,7 +365,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 	if got, exp := statedb.GetBalance(aa), big.NewInt(0); got.Cmp(exp) != 0 {
 		t.Fatalf("Post-shanghai address \"%v\" balance, got %v exp %v\n", aa, got, exp)
 	}
-	if got, exp := statedb.GetBalance(bb), new(big.Int).Mul(big.NewInt(5), big.NewInt(params.GWei)); got.Cmp(exp) != 0 {
+	if got, exp := statedb.GetBalance(bb), gwei5; got.Cmp(exp) != 0 {
 		t.Fatalf("Post-shanghai address \"%v\" balance, got %v exp %v\n", bb, got, exp)
 	}
 
@@ -376,7 +383,144 @@ func TestSupplySelfdestruct(t *testing.T) {
 	actual = postCancunOutput[expected.Number]
 
 	if !reflect.DeepEqual(actual, expected) {
-		t.Fatalf("incorrect supply info: expected %+v, got %+v", expected, actual)
+		t.Fatalf("Post-cancun incorrect supply info: expected %+v, got %+v", expected, actual)
+	}
+}
+
+// Tests selfdestructing contract to send its balance to itself.
+// Contract A calls contract B which selfdestructs and passes its balance
+// to itself (Contract B).
+// Because Contract B is removed only at the end of the transaction
+// the ether sent in between is burnt before Cancun hard fork.
+func TestSupplySelfdestructItself(t *testing.T) {
+	var (
+		merger = consensus.NewMerger(rawdb.NewMemoryDatabase())
+		config = *params.AllEthashProtocolChanges
+
+		aa = common.HexToAddress("0x1111111111111111111111111111111111111111")
+		bb = common.HexToAddress("0x2222222222222222222222222222222222222222")
+		// dad     = common.HexToAddress("0x0000000000000000000000000000000000000dad")
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		gwei5   = new(big.Int).Mul(big.NewInt(5), big.NewInt(params.GWei))
+		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+
+		gspec = &core.Genesis{
+			Config:  &config,
+			BaseFee: big.NewInt(params.InitialBaseFee),
+			Alloc: core.GenesisAlloc{
+				addr1: {Balance: funds},
+				aa: {
+					Code: common.FromHex("0x61face60f01b6000527322222222222222222222222222222222222222226000806002600080855af160008103603457600080fd5b60008060008034865af1905060008103604c57600080fd5b5050"),
+					// Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+				bb: {
+					Code:    common.FromHex("0x6000357fface00000000000000000000000000000000000000000000000000000000000080820360415773222222222222222222222222222222222222222280ff5b5050"),
+					Nonce:   0,
+					Balance: funds,
+				},
+			},
+		}
+	)
+
+	// Activate merge since genesis
+	merger.ReachTTD()
+	merger.FinalizePoS()
+
+	// Set the terminal total difficulty in the config
+	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
+
+	signer := types.LatestSigner(gspec.Config)
+
+	testBlockGenerationFunc := func(b *core.BlockGen) {
+		b.SetPoS()
+
+		txdata := &types.LegacyTx{
+			Nonce:    0,
+			To:       &aa,
+			Value:    gwei5,
+			Gas:      150000,
+			GasPrice: gwei5,
+			Data:     []byte{},
+		}
+
+		tx := types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key1)
+
+		b.AddTx(tx)
+	}
+
+	// 1. Test pre Cancun
+	preCancunOutput, preCancunChain, err := testSupplyTracer(gspec, testBlockGenerationFunc)
+	if err != nil {
+		t.Fatalf("Pre-cancun failed to test supply tracer: %v", err)
+	}
+
+	// Check balance at state:
+	// 1. A has 0 ether
+	// 2. B has 0 ether
+	statedb, _ := preCancunChain.State()
+	if got, exp := statedb.GetBalance(aa), big.NewInt(0); got.Cmp(exp) != 0 {
+		t.Fatalf("Pre-cancun address \"%v\" balance, got %v exp %v\n", aa, got, exp)
+	}
+	if got, exp := statedb.GetBalance(bb), big.NewInt(0); got.Cmp(exp) != 0 {
+		t.Fatalf("Pre-cancun address \"%v\" balance, got %v exp %v\n", bb, got, exp)
+	}
+
+	// Check live trace output
+	expected := live.SupplyInfo{
+		Delta:       big.NewInt(-31144500000000),
+		Reward:      common.Big0,
+		Withdrawals: common.Big0,
+		Burn:        big.NewInt(31144500000000),
+		Number:      1,
+		Hash:        common.HexToHash("0x71aafcce72971d4288bc4e50ca67aa0c6157cf9c1e135701f5b90c545bfaa136"),
+		ParentHash:  common.HexToHash("0x69cf2998c223bb2ad5a67c1f1c7a65cdc6ca4e744993897ea9b00dff4bb0e100"),
+	}
+
+	actual := preCancunOutput[expected.Number]
+
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("Pre-cancun incorrect supply info: expected %+v, got %+v", expected, actual)
+	}
+
+	// 2. Test post Cancun
+	cancunTime := uint64(0)
+	gspec.Config.ShanghaiTime = &cancunTime
+	gspec.Config.CancunTime = &cancunTime
+
+	postCancunOutput, postCancunChain, err := testSupplyTracer(gspec, testBlockGenerationFunc)
+	if err != nil {
+		t.Fatalf("Post-cancun failed to test supply tracer: %v", err)
+	}
+
+	// Check balance at state:
+	// 1. A has 0 ether
+	// 2. B has 1 ether and 5 gwei
+	statedb, _ = postCancunChain.State()
+	if got, exp := statedb.GetBalance(aa), big.NewInt(0); got.Cmp(exp) != 0 {
+		t.Fatalf("Post-shanghai address \"%v\" balance, got %v exp %v\n", aa, got, exp)
+	}
+	if got, exp := statedb.GetBalance(bb), big.NewInt(0).Add(funds, gwei5); got.Cmp(exp) != 0 {
+		t.Fatalf("Post-shanghai address \"%v\" balance, got %v exp %v\n", bb, got, exp)
+	}
+
+	// Check live trace output
+	expected = live.SupplyInfo{
+		Delta:       big.NewInt(-31139500000000),
+		Reward:      common.Big0,
+		Withdrawals: common.Big0,
+		Burn:        big.NewInt(31139500000000),
+		Number:      1,
+		Hash:        common.HexToHash("0xca887ca0d205de78203355699fc2207696cb9d1a3cf2606abf43094deee95724"),
+		ParentHash:  common.HexToHash("0xf18527496dc26564d28a69ee3cfbc81877f7c1dc80f25d111cd9c097048442d3"),
+	}
+
+	actual = postCancunOutput[expected.Number]
+
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("Post-cancun incorrect supply info: expected %+v, got %+v", expected, actual)
 	}
 }
 

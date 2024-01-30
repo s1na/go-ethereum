@@ -411,13 +411,11 @@ func TestSupplySelfdestructItself(t *testing.T) {
 			Alloc: core.GenesisAlloc{
 				addr1: {Balance: funds},
 				aa: {
-					Code: common.FromHex("0x61face60f01b6000527322222222222222222222222222222222222222226000806002600080855af160008103603457600080fd5b60008060008034865af1905060008103604c57600080fd5b5050"),
-					// Nonce:   0,
-					Balance: big.NewInt(0),
+					Code:    common.FromHex("0x61face60f01b6000527322222222222222222222222222222222222222226000806002600080855af160008103603457600080fd5b60008060008034865af1905060008103604c57600080fd5b5050"),
+					Balance: common.Big0,
 				},
 				bb: {
 					Code:    common.FromHex("0x6000357fface00000000000000000000000000000000000000000000000000000000000080820360415773222222222222222222222222222222222222222280ff5b5050"),
-					Nonce:   0,
 					Balance: funds,
 				},
 			},
@@ -521,6 +519,127 @@ func TestSupplySelfdestructItself(t *testing.T) {
 
 	if !reflect.DeepEqual(actual, expected) {
 		t.Fatalf("Post-cancun incorrect supply info: expected %+v, got %+v", expected, actual)
+	}
+}
+
+// Tests selfdestructing contract to send its balance to itself (burn).
+// It tests both cases of selfdestructing succeding and being reverted.
+//   - Contract A calls B and D.
+//   - Contract B selfdestructs and sends the funds to itself (Burn amount to be counted).
+//   - Contract C selfdestructs and sends the funds to itself.
+//   - Contract D calls C and reverts (Burn amount of C
+//     has to be reverted as well).
+func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
+	var (
+		merger = consensus.NewMerger(rawdb.NewMemoryDatabase())
+		config = *params.AllEthashProtocolChanges
+
+		aa      = common.HexToAddress("0x1111111111111111111111111111111111111111")
+		bb      = common.HexToAddress("0x2222222222222222222222222222222222222222")
+		cc      = common.HexToAddress("0x3333333333333333333333333333333333333333")
+		dd      = common.HexToAddress("0x4444444444444444444444444444444444444444")
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		gwei5   = new(big.Int).Mul(big.NewInt(5), big.NewInt(params.GWei))
+		eth1    = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		eth2    = new(big.Int).Mul(common.Big2, big.NewInt(params.Ether))
+		eth5    = new(big.Int).Mul(big.NewInt(5), big.NewInt(params.Ether))
+
+		gspec = &core.Genesis{
+			Config: &config,
+			// BaseFee: big.NewInt(params.InitialBaseFee),
+			Alloc: core.GenesisAlloc{
+				addr1: {Balance: eth1},
+				aa: {
+					Code:    common.FromHex("0x73222222222222222222222222222222222222222273444444444444444444444444444444444444444460006000600060006000865af160006000600060006000865af150505050"),
+					Balance: common.Big0,
+				},
+				bb: {
+					Code:    common.FromHex("0x3080ff50"),
+					Balance: eth5,
+				},
+				cc: {
+					Code:    common.FromHex("0x3080ff50"),
+					Balance: eth1,
+				},
+				dd: {
+					Code:    common.FromHex("0x73333333333333333333333333333333333333333360006000600060006000855af160006000fd5050"),
+					Balance: eth2,
+				},
+			},
+		}
+	)
+
+	// Activate merge since genesis
+	merger.ReachTTD()
+	merger.FinalizePoS()
+
+	// Set the terminal total difficulty in the config
+	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
+
+	signer := types.LatestSigner(gspec.Config)
+
+	testBlockGenerationFunc := func(b *core.BlockGen) {
+		b.SetPoS()
+
+		txdata := &types.LegacyTx{
+			Nonce:    0,
+			To:       &aa,
+			Value:    common.Big0,
+			Gas:      150000,
+			GasPrice: gwei5,
+			Data:     []byte{},
+		}
+
+		tx := types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key1)
+
+		b.AddTx(tx)
+	}
+
+	output, chain, err := testSupplyTracer(gspec, testBlockGenerationFunc)
+	if err != nil {
+		t.Fatalf("failed to test supply tracer: %v", err)
+	}
+
+	// Check balance at state:
+	// 1. A has 0 ether
+	// 2. B has 0 ether, burned
+	// 3. C has 2 ether, selfdestructed but parent D reverted
+	// 4. D has 1 ether, reverted
+	statedb, _ := chain.State()
+	if got, exp := statedb.GetBalance(aa), common.Big0; got.Cmp(exp) != 0 {
+		t.Fatalf("address \"%v\" balance, got %v exp %v\n", aa, got, exp)
+	}
+	if got, exp := statedb.GetBalance(bb), common.Big0; got.Cmp(exp) != 0 {
+		t.Fatalf("address \"%v\" balance, got %v exp %v\n", bb, got, exp)
+	}
+	if got, exp := statedb.GetBalance(cc), eth1; got.Cmp(exp) != 0 {
+		t.Fatalf("address \"%v\" balance, got %v exp %v\n", bb, got, exp)
+	}
+	if got, exp := statedb.GetBalance(dd), eth2; got.Cmp(exp) != 0 {
+		t.Fatalf("address \"%v\" balance, got %v exp %v\n", bb, got, exp)
+	}
+
+	// Check live trace output
+	block := chain.GetBlockByNumber(1)
+	blockBurn := new(big.Int).Mul(block.BaseFee(), big.NewInt(int64(block.GasUsed())))
+	totalBurn := new(big.Int).Add(blockBurn, eth5) // 5ETH burned from contract B
+
+	expected := live.SupplyInfo{
+		Delta:       new(big.Int).Neg(totalBurn),
+		Reward:      common.Big0,
+		Withdrawals: common.Big0,
+		Burn:        totalBurn,
+		Number:      1,
+		Hash:        common.HexToHash("0x405e000c449cbae0d02e8440fde3badaf77594b0fa3a56aa35a233c0218ab395"),
+		ParentHash:  common.HexToHash("0xaf41e72f748de317965454508c749f7e14dc4fe444cd07bca4c981c7e952364d"),
+	}
+
+	actual := output[expected.Number]
+
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("incorrect supply info: expected %+v, got %+v", expected, actual)
 	}
 }
 

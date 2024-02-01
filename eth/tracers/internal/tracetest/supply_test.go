@@ -416,10 +416,32 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 			Alloc: core.GenesisAlloc{
 				addr1: {Balance: eth1},
 				aa: {
+					// Contract code in YUL:
+					//
+					// object "ContractA" {
+					// 	code {
+					// 			let B := 0x2222222222222222222222222222222222222222
+					// 			let D := 0x4444444444444444444444444444444444444444
+
+					// 			// Call to Contract B
+					// 			let resB:= call(gas(), B, 0, 0x0, 0x0, 0, 0)
+
+					// 			// Call to Contract D
+					// 			let resD := call(gas(), D, 0, 0x0, 0x0, 0, 0)
+					// 	}
+					// }
 					Code:    common.FromHex("0x73222222222222222222222222222222222222222273444444444444444444444444444444444444444460006000600060006000865af160006000600060006000865af150505050"),
 					Balance: common.Big0,
 				},
 				bb: {
+					// Contract code in YUL:
+					//
+					// object "ContractB" {
+					// 	code {
+					// 			let self := address()
+					// 			selfdestruct(self)
+					// 	}
+					// }
 					Code:    common.FromHex("0x3080ff50"),
 					Balance: eth5,
 				},
@@ -428,6 +450,19 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 					Balance: eth1,
 				},
 				dd: {
+					// Contract code in YUL:
+					//
+					// object "ContractD" {
+					// 	code {
+					// 			let C := 0x3333333333333333333333333333333333333333
+
+					// 			// Call to Contract C
+					// 			let resC := call(gas(), C, 0, 0x0, 0x0, 0, 0)
+
+					// 			// Revert
+					// 			revert(0, 0)
+					// 	}
+					// }
 					Code:    common.FromHex("0x73333333333333333333333333333333333333333360006000600060006000855af160006000fd5050"),
 					Balance: eth2,
 				},

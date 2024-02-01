@@ -50,15 +50,15 @@ func TestSupplyGenesisAlloc(t *testing.T) {
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		eth1    = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
 
 		config = *params.AllEthashProtocolChanges
 
 		gspec = &core.Genesis{
 			Config: &config,
 			Alloc: core.GenesisAlloc{
-				addr1: {Balance: funds},
-				addr2: {Balance: funds},
+				addr1: {Balance: eth1},
+				addr2: {Balance: eth1},
 			},
 		}
 	)
@@ -119,17 +119,17 @@ func TestSupplyEip1559Burn(t *testing.T) {
 		config = *params.AllEthashProtocolChanges
 
 		aa = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
-		// A sender who makes transactions, has some funds
+		// A sender who makes transactions, has some eth1
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		gwei5   = new(big.Int).Mul(big.NewInt(5), big.NewInt(params.GWei))
-		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		eth1    = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
 
 		gspec = &core.Genesis{
 			Config:  &config,
 			BaseFee: big.NewInt(params.InitialBaseFee),
 			Alloc: core.GenesisAlloc{
-				addr1: {Balance: funds},
+				addr1: {Balance: eth1},
 				// The address 0xAAAA sloads 0x00 and 0x01
 				aa: {
 					Code: []byte{
@@ -243,7 +243,7 @@ func TestSupplyWithdrawals(t *testing.T) {
 }
 
 // Tests fund retrieval after contract's selfdestruct.
-// Contract A calls contract B which selfdestructs, but B receives funds
+// Contract A calls contract B which selfdestructs, but B receives eth1
 // after the selfdestruct opcode executes from Contract A.
 // Because Contract B is removed only at the end of the transaction
 // the ether sent in between is burnt before Cancun hard fork.
@@ -258,13 +258,13 @@ func TestSupplySelfdestruct(t *testing.T) {
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		gwei5   = new(big.Int).Mul(big.NewInt(5), big.NewInt(params.GWei))
-		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		eth1    = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
 
 		gspec = &core.Genesis{
 			Config:  &config,
 			BaseFee: big.NewInt(params.InitialBaseFee),
 			Alloc: core.GenesisAlloc{
-				addr1: {Balance: funds},
+				addr1: {Balance: eth1},
 				aa: {
 					Code: common.FromHex("0x61face60f01b6000527322222222222222222222222222222222222222226000806002600080855af160008103603457600080fd5b60008060008034865af1905060008103604c57600080fd5b5050"),
 					// Nonce:   0,
@@ -273,7 +273,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 				bb: {
 					Code:    common.FromHex("0x6000357fface000000000000000000000000000000000000000000000000000000000000808203602f57610dad80ff5b5050"),
 					Nonce:   0,
-					Balance: funds,
+					Balance: eth1,
 				},
 			},
 		}
@@ -317,7 +317,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 	// 2. A has 0 ether
 	// 3. B has 0 ether
 	statedb, _ := preCancunChain.State()
-	if got, exp := statedb.GetBalance(dad), funds; got.Cmp(exp) != 0 {
+	if got, exp := statedb.GetBalance(dad), eth1; got.Cmp(exp) != 0 {
 		t.Fatalf("Pre-cancun address \"%v\" balance, got %v exp %v\n", dad, got, exp)
 	}
 	if got, exp := statedb.GetBalance(aa), big.NewInt(0); got.Cmp(exp) != 0 {
@@ -359,7 +359,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 	// 3. A has 0 ether
 	// 3. B has 5 gwei
 	statedb, _ = postCancunChain.State()
-	if got, exp := statedb.GetBalance(dad), funds; got.Cmp(exp) != 0 {
+	if got, exp := statedb.GetBalance(dad), eth1; got.Cmp(exp) != 0 {
 		t.Fatalf("Post-shanghai address \"%v\" balance, got %v exp %v\n", dad, got, exp)
 	}
 	if got, exp := statedb.GetBalance(aa), big.NewInt(0); got.Cmp(exp) != 0 {
@@ -390,8 +390,8 @@ func TestSupplySelfdestruct(t *testing.T) {
 // Tests selfdestructing contract to send its balance to itself (burn).
 // It tests both cases of selfdestructing succeding and being reverted.
 //   - Contract A calls B and D.
-//   - Contract B selfdestructs and sends the funds to itself (Burn amount to be counted).
-//   - Contract C selfdestructs and sends the funds to itself.
+//   - Contract B selfdestructs and sends the eth1 to itself (Burn amount to be counted).
+//   - Contract C selfdestructs and sends the eth1 to itself.
 //   - Contract D calls C and reverts (Burn amount of C
 //     has to be reverted as well).
 func TestSupplySelfdestructItselfAndRevert(t *testing.T) {

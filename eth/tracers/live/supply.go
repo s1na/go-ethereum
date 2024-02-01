@@ -121,14 +121,10 @@ func (s *Supply) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
 	s.delta.Hash = b.Hash()
 	s.delta.ParentHash = b.ParentHash()
 
-	delta := big.NewInt(0)
-
 	// Initialize supply with total allocation in genesis block
 	for _, account := range alloc {
-		delta.Add(delta, account.Balance)
+		s.delta.Delta.Add(s.delta.Delta, account.Balance)
 	}
-
-	s.delta.Delta = delta
 
 	s.hasGenesisProcessed = true
 
@@ -141,9 +137,8 @@ func (s *Supply) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
 func (s *Supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.Int, reason state.BalanceChangeReason) {
 	diff := new(big.Int).Sub(newBalance, prevBalance)
 
+	// NOTE: don't handle "BalanceIncreaseGenesisBalance" because it is handled in OnGenesisBlock
 	switch reason {
-	case state.BalanceIncreaseGenesisBalance:
-		s.delta.Delta.Add(s.delta.Delta, diff)
 	case state.BalanceIncreaseRewardMineUncle:
 	case state.BalanceIncreaseRewardMineBlock:
 		s.delta.Reward.Add(s.delta.Reward, diff)

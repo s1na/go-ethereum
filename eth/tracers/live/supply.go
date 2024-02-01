@@ -201,8 +201,6 @@ func (s *Supply) CaptureEnter(typ vm.OpCode, from common.Address, to common.Addr
 		calls: make([]supplyTxCallstack, 0),
 	}
 
-	// TODO shall we check if London enabled or b.BaseFee() != nil
-
 	// This is a special case of burned amount which has to be handled here
 	// which happens when type == selfdestruct and from == to.
 	if typ == vm.SELFDESTRUCT && from == to && value.Cmp(common.Big0) == 1 {

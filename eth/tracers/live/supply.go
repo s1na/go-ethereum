@@ -2,7 +2,6 @@ package live
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"math/big"
 	"path/filepath"
@@ -99,9 +98,6 @@ func (s *Supply) OnBlockStart(b *types.Block, td *big.Int, finalized, safe *type
 func (s *Supply) OnBlockEnd(err error) {
 	out, _ := json.Marshal(s.delta)
 	s.logger.Println(string(out))
-
-	fmt.Printf("OnBlockEnd: err=%v,\n\t --[supply] %s\n\n", err, out)
-	fmt.Printf("------------------------------\n\n")
 }
 
 func (s *Supply) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
@@ -124,8 +120,6 @@ func (s *Supply) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
 
 	out, _ := json.Marshal(s.delta)
 	s.logger.Println(string(out))
-
-	fmt.Printf("OnGenesisBlock:\n\t --[supply] %s\n\n", out)
 }
 
 func (s *Supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.Int, reason state.BalanceChangeReason) {
@@ -146,8 +140,6 @@ func (s *Supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.
 	}
 
 	s.delta.Delta.Add(s.delta.Delta, diff)
-
-	fmt.Printf("\nOnBalanceChange: a=%v, prev=%v, new=%v, \n--\tdiff=%v, reason=%v\n", a, prevBalance, newBalance, diff, reason)
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.

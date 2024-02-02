@@ -21,7 +21,7 @@ func init() {
 
 type Printer struct{}
 
-func newPrinter() (core.BlockchainLogger, error) {
+func newPrinter(ctx *directory.LiveTracerContext) (core.BlockchainLogger, error) {
 	return &Printer{}, nil
 }
 

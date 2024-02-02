@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"os"
-	"runtime"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -15,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory"
 	"github.com/ethereum/go-ethereum/params"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 func init() {
@@ -47,19 +47,14 @@ type Supply struct {
 	hasGenesisProcessed bool
 }
 
-func newSupply() (core.BlockchainLogger, error) {
-	// TODO: file writing has been used for the test and we have to consider if we will write in a file or replace this mechanism at all
-	file, err := os.OpenFile("supply.txt", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
-	// file, err := os.OpenFile("supply.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		log.Fatal(err)
+func newSupply(ctx *directory.LiveTracerContext) (core.BlockchainLogger, error) {
+	// Store traces in a rotating file
+	loggerOutput := &lumberjack.Logger{
+		Filename: filepath.Join(ctx.OutputPath, "supply.jsonl"),
+		MaxSize:  200, // megabytes
 	}
-	// TODO: better handling of file close
-	runtime.SetFinalizer(file, func(f *os.File) {
-		f.Close()
-	})
 
-	logger := log.New(file, "", 0)
+	logger := log.New(loggerOutput, "", 0)
 
 	supplyInfo := newSupplyInfo()
 
@@ -102,7 +97,6 @@ func (s *Supply) OnBlockStart(b *types.Block, td *big.Int, finalized, safe *type
 }
 
 func (s *Supply) OnBlockEnd(err error) {
-
 	out, _ := json.Marshal(s.delta)
 	s.logger.Println(string(out))
 

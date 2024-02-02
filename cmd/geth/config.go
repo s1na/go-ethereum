@@ -181,7 +181,15 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 
 	if ctx.IsSet(utils.VMTraceFlag.Name) {
 		if name := ctx.String(utils.VMTraceFlag.Name); name != "" {
-			t, err := directory.LiveDirectory.New(name)
+			liveTracerCtx := directory.LiveTracerContext{}
+
+			if ctx.IsSet(utils.VMTracePathFlag.Name) {
+				if path := ctx.String(utils.VMTracePathFlag.Name); path != "" {
+					liveTracerCtx.OutputPath = path
+				}
+			}
+
+			t, err := directory.LiveDirectory.New(name, &liveTracerCtx)
 			if err != nil {
 				utils.Fatalf("Failed to create tracer %q: %v", name, err)
 			}

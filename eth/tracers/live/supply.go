@@ -46,7 +46,7 @@ type Supply struct {
 	hasGenesisProcessed bool
 }
 
-func newSupply(ctx *directory.LiveTracerContext) (core.BlockchainLogger, error) {
+func newSupply(ctx *directory.TracerContext) (core.BlockchainLogger, error) {
 	// Store traces in a rotating file
 	loggerOutput := &lumberjack.Logger{
 		Filename: filepath.Join(ctx.OutputPath, "supply.jsonl"),

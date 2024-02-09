@@ -554,7 +554,7 @@ func testSupplyTracer(genesis *core.Genesis, gen func(*core.BlockGen)) ([]live.S
 	defer os.Remove(traceOutputFilename)
 
 	// Load supply tracer
-	tracer, err := directory.LiveDirectory.New("supply", &directory.LiveTracerContext{OutputPath: traceOutputPath})
+	tracer, err := directory.LiveDirectory.New("supply", &directory.TracerContext{OutputPath: traceOutputPath})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create call tracer: %v", err)
 	}

@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	liveDir "github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/eth/tracers/live"
 	"github.com/ethereum/go-ethereum/params"
 
@@ -318,13 +318,13 @@ func TestSupplySelfdestruct(t *testing.T) {
 	// 2. A has 0 ether
 	// 3. B has 0 ether
 	statedb, _ := preCancunChain.State()
-	if got, exp := statedb.GetBalance(dad), eth1; got.Cmp(exp) != 0 {
+	if got, exp := statedb.GetBalance(dad), eth1; got.CmpBig(exp) != 0 {
 		t.Fatalf("Pre-cancun address \"%v\" balance, got %v exp %v\n", dad, got, exp)
 	}
-	if got, exp := statedb.GetBalance(aa), big.NewInt(0); got.Cmp(exp) != 0 {
+	if got, exp := statedb.GetBalance(aa), big.NewInt(0); got.CmpBig(exp) != 0 {
 		t.Fatalf("Pre-cancun address \"%v\" balance, got %v exp %v\n", aa, got, exp)
 	}
-	if got, exp := statedb.GetBalance(bb), big.NewInt(0); got.Cmp(exp) != 0 {
+	if got, exp := statedb.GetBalance(bb), big.NewInt(0); got.CmpBig(exp) != 0 {
 		t.Fatalf("Pre-cancun address \"%v\" balance, got %v exp %v\n", bb, got, exp)
 	}
 
@@ -360,13 +360,13 @@ func TestSupplySelfdestruct(t *testing.T) {
 	// 3. A has 0 ether
 	// 3. B has 5 gwei
 	statedb, _ = postCancunChain.State()
-	if got, exp := statedb.GetBalance(dad), eth1; got.Cmp(exp) != 0 {
+	if got, exp := statedb.GetBalance(dad), eth1; got.CmpBig(exp) != 0 {
 		t.Fatalf("Post-shanghai address \"%v\" balance, got %v exp %v\n", dad, got, exp)
 	}
-	if got, exp := statedb.GetBalance(aa), big.NewInt(0); got.Cmp(exp) != 0 {
+	if got, exp := statedb.GetBalance(aa), big.NewInt(0); got.CmpBig(exp) != 0 {
 		t.Fatalf("Post-shanghai address \"%v\" balance, got %v exp %v\n", aa, got, exp)
 	}
-	if got, exp := statedb.GetBalance(bb), gwei5; got.Cmp(exp) != 0 {
+	if got, exp := statedb.GetBalance(bb), gwei5; got.CmpBig(exp) != 0 {
 		t.Fatalf("Post-shanghai address \"%v\" balance, got %v exp %v\n", bb, got, exp)
 	}
 
@@ -509,16 +509,16 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 	// 3. C has 2 ether, selfdestructed but parent D reverted
 	// 4. D has 1 ether, reverted
 	statedb, _ := chain.State()
-	if got, exp := statedb.GetBalance(aa), common.Big0; got.Cmp(exp) != 0 {
+	if got, exp := statedb.GetBalance(aa), common.Big0; got.CmpBig(exp) != 0 {
 		t.Fatalf("address \"%v\" balance, got %v exp %v\n", aa, got, exp)
 	}
-	if got, exp := statedb.GetBalance(bb), common.Big0; got.Cmp(exp) != 0 {
+	if got, exp := statedb.GetBalance(bb), common.Big0; got.CmpBig(exp) != 0 {
 		t.Fatalf("address \"%v\" balance, got %v exp %v\n", bb, got, exp)
 	}
-	if got, exp := statedb.GetBalance(cc), eth1; got.Cmp(exp) != 0 {
+	if got, exp := statedb.GetBalance(cc), eth1; got.CmpBig(exp) != 0 {
 		t.Fatalf("address \"%v\" balance, got %v exp %v\n", bb, got, exp)
 	}
-	if got, exp := statedb.GetBalance(dd), eth2; got.Cmp(exp) != 0 {
+	if got, exp := statedb.GetBalance(dd), eth2; got.CmpBig(exp) != 0 {
 		t.Fatalf("address \"%v\" balance, got %v exp %v\n", bb, got, exp)
 	}
 
@@ -554,7 +554,7 @@ func testSupplyTracer(genesis *core.Genesis, gen func(*core.BlockGen)) ([]live.S
 	defer os.Remove(traceOutputFilename)
 
 	// Load supply tracer
-	tracer, err := directory.LiveDirectory.New("supply", &directory.TracerContext{OutputPath: traceOutputPath})
+	tracer, err := liveDir.Directory.New("supply", &liveDir.TracerContext{OutputPath: traceOutputPath})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create call tracer: %v", err)
 	}

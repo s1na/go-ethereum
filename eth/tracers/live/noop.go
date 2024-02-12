@@ -22,7 +22,7 @@ func init() {
 // as soon as we have a real live tracer.
 type noop struct{}
 
-func newNoopTracer() (core.BlockchainLogger, error) {
+func newNoopTracer(ctx *live.TracerContext) (core.BlockchainLogger, error) {
 	return &noop{}, nil
 }
 

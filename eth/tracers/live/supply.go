@@ -11,13 +11,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers/directory"
+	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 func init() {
-	directory.LiveDirectory.Register("supply", newSupply)
+	live.Directory.Register("supply", newSupply)
 }
 
 type SupplyInfo struct {
@@ -46,7 +46,7 @@ type Supply struct {
 	hasGenesisProcessed bool
 }
 
-func newSupply(ctx *directory.TracerContext) (core.BlockchainLogger, error) {
+func newSupply(ctx *live.TracerContext) (core.BlockchainLogger, error) {
 	// Store traces in a rotating file
 	loggerOutput := &lumberjack.Logger{
 		Filename: filepath.Join(ctx.OutputPath, "supply.jsonl"),
@@ -80,7 +80,7 @@ func (s *Supply) resetDelta() {
 	s.delta = newSupplyInfo()
 }
 
-func (s *Supply) OnBlockStart(b *types.Block, td *big.Int, finalized, safe *types.Header, _ *params.ChainConfig) {
+func (s *Supply) OnBlockStart(b *types.Block, td *big.Int, finalized, safe *types.Header, skip bool) {
 	s.resetDelta()
 
 	s.delta.Number = b.NumberU64()
@@ -212,6 +212,8 @@ func (s *Supply) CaptureExit(output []byte, gasUsed uint64, err error, reverted 
 	}
 	s.txCallstack[size-1].calls = append(s.txCallstack[size-1].calls, call)
 }
+
+func (s *Supply) OnBlockchainInit(chainConfig *params.ChainConfig) {}
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (s *Supply) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {

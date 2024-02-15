@@ -502,12 +502,6 @@ var (
 		Usage:    "Name of tracer which should record internal VM operations (costly)",
 		Category: flags.VMCategory,
 	}
-	VMTracePathFlag = &flags.DirectoryFlag{
-		Name:     "vmtrace.output.path",
-		Usage:    "Directory to store VM traces in",
-		Value:    flags.DirectoryString("."),
-		Category: flags.VMCategory,
-	}
 
 	// API options.
 	RPCGlobalGasCapFlag = &cli.Uint64Flag{
@@ -2134,15 +2128,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name)}
 	if ctx.IsSet(VMTraceFlag.Name) {
 		if name := ctx.String(VMTraceFlag.Name); name != "" {
-			liveTracerCtx := live.TracerContext{}
-
-			if ctx.IsSet(VMTracePathFlag.Name) {
-				if path := ctx.String(VMTracePathFlag.Name); path != "" {
-					liveTracerCtx.OutputPath = path
-				}
-			}
-
-			t, err := live.Directory.New(name, &liveTracerCtx)
+			t, err := live.Directory.New(name)
 			if err != nil {
 				Fatalf("Failed to create tracer %q: %v", name, err)
 			}

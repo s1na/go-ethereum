@@ -1,17 +1,13 @@
 package live
 
 import (
+	"encoding/json"
 	"errors"
 
 	"github.com/ethereum/go-ethereum/core"
 )
 
-// Context contains some contextual infos to support the live tracers.
-type TracerContext struct {
-	OutputPath string
-}
-
-type ctorFunc func(ctx *TracerContext) (core.BlockchainLogger, error)
+type ctorFunc func(config json.RawMessage) (core.BlockchainLogger, error)
 
 // Directory is the collection of tracers which can be used
 // during normal block import operations.
@@ -27,9 +23,9 @@ func (d *directory) Register(name string, f ctorFunc) {
 }
 
 // New instantiates a tracer by name.
-func (d *directory) New(name string, ctx *TracerContext) (core.BlockchainLogger, error) {
+func (d *directory) New(name string, config json.RawMessage) (core.BlockchainLogger, error) {
 	if f, ok := d.elems[name]; ok {
-		return f(ctx)
+		return f(config)
 	}
 	return nil, errors.New("not found")
 }

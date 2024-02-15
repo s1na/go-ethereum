@@ -2,10 +2,11 @@ package live
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
 	"math/big"
-	"os"
-	"runtime"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -14,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
 	"github.com/ethereum/go-ethereum/params"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 func init() {
@@ -46,19 +48,33 @@ type Supply struct {
 	hasGenesisProcessed bool
 }
 
-func newSupply() (core.BlockchainLogger, error) {
-	// TODO: file writing has been used for the test and we have to consider if we will write in a file or replace this mechanism at all
-	file, err := os.OpenFile("supply.txt", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
-	// file, err := os.OpenFile("supply.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		log.Fatal(err)
-	}
-	// TODO: better handling of file close
-	runtime.SetFinalizer(file, func(f *os.File) {
-		f.Close()
-	})
+type supplyTracerConfig struct {
+	Path    string `json:"path"`    // Path to the directory where the tracer logs will be stored
+	MaxSize int    `json:"maxSize"` // MaxSize is the maximum size in megabytes of the tracer log file before it gets rotated. It defaults to 100 megabytes.
+}
 
-	logger := log.New(file, "", 0)
+func newSupply(cfg json.RawMessage) (core.BlockchainLogger, error) {
+	var config supplyTracerConfig
+	if cfg != nil {
+		if err := json.Unmarshal(cfg, &config); err != nil {
+			return nil, fmt.Errorf("failed to parse config: %v", err)
+		}
+	}
+
+	if config.Path == "" {
+		return nil, errors.New("supply tracer output path is required")
+	}
+
+	// Store traces in a rotating file
+	loggerOutput := &lumberjack.Logger{
+		Filename: filepath.Join(config.Path, "supply.jsonl"),
+	}
+
+	if config.MaxSize > 0 {
+		loggerOutput.MaxSize = config.MaxSize
+	}
+
+	logger := log.New(loggerOutput, "", 0)
 
 	supplyInfo := newSupplyInfo()
 

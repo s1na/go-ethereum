@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"path"
 	"reflect"
 	"testing"
 
@@ -548,8 +549,12 @@ func testSupplyTracer(genesis *core.Genesis, gen func(*core.BlockGen)) ([]live.S
 		engine = beacon.New(ethash.NewFaker())
 	)
 
+	traceOutputPath := os.TempDir()
+	traceOutputFilename := path.Join(traceOutputPath, "supply.jsonl")
+	defer os.Remove(traceOutputFilename)
+
 	// Load supply tracer
-	tracer, err := liveDir.Directory.New("supply")
+	tracer, err := liveDir.Directory.New("supply", json.RawMessage([]byte(fmt.Sprintf(`{"path":"%s"}`, traceOutputPath))))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create call tracer: %v", err)
 	}
@@ -571,7 +576,7 @@ func testSupplyTracer(genesis *core.Genesis, gen func(*core.BlockGen)) ([]live.S
 
 	// Check and compare the results
 	// TODO: replace file to pass results
-	file, err := os.OpenFile("supply.txt", os.O_RDONLY, 0666)
+	file, err := os.OpenFile(traceOutputFilename, os.O_RDONLY, 0666)
 	if err != nil {
 		return nil, chain, fmt.Errorf("failed to open output file: %v", err)
 	}

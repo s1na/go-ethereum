@@ -43,9 +43,6 @@ type Supply struct {
 	delta       SupplyInfo
 	txCallstack []supplyTxCallstack // Callstack for current transaction
 	logger      *log.Logger
-
-	// Check if genesis has been processed
-	hasGenesisProcessed bool
 }
 
 type supplyTracerConfig struct {
@@ -123,10 +120,6 @@ func (s *Supply) OnBlockEnd(err error) {
 }
 
 func (s *Supply) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
-	if s.hasGenesisProcessed {
-		return
-	}
-
 	s.resetDelta()
 
 	s.delta.Number = b.NumberU64()
@@ -137,8 +130,6 @@ func (s *Supply) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
 	for _, account := range alloc {
 		s.delta.Delta.Add(s.delta.Delta, account.Balance)
 	}
-
-	s.hasGenesisProcessed = true
 
 	out, _ := json.Marshal(s.delta)
 	s.logger.Println(string(out))

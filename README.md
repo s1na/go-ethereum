@@ -29,7 +29,7 @@ or, to build the full suite of utilities:
 make all
 ```
 
-## Executables
+## Executable
 
 The go-ethereum project comes with several wrappers/executables found in the `cmd`
 directory.

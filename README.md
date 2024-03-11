@@ -25,7 +25,7 @@ make geth
 
 or, to build the full suite of utilities:
 
-```shell
+```terminal
 make all
 ```
 

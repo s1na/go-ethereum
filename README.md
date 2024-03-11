@@ -19,7 +19,7 @@ For prerequisites and detailed build instructions please read the [Installation 
 Building `geth` requires both a Go (version 1.19 or later) and a C compiler. You can install
 them using your favourite package manager. Once the dependencies are installed, run
 
-```shell
+```terminal
 make geth
 ```
 

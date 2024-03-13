@@ -69,7 +69,8 @@ func TestSupplyGenesisAlloc(t *testing.T) {
 		Withdrawals: common.Big0,
 		Burn:        common.Big0,
 		Number:      0,
-		Hash:        common.HexToHash("0xbcc9466e9fc6a8b56f4b29ca353a421ff8b51a0c1a58ca4743b427605b08f2ca"), ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		Hash:        common.HexToHash("0xbcc9466e9fc6a8b56f4b29ca353a421ff8b51a0c1a58ca4743b427605b08f2ca"),
+		ParentHash:  common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 	}
 
 	out, _, err := testSupplyTracer(gspec, emptyBlockGenerationFunc)
@@ -99,7 +100,8 @@ func TestSupplyRewards(t *testing.T) {
 		Withdrawals: common.Big0,
 		Burn:        common.Big0,
 		Number:      1,
-		Hash:        common.HexToHash("0xcbb08370505be503dafedc4e96d139ea27aba3cbc580148568b8a307b3f51052"), ParentHash: common.HexToHash("0xadeda0a83e337b6c073e3f0e9a17531a04009b397a9588c093b628f21b8bc5a3"),
+		Hash:        common.HexToHash("0xcbb08370505be503dafedc4e96d139ea27aba3cbc580148568b8a307b3f51052"),
+		ParentHash:  common.HexToHash("0xadeda0a83e337b6c073e3f0e9a17531a04009b397a9588c093b628f21b8bc5a3"),
 	}
 
 	out, _, err := testSupplyTracer(gspec, emptyBlockGenerationFunc)
@@ -128,7 +130,7 @@ func TestSupplyEip1559Burn(t *testing.T) {
 		gspec = &core.Genesis{
 			Config:  &config,
 			BaseFee: big.NewInt(params.InitialBaseFee),
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				addr1: {Balance: eth1},
 				// The address 0xAAAA sloads 0x00 and 0x01
 				aa: {
@@ -176,7 +178,8 @@ func TestSupplyEip1559Burn(t *testing.T) {
 		Withdrawals: common.Big0,
 		Burn:        big.NewInt(24066000000000),
 		Number:      1,
-		Hash:        common.HexToHash("0x9910ef69af46d01093bd74da6045c0a2d37adf158001d1df5abb4106d85f1aeb"), ParentHash: common.HexToHash("0x7469edd360a63bcf47b7ab6e1a28e5ace54985138d99f100191fef012d73cf32"),
+		Hash:        common.HexToHash("0x9910ef69af46d01093bd74da6045c0a2d37adf158001d1df5abb4106d85f1aeb"),
+		ParentHash:  common.HexToHash("0x7469edd360a63bcf47b7ab6e1a28e5ace54985138d99f100191fef012d73cf32"),
 	}
 
 	out, _, err := testSupplyTracer(gspec, eip1559BlockGenerationFunc)
@@ -538,7 +541,7 @@ func testSupplyTracer(genesis *core.Genesis, gen func(*core.BlockGen)) ([]live.S
 	defer os.Remove(traceOutputFilename)
 
 	// Load supply tracer
-	tracer, err := liveDir.Directory.New("supply", json.RawMessage([]byte(fmt.Sprintf(`{"path":"%s"}`, traceOutputPath))))
+	tracer, err := liveDir.Directory.New("supply", []byte(fmt.Sprintf(`{"path":"%s"}`, traceOutputPath)))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create call tracer: %v", err)
 	}

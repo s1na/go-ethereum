@@ -27,7 +27,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -57,7 +56,7 @@ func TestSupplyGenesisAlloc(t *testing.T) {
 
 		gspec = &core.Genesis{
 			Config: &config,
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				addr1: {Balance: eth1},
 				addr2: {Balance: eth1},
 			},
@@ -194,7 +193,6 @@ func TestSupplyEip1559Burn(t *testing.T) {
 
 func TestSupplyWithdrawals(t *testing.T) {
 	var (
-		merger = consensus.NewMerger(rawdb.NewMemoryDatabase())
 		config = *params.AllEthashProtocolChanges
 
 		gspec = &core.Genesis{
@@ -204,10 +202,6 @@ func TestSupplyWithdrawals(t *testing.T) {
 
 	shanghaiTime := uint64(0)
 	gspec.Config.ShanghaiTime = &shanghaiTime
-
-	// Activate merge since genesis
-	merger.ReachTTD()
-	merger.FinalizePoS()
 
 	// Set the terminal total difficulty in the config
 	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
@@ -250,7 +244,6 @@ func TestSupplyWithdrawals(t *testing.T) {
 // the ether sent in between is burnt before Cancun hard fork.
 func TestSupplySelfdestruct(t *testing.T) {
 	var (
-		merger = consensus.NewMerger(rawdb.NewMemoryDatabase())
 		config = *params.AllEthashProtocolChanges
 
 		aa      = common.HexToAddress("0x1111111111111111111111111111111111111111")
@@ -264,7 +257,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 		gspec = &core.Genesis{
 			Config:  &config,
 			BaseFee: big.NewInt(params.InitialBaseFee),
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				addr1: {Balance: eth1},
 				aa: {
 					Code: common.FromHex("0x61face60f01b6000527322222222222222222222222222222222222222226000806002600080855af160008103603457600080fd5b60008060008034865af1905060008103604c57600080fd5b5050"),
@@ -279,10 +272,6 @@ func TestSupplySelfdestruct(t *testing.T) {
 			},
 		}
 	)
-
-	// Activate merge since genesis
-	merger.ReachTTD()
-	merger.FinalizePoS()
 
 	// Set the terminal total difficulty in the config
 	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
@@ -397,7 +386,6 @@ func TestSupplySelfdestruct(t *testing.T) {
 //     has to be reverted as well).
 func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 	var (
-		merger = consensus.NewMerger(rawdb.NewMemoryDatabase())
 		config = *params.AllEthashProtocolChanges
 
 		aa      = common.HexToAddress("0x1111111111111111111111111111111111111111")
@@ -414,7 +402,7 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 		gspec = &core.Genesis{
 			Config: &config,
 			// BaseFee: big.NewInt(params.InitialBaseFee),
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				addr1: {Balance: eth1},
 				aa: {
 					// Contract code in YUL:
@@ -470,10 +458,6 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 			},
 		}
 	)
-
-	// Activate merge since genesis
-	merger.ReachTTD()
-	merger.FinalizePoS()
 
 	// Set the terminal total difficulty in the config
 	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)

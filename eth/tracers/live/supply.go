@@ -9,12 +9,10 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/directory/live"
-	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -50,7 +48,7 @@ type supplyTracerConfig struct {
 	MaxSize int    `json:"maxSize"` // MaxSize is the maximum size in megabytes of the tracer log file before it gets rotated. It defaults to 100 megabytes.
 }
 
-func newSupply(cfg json.RawMessage) (core.BlockchainLogger, error) {
+func newSupply(cfg json.RawMessage) (*tracing.Hooks, error) {
 	var config supplyTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
@@ -75,9 +73,18 @@ func newSupply(cfg json.RawMessage) (core.BlockchainLogger, error) {
 
 	supplyInfo := newSupplyInfo()
 
-	return &Supply{
+	t := &Supply{
 		delta:  supplyInfo,
 		logger: logger,
+	}
+	return &tracing.Hooks{
+		OnBlockStart:    t.OnBlockStart,
+		OnBlockEnd:      t.OnBlockEnd,
+		OnGenesisBlock:  t.OnGenesisBlock,
+		OnTxStart:       t.OnTxStart,
+		OnBalanceChange: t.OnBalanceChange,
+		OnEnter:         t.OnEnter,
+		OnExit:          t.OnExit,
 	}, nil
 }
 
@@ -98,28 +105,27 @@ func (s *Supply) resetDelta() {
 	s.delta = newSupplyInfo()
 }
 
-func (s *Supply) OnBlockStart(b *types.Block, td *big.Int, finalized, safe *types.Header, skip bool) {
+func (s *Supply) OnBlockStart(ev tracing.BlockEvent) {
 	s.resetDelta()
 
-	s.delta.Number = b.NumberU64()
-	s.delta.Hash = b.Hash()
-	s.delta.ParentHash = b.ParentHash()
+	s.delta.Number = ev.Block.NumberU64()
+	s.delta.Hash = ev.Block.Hash()
+	s.delta.ParentHash = ev.Block.ParentHash()
 
 	// Calculate Burn for this block
-	if b.BaseFee() != nil {
-		burn := new(big.Int).Mul(new(big.Int).SetUint64(b.GasUsed()), b.BaseFee())
+	if ev.Block.BaseFee() != nil {
+		burn := new(big.Int).Mul(new(big.Int).SetUint64(ev.Block.GasUsed()), ev.Block.BaseFee())
 		s.delta.Burn.Add(s.delta.Burn, burn)
 		s.delta.Delta.Sub(s.delta.Delta, burn)
 	}
 }
 
 func (s *Supply) OnBlockEnd(err error) {
-
 	out, _ := json.Marshal(s.delta)
 	s.logger.Println(string(out))
 }
 
-func (s *Supply) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
+func (s *Supply) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
 	s.resetDelta()
 
 	s.delta.Number = b.NumberU64()
@@ -135,17 +141,17 @@ func (s *Supply) OnGenesisBlock(b *types.Block, alloc core.GenesisAlloc) {
 	s.logger.Println(string(out))
 }
 
-func (s *Supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.Int, reason state.BalanceChangeReason) {
+func (s *Supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.Int, reason tracing.BalanceChangeReason) {
 	diff := new(big.Int).Sub(newBalance, prevBalance)
 
 	// NOTE: don't handle "BalanceIncreaseGenesisBalance" because it is handled in OnGenesisBlock
 	switch reason {
-	case state.BalanceIncreaseRewardMineUncle:
-	case state.BalanceIncreaseRewardMineBlock:
+	case tracing.BalanceIncreaseRewardMineUncle:
+	case tracing.BalanceIncreaseRewardMineBlock:
 		s.delta.Reward.Add(s.delta.Reward, diff)
-	case state.BalanceIncreaseWithdrawal:
+	case tracing.BalanceIncreaseWithdrawal:
 		s.delta.Withdrawals.Add(s.delta.Withdrawals, diff)
-	case state.BalanceDecreaseSelfdestructBurn:
+	case tracing.BalanceDecreaseSelfdestructBurn:
 		s.delta.Burn.Sub(s.delta.Burn, diff)
 	default:
 		// fmt.Printf("~~\tNo need to take action. Change reason: %v\n\n", reason)
@@ -155,16 +161,10 @@ func (s *Supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.
 	s.delta.Delta.Add(s.delta.Delta, diff)
 }
 
-// CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (s *Supply) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	s.txCallstack = make([]supplyTxCallstack, 1)
-
-	s.txCallstack[0] = supplyTxCallstack{
-		calls: make([]supplyTxCallstack, 0),
-	}
+func (s *Supply) OnTxStart(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	s.txCallstack = make([]supplyTxCallstack, 0, 1)
 }
 
-// CaptureEnd is called after the call finishes to finalize the tracing.
 func (s *Supply) CaptureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
 	// No need to handle Burned amount if transaction is reverted
 	if !reverted {
@@ -189,15 +189,14 @@ func (s *Supply) interalTxsHandler(call *supplyTxCallstack) {
 	}
 }
 
-// CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (s *Supply) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (s *Supply) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	call := supplyTxCallstack{
 		calls: make([]supplyTxCallstack, 0),
 	}
 
 	// This is a special case of burned amount which has to be handled here
 	// which happens when type == selfdestruct and from == to.
-	if typ == vm.SELFDESTRUCT && from == to && value.Cmp(common.Big0) == 1 {
+	if vm.OpCode(typ) == vm.SELFDESTRUCT && from == to && value.Cmp(common.Big0) == 1 {
 		call.burn = value
 	}
 
@@ -205,14 +204,19 @@ func (s *Supply) CaptureEnter(typ vm.OpCode, from common.Address, to common.Addr
 	s.txCallstack = append(s.txCallstack, call)
 }
 
-// CaptureExit is called when EVM exits a scope, even if the scope didn't
-// execute any code.
-func (s *Supply) CaptureExit(output []byte, gasUsed uint64, err error, reverted bool) {
+func (s *Supply) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	if depth == 0 {
+		// No need to handle Burned amount if transaction is reverted
+		if !reverted {
+			s.interalTxsHandler(&s.txCallstack[0])
+		}
+		return
+	}
+
 	size := len(s.txCallstack)
 	if size <= 1 {
 		return
 	}
-
 	// Pop call
 	call := s.txCallstack[size-1]
 	s.txCallstack = s.txCallstack[:size-1]
@@ -225,36 +229,3 @@ func (s *Supply) CaptureExit(output []byte, gasUsed uint64, err error, reverted 
 	}
 	s.txCallstack[size-1].calls = append(s.txCallstack[size-1].calls, call)
 }
-
-func (s *Supply) OnBlockchainInit(chainConfig *params.ChainConfig) {}
-
-// CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (s *Supply) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-}
-
-// CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (s *Supply) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
-}
-
-// CaptureKeccakPreimage is called during the KECCAK256 opcode.
-func (s *Supply) CaptureKeccakPreimage(hash common.Hash, data []byte) {}
-
-func (s *Supply) OnBeaconBlockRootStart(root common.Hash) {}
-func (s *Supply) OnBeaconBlockRootEnd()                   {}
-
-func (s *Supply) CaptureTxStart(env *vm.EVM, tx *types.Transaction, from common.Address) {}
-
-func (s *Supply) CaptureTxEnd(receipt *types.Receipt, err error) {}
-
-func (s *Supply) OnNonceChange(a common.Address, prev, new uint64) {}
-
-func (s *Supply) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
-}
-
-func (s *Supply) OnStorageChange(a common.Address, k, prev, new common.Hash) {}
-
-func (s *Supply) OnLog(l *types.Log) {}
-
-func (s *Supply) OnNewAccount(a common.Address) {}
-
-func (s *Supply) OnGasChange(old, new uint64, reason vm.GasChangeReason) {}

@@ -22,7 +22,7 @@ import (
 	"io"
 	"math/big"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -50,7 +50,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 		address = crypto.PubkeyToAddress(key.PublicKey)
 		genesis = &core.Genesis{
 			Config: params.TestChainConfig,
-			Alloc:  core.GenesisAlloc{address: {Balance: big.NewInt(1000000000000000000)}},
+			Alloc:  types.GenesisAlloc{address: {Balance: big.NewInt(1000000000000000000)}},
 		}
 		signer = types.LatestSigner(genesis.Config)
 	)
@@ -99,7 +99,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	}
 
 	// Read checksums.
-	b, err := os.ReadFile(path.Join(dir, "checksums.txt"))
+	b, err := os.ReadFile(filepath.Join(dir, "checksums.txt"))
 	if err != nil {
 		t.Fatalf("failed to read checksums: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	entries, _ := era.ReadDir(dir, "mainnet")
 	for i, filename := range entries {
 		func() {
-			f, err := os.Open(path.Join(dir, filename))
+			f, err := os.Open(filepath.Join(dir, filename))
 			if err != nil {
 				t.Fatalf("error opening era file: %v", err)
 			}

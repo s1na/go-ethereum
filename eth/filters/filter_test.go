@@ -57,7 +57,7 @@ func BenchmarkFilters(b *testing.B) {
 		addr4   = common.BytesToAddress([]byte("random addresses please"))
 
 		gspec = &core.Genesis{
-			Alloc:   core.GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
+			Alloc:   types.GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 			Config:  params.TestChainConfig,
 		}
@@ -109,8 +109,8 @@ func BenchmarkFilters(b *testing.B) {
 
 func TestFilters(t *testing.T) {
 	var (
-		db     = rawdb.NewMemoryDatabase()
-		_, sys = newTestFilterSystem(t, db, Config{})
+		db           = rawdb.NewMemoryDatabase()
+		backend, sys = newTestFilterSystem(t, db, Config{})
 		// Sender account
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr    = crypto.PubkeyToAddress(key1.PublicKey)
@@ -165,7 +165,7 @@ func TestFilters(t *testing.T) {
 
 		gspec = &core.Genesis{
 			Config: params.TestChainConfig,
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				addr:      {Balance: big.NewInt(0).Mul(big.NewInt(100), big.NewInt(params.Ether))},
 				contract:  {Balance: big.NewInt(0), Code: bytecode},
 				contract2: {Balance: big.NewInt(0), Code: bytecode},
@@ -277,8 +277,7 @@ func TestFilters(t *testing.T) {
 		}), signer, key1)
 		gen.AddTx(tx)
 	})
-	sys.backend.(*testBackend).pendingBlock = pchain[0]
-	sys.backend.(*testBackend).pendingReceipts = preceipts[0]
+	backend.setPending(pchain[0], preceipts[0])
 
 	for i, tc := range []struct {
 		f    *Filter

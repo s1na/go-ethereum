@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -115,6 +116,16 @@ func (s *Supply) OnBlockStart(ev tracing.BlockEvent) {
 	// Calculate Burn for this block
 	if ev.Block.BaseFee() != nil {
 		burn := new(big.Int).Mul(new(big.Int).SetUint64(ev.Block.GasUsed()), ev.Block.BaseFee())
+		s.delta.Burn.Add(s.delta.Burn, burn)
+		s.delta.Delta.Sub(s.delta.Delta, burn)
+	}
+	// Blob burnt gas
+	if blobGas := ev.Block.BlobGasUsed(); blobGas != nil && *blobGas > 0 && ev.Block.ExcessBlobGas() != nil {
+		var (
+			excess  = *ev.Block.ExcessBlobGas()
+			baseFee = eip4844.CalcBlobFee(excess)
+			burn    = new(big.Int).Mul(new(big.Int).SetUint64(*blobGas), baseFee)
+		)
 		s.delta.Burn.Add(s.delta.Burn, burn)
 		s.delta.Delta.Sub(s.delta.Delta, burn)
 	}

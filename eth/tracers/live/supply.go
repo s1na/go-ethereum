@@ -165,13 +165,6 @@ func (s *Supply) OnTxStart(vm *tracing.VMContext, tx *types.Transaction, from co
 	s.txCallstack = make([]supplyTxCallstack, 0, 1)
 }
 
-func (s *Supply) CaptureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
-	// No need to handle Burned amount if transaction is reverted
-	if !reverted {
-		s.interalTxsHandler(&s.txCallstack[0])
-	}
-}
-
 // interalTxsHandler handles internal transactions burned amount
 func (s *Supply) interalTxsHandler(call *supplyTxCallstack) {
 	// Handle Burned amount

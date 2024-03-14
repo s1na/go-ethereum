@@ -132,17 +132,6 @@ func TestSupplyEip1559Burn(t *testing.T) {
 			BaseFee: big.NewInt(params.InitialBaseFee),
 			Alloc: types.GenesisAlloc{
 				addr1: {Balance: eth1},
-				// The address 0xAAAA sloads 0x00 and 0x01
-				aa: {
-					Code: []byte{
-						byte(vm.PC),
-						byte(vm.PC),
-						byte(vm.SLOAD),
-						byte(vm.SLOAD),
-					},
-					Nonce:   0,
-					Balance: big.NewInt(0),
-				},
 			},
 		}
 	)
@@ -150,21 +139,13 @@ func TestSupplyEip1559Burn(t *testing.T) {
 	signer := types.LatestSigner(gspec.Config)
 
 	eip1559BlockGenerationFunc := func(b *core.BlockGen) {
-		// One transaction to 0xAAAA
-		accesses := types.AccessList{types.AccessTuple{
-			Address:     aa,
-			StorageKeys: []common.Hash{{0}},
-		}}
-
 		txdata := &types.DynamicFeeTx{
-			ChainID:    gspec.Config.ChainID,
-			Nonce:      0,
-			To:         &aa,
-			Gas:        30000,
-			GasFeeCap:  gwei5,
-			GasTipCap:  big.NewInt(2),
-			AccessList: accesses,
-			Data:       []byte{},
+			ChainID:   gspec.Config.ChainID,
+			Nonce:     0,
+			To:        &aa,
+			Gas:       21000,
+			GasFeeCap: gwei5,
+			GasTipCap: big.NewInt(2),
 		}
 		tx := types.NewTx(txdata)
 		tx, _ = types.SignTx(tx, signer, key1)
@@ -172,23 +153,26 @@ func TestSupplyEip1559Burn(t *testing.T) {
 		b.AddTx(tx)
 	}
 
-	expected := live.SupplyInfo{
-		Delta:       big.NewInt(1999975934000000000),
-		Reward:      new(big.Int).Mul(common.Big2, big.NewInt(params.Ether)),
-		Withdrawals: common.Big0,
-		Burn:        big.NewInt(24066000000000),
-		Number:      1,
-		Hash:        common.HexToHash("0x9910ef69af46d01093bd74da6045c0a2d37adf158001d1df5abb4106d85f1aeb"),
-		ParentHash:  common.HexToHash("0x7469edd360a63bcf47b7ab6e1a28e5ace54985138d99f100191fef012d73cf32"),
-	}
-
-	out, _, err := testSupplyTracer(gspec, eip1559BlockGenerationFunc)
+	out, chain, err := testSupplyTracer(gspec, eip1559BlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("failed to test supply tracer: %v", err)
 	}
+	var (
+		head     = chain.CurrentBlock()
+		reward   = new(big.Int).Mul(common.Big2, big.NewInt(params.Ether))
+		burn     = new(big.Int).Mul(big.NewInt(21000), head.BaseFee)
+		expected = live.SupplyInfo{
+			Delta:       new(big.Int).Sub(reward, burn),
+			Reward:      reward,
+			Withdrawals: common.Big0,
+			Burn:        burn,
+			Number:      1,
+			Hash:        head.Hash(),
+			ParentHash:  head.ParentHash,
+		}
+	)
 
 	actual := out[expected.Number]
-
 	if !reflect.DeepEqual(actual, expected) {
 		t.Fatalf("incorrect supply info: expected %+v, got %+v", expected, actual)
 	}

@@ -33,6 +33,11 @@ type SupplyInfo struct {
 	ParentHash common.Hash `json:"parentHash"`
 }
 
+func (s *SupplyInfo) burn(amount *big.Int) {
+	s.Burn.Add(s.Burn, amount)
+	s.Delta.Sub(s.Delta, amount)
+}
+
 type supplyTxCallstack struct {
 	calls []supplyTxCallstack
 	burn  *big.Int
@@ -116,8 +121,7 @@ func (s *Supply) OnBlockStart(ev tracing.BlockEvent) {
 	// Calculate Burn for this block
 	if ev.Block.BaseFee() != nil {
 		burn := new(big.Int).Mul(new(big.Int).SetUint64(ev.Block.GasUsed()), ev.Block.BaseFee())
-		s.delta.Burn.Add(s.delta.Burn, burn)
-		s.delta.Delta.Sub(s.delta.Delta, burn)
+		s.delta.burn(burn)
 	}
 	// Blob burnt gas
 	if blobGas := ev.Block.BlobGasUsed(); blobGas != nil && *blobGas > 0 && ev.Block.ExcessBlobGas() != nil {
@@ -126,8 +130,7 @@ func (s *Supply) OnBlockStart(ev tracing.BlockEvent) {
 			baseFee = eip4844.CalcBlobFee(excess)
 			burn    = new(big.Int).Mul(new(big.Int).SetUint64(*blobGas), baseFee)
 		)
-		s.delta.Burn.Add(s.delta.Burn, burn)
-		s.delta.Delta.Sub(s.delta.Delta, burn)
+		s.delta.burn(burn)
 	}
 }
 
@@ -163,6 +166,8 @@ func (s *Supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.
 	case tracing.BalanceIncreaseWithdrawal:
 		s.delta.Withdrawals.Add(s.delta.Withdrawals, diff)
 	case tracing.BalanceDecreaseSelfdestructBurn:
+		// BalanceDecreaseSelfdestructBurn is non-reversible as it happens
+		// at the end of the transaction.
 		s.delta.Burn.Sub(s.delta.Burn, diff)
 	default:
 		// fmt.Printf("~~\tNo need to take action. Change reason: %v\n\n", reason)
@@ -180,8 +185,7 @@ func (s *Supply) OnTxStart(vm *tracing.VMContext, tx *types.Transaction, from co
 func (s *Supply) interalTxsHandler(call *supplyTxCallstack) {
 	// Handle Burned amount
 	if call.burn != nil {
-		s.delta.Burn.Add(s.delta.Burn, call.burn)
-		s.delta.Delta.Sub(s.delta.Delta, call.burn)
+		s.delta.burn(call.burn)
 	}
 
 	if len(call.calls) > 0 {

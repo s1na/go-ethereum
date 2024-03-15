@@ -180,18 +180,11 @@ func TestSupplyEip1559Burn(t *testing.T) {
 
 func TestSupplyWithdrawals(t *testing.T) {
 	var (
-		config = *params.AllEthashProtocolChanges
-
-		gspec = &core.Genesis{
+		config = *params.MergedTestChainConfig
+		gspec  = &core.Genesis{
 			Config: &config,
 		}
 	)
-
-	shanghaiTime := uint64(0)
-	gspec.Config.ShanghaiTime = &shanghaiTime
-
-	// Set the terminal total difficulty in the config
-	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
 
 	withdrawalsBlockGenerationFunc := func(b *core.BlockGen) {
 		b.SetPoS()
@@ -203,21 +196,24 @@ func TestSupplyWithdrawals(t *testing.T) {
 		})
 	}
 
-	expected := live.SupplyInfo{
-		Delta:       big.NewInt(1337000000000),
-		Reward:      common.Big0,
-		Withdrawals: big.NewInt(1337000000000),
-		Burn:        common.Big0,
-		Number:      1,
-		Hash:        common.HexToHash("0xb85343cee6331f7dcdc1b1c8e698e0e63d47d84d8f81c9058fda830ac9368ec0"), ParentHash: common.HexToHash("0xc8265888895eb7715237be1c8730a1370f8fd8b33b6e4d5400413ebf33e4d3be"),
-	}
-
-	out, _, err := testSupplyTracer(gspec, withdrawalsBlockGenerationFunc)
+	out, chain, err := testSupplyTracer(gspec, withdrawalsBlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("failed to test supply tracer: %v", err)
 	}
 
-	actual := out[expected.Number]
+	var (
+		head     = chain.CurrentBlock()
+		expected = live.SupplyInfo{
+			Delta:       big.NewInt(1337000000000),
+			Reward:      common.Big0,
+			Withdrawals: big.NewInt(1337000000000),
+			Burn:        common.Big0,
+			Number:      1,
+			Hash:        head.Hash(),
+			ParentHash:  head.ParentHash,
+		}
+		actual = out[expected.Number]
+	)
 
 	if !reflect.DeepEqual(actual, expected) {
 		t.Fatalf("incorrect supply info: expected %+v, got %+v", expected, actual)
@@ -231,7 +227,7 @@ func TestSupplyWithdrawals(t *testing.T) {
 // the ether sent in between is burnt before Cancun hard fork.
 func TestSupplySelfdestruct(t *testing.T) {
 	var (
-		config = *params.AllEthashProtocolChanges
+		config = *params.TestChainConfig
 
 		aa      = common.HexToAddress("0x1111111111111111111111111111111111111111")
 		bb      = common.HexToAddress("0x2222222222222222222222222222222222222222")
@@ -260,7 +256,6 @@ func TestSupplySelfdestruct(t *testing.T) {
 		}
 	)
 
-	// Set the terminal total difficulty in the config
 	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
 
 	signer := types.LatestSigner(gspec.Config)
@@ -304,6 +299,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 		t.Fatalf("Pre-cancun address \"%v\" balance, got %v exp %v\n", bb, got, exp)
 	}
 
+	head := preCancunChain.CurrentBlock()
 	// Check live trace output
 	expected := live.SupplyInfo{
 		Delta:       big.NewInt(-55294500000000),
@@ -311,8 +307,8 @@ func TestSupplySelfdestruct(t *testing.T) {
 		Withdrawals: common.Big0,
 		Burn:        big.NewInt(55294500000000),
 		Number:      1,
-		Hash:        common.HexToHash("0x624bfe06805a0df0bc180c68bc9c85460e754e26b76de9fa52d2e56a8d416e06"),
-		ParentHash:  common.HexToHash("0xdd9fbe877f0b43987d2f0cda0df176b7939be14f33eb5137f16e6eddf4562706"),
+		Hash:        head.Hash(),
+		ParentHash:  head.ParentHash,
 	}
 
 	actual := preCancunOutput[expected.Number]
@@ -347,14 +343,15 @@ func TestSupplySelfdestruct(t *testing.T) {
 	}
 
 	// Check live trace output
+	head = postCancunChain.CurrentBlock()
 	expected = live.SupplyInfo{
 		Delta:       big.NewInt(-55289500000000),
 		Reward:      common.Big0,
 		Withdrawals: common.Big0,
 		Burn:        big.NewInt(55289500000000),
 		Number:      1,
-		Hash:        common.HexToHash("0xc80e2b68ae44dd898b269d965c88f9e2a82d08d98fd8c8b7765a3eeadf1b2464"),
-		ParentHash:  common.HexToHash("0x16d2bb0b366d3963bf2d8d75cb4b3bc0f233047c948fa746cbd38ac82bf9cfe9"),
+		Hash:        head.Hash(),
+		ParentHash:  head.ParentHash,
 	}
 
 	actual = postCancunOutput[expected.Number]
@@ -373,7 +370,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 //     has to be reverted as well).
 func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 	var (
-		config = *params.AllEthashProtocolChanges
+		config = *params.TestChainConfig
 
 		aa      = common.HexToAddress("0x1111111111111111111111111111111111111111")
 		bb      = common.HexToAddress("0x2222222222222222222222222222222222222222")
@@ -446,7 +443,6 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 		}
 	)
 
-	// Set the terminal total difficulty in the config
 	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
 
 	signer := types.LatestSigner(gspec.Config)
@@ -504,8 +500,8 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 		Withdrawals: common.Big0,
 		Burn:        totalBurn,
 		Number:      1,
-		Hash:        common.HexToHash("0x405e000c449cbae0d02e8440fde3badaf77594b0fa3a56aa35a233c0218ab395"),
-		ParentHash:  common.HexToHash("0xaf41e72f748de317965454508c749f7e14dc4fe444cd07bca4c981c7e952364d"),
+		Hash:        block.Hash(),
+		ParentHash:  block.ParentHash(),
 	}
 
 	actual := output[expected.Number]

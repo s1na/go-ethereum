@@ -458,6 +458,14 @@ func (api *ConsensusAPI) GetPayloadV3(payloadID engine.PayloadID) (*engine.Execu
 	return api.getPayload(payloadID, false)
 }
 
+// GetPayloadV4 returns a cached payload by id.
+func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
+	if !payloadID.Is(engine.PayloadV4) {
+		return nil, engine.UnsupportedFork
+	}
+	return api.getPayload(payloadID, false)
+}
+
 func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool) (*engine.ExecutionPayloadEnvelope, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
 	data := api.localBlocks.get(payloadID, full)

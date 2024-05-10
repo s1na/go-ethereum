@@ -553,8 +553,8 @@ func (api *ConsensusAPI) NewPayloadV4(params engine.ExecutableData, versionedHas
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil beaconRoot post-cancun"))
 	}
 
-	if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Cancun {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.UnsupportedFork.With(errors.New("newPayloadV3 must only be called for cancun payloads"))
+	if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Prague {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.UnsupportedFork.With(errors.New("newPayloadV4 must only be called for prague payloads"))
 	}
 	return api.newPayload(params, versionedHashes, beaconRoot)
 }

@@ -365,7 +365,8 @@ func (b *Block) Withdrawals() Withdrawals   { return b.withdrawals }
 func (b *Block) Requests() Requests         { return b.requests }
 
 func (b *Block) Deposits() Deposits {
-	var deps Deposits
+	// need to make here, otherwise Deposits will return nil instead of empty slice
+	deps := make(Deposits, 0)
 	for _, r := range b.requests {
 		if d, ok := r.inner.(*Deposit); ok {
 			deps = append(deps, d)

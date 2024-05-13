@@ -296,13 +296,10 @@ func ProcessBlockHashHistory(statedb *state.StateDB, header *types.Header, chain
 	var low uint64
 	if number > params.HistoryServeWindow {
 		low = number - params.HistoryServeWindow
-		if number < params.HistoryServeWindow {
-			low = 0
-		}
 	}
-	for i := prevNumber - 1; i >= low; i-- {
-		ProcessParentBlockHash(statedb, i, parent.ParentHash)
-		parent = chain.GetHeader(parent.ParentHash, i)
+	for i := prevNumber; i > low; i-- {
+		ProcessParentBlockHash(statedb, i-1, parent.ParentHash)
+		parent = chain.GetHeader(parent.ParentHash, i-1)
 	}
 }
 

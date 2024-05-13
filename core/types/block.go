@@ -365,8 +365,12 @@ func (b *Block) Withdrawals() Withdrawals   { return b.withdrawals }
 func (b *Block) Requests() Requests         { return b.requests }
 
 func (b *Block) Deposits() Deposits {
-	// need to make here, otherwise Deposits will return nil instead of empty slice
-	deps := make(Deposits, 0)
+	var deps Deposits
+	if b.requests != nil {
+		// If requests is non-nil, it means deposits are available in block and we
+		// should return an empty slice instead of nil if there are no deposits.
+		deps = make(Deposits, 0)
+	}
 	for _, r := range b.requests {
 		if d, ok := r.inner.(*Deposit); ok {
 			deps = append(deps, d)
@@ -376,6 +380,11 @@ func (b *Block) Deposits() Deposits {
 }
 func (b *Block) WithdrawalRequests() WithdrawalRequests {
 	var wxs WithdrawalRequests
+	if b.requests != nil {
+		// If requests is non-nil, it means wx requests are available in block and
+		// we should return an empty slice instead of nil if there are no wxs.
+		wxs = make(WithdrawalRequests, 0)
+	}
 	for _, r := range b.requests {
 		if w, ok := r.inner.(*WithdrawalRequest); ok {
 			wxs = append(wxs, w)

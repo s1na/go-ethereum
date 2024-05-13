@@ -231,7 +231,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, pa
 	// forkchoiceUpdate into a function that only updates the head and then a
 	// function that kicks off block construction.
 	payloadVersion := engine.PayloadV3
-	if api.eth.BlockChain().Config().LatestFork(params.Timestamp) == forks.Prague {
+	if params != nil && api.eth.BlockChain().Config().LatestFork(params.Timestamp) == forks.Prague {
 		payloadVersion = engine.PayloadV4
 	}
 	return api.forkchoiceUpdated(update, params, payloadVersion, false)

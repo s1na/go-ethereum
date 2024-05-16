@@ -90,7 +90,6 @@ func newVerkleInstructionSet() JumpTable {
 
 func newPraugeInstructionSet() JumpTable {
 	instructionSet := newCancunInstructionSet()
-	enable2935(&instructionSet) // EIP-2935 Serve historical block hashes from state
 	enable3074(&instructionSet) // EIP-3074 AUTH & AUTHCALL
 	return validate(instructionSet)
 }

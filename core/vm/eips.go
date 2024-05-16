@@ -40,7 +40,6 @@ var activators = map[int]func(*JumpTable){
 	1884: enable1884,
 	1344: enable1344,
 	1153: enable1153,
-	2935: enable2935,
 	3074: enable3074,
 	4762: enable4762,
 }
@@ -157,12 +156,6 @@ func enable2929(jt *JumpTable) {
 	// factor here
 	jt[SELFDESTRUCT].constantGas = params.SelfdestructGasEIP150
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP2929
-}
-
-// enable2935 enables "EIP-2935: Serve historical block hashes from state"
-// - Additionally charge the corresponding warm or cold SLOAD costs for BLOCKHASH
-func enable2935(jt *JumpTable) {
-	jt[BLOCKHASH].dynamicGas = gasSLoadEIP2929
 }
 
 // enable3529 enabled "EIP-3529: Reduction in refunds":

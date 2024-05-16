@@ -249,6 +249,12 @@ func ParseDepositLogs(logs []*types.Log, config *params.ChainConfig) (types.Requ
 
 // ProcessDequeueWithdrawalRequests applies the EIP-7002 system call to the withdrawal requests contract.
 func ProcessDequeueWithdrawalRequests(vmenv *vm.EVM, statedb *state.StateDB) types.Requests {
+	if vmenv.Config.Tracer != nil && vmenv.Config.Tracer.OnSystemCallStart != nil {
+		vmenv.Config.Tracer.OnSystemCallStart()
+	}
+	if vmenv.Config.Tracer != nil && vmenv.Config.Tracer.OnSystemCallEnd != nil {
+		defer vmenv.Config.Tracer.OnSystemCallEnd()
+	}
 	msg := &Message{
 		From:      params.SystemAddress,
 		GasLimit:  30_000_000,

@@ -28,7 +28,7 @@ import (
 )
 
 func filledStateDB() *StateDB {
-	state, _ := New(types.EmptyRootHash, NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting(rawdb.NewMemoryDatabase()))
 
 	// Create an account and check if the retrieved balance is correct
 	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")
@@ -47,15 +47,15 @@ func filledStateDB() *StateDB {
 
 func TestUseAfterTerminate(t *testing.T) {
 	db := filledStateDB()
-	prefetcher := newTriePrefetcher(db.db, db.originalRoot, "")
+	prefetcher := newTriePrefetcher(db.db, db.originalRoot, "", true)
 	skey := common.HexToHash("aaa")
 
-	if err := prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, [][]byte{skey.Bytes()}); err != nil {
+	if err := prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, [][]byte{skey.Bytes()}, false); err != nil {
 		t.Errorf("Prefetch failed before terminate: %v", err)
 	}
 	prefetcher.terminate(false)
 
-	if err := prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, [][]byte{skey.Bytes()}); err == nil {
+	if err := prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, [][]byte{skey.Bytes()}, false); err == nil {
 		t.Errorf("Prefetch succeeded after terminate: %v", err)
 	}
 	if tr := prefetcher.trie(common.Hash{}, db.originalRoot); tr == nil {

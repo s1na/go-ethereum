@@ -127,8 +127,8 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 	}
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
-	db := state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), config)
-	statedb, err := state.New(types.EmptyRootHash, db, nil)
+	db := rawdb.NewMemoryDatabase()
+	statedb, err := state.New(types.EmptyRootHash, state.NewDatabase(db, triedb.NewDatabase(db, config), nil))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -149,7 +149,7 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 // states will be persisted into the given database. Also, the genesis state
 // specification will be flushed as well.
 func flushAlloc(ga *types.GenesisAlloc, db ethdb.Database, triedb *triedb.Database, blockhash common.Hash) error {
-	statedb, err := state.New(types.EmptyRootHash, state.NewDatabaseWithNodeDB(db, triedb), nil)
+	statedb, err := state.New(types.EmptyRootHash, state.NewDatabase(db, triedb, nil))
 	if err != nil {
 		return err
 	}
@@ -594,7 +594,7 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 			common.BytesToAddress([]byte{8}): {Balance: big.NewInt(1)}, // ECPairing
 			common.BytesToAddress([]byte{9}): {Balance: big.NewInt(1)}, // BLAKE2b
 			// Pre-deploy EIP-4788 system contract
-			params.BeaconRootsAddress: {Nonce: 1, Code: params.BeaconRootsCode},
+			params.BeaconRootsAddress: {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
 		},
 	}
 	if faucet != nil {

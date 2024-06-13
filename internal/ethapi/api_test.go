@@ -531,7 +531,7 @@ func (b testBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 func (b testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
 	return b.chain.GetBlock(hash, uint64(number.Int64())).Body(), nil
 }
-func (b testBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
+func (b testBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber, overrides *map[common.Address]state.OverrideAccount) (*state.StateDB, *types.Header, error) {
 	if number == rpc.PendingBlockNumber {
 		panic("pending state not implemented")
 	}
@@ -542,12 +542,17 @@ func (b testBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.Bloc
 	if header == nil {
 		return nil, nil, errors.New("header not found")
 	}
-	stateDb, err := b.chain.StateAt(header.Root)
+	var stateDb *state.StateDB
+	if overrides != nil {
+		stateDb, err = b.chain.StateWithOverrides(header.Root, overrides)
+	} else {
+		stateDb, err = b.chain.StateAt(header.Root)
+	}
 	return stateDb, header, err
 }
-func (b testBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
+func (b testBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, overrides *map[common.Address]state.OverrideAccount) (*state.StateDB, *types.Header, error) {
 	if blockNr, ok := blockNrOrHash.Number(); ok {
-		return b.StateAndHeaderByNumber(ctx, blockNr)
+		return b.StateAndHeaderByNumber(ctx, blockNr, overrides)
 	}
 	panic("only implemented for number")
 }
@@ -651,7 +656,7 @@ func TestEstimateGas(t *testing.T) {
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
 		call        TransactionArgs
-		overrides   StateOverride
+		overrides   map[common.Address]state.OverrideAccount
 		expectErr   error
 		want        uint64
 	}{
@@ -687,8 +692,8 @@ func TestEstimateGas(t *testing.T) {
 		{
 			blockNumber: rpc.LatestBlockNumber,
 			call:        TransactionArgs{},
-			overrides: StateOverride{
-				randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
+			overrides: map[common.Address]state.OverrideAccount{
+				randomAccounts[0].addr: {Balance: uint256.MustFromBig(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
 			},
 			expectErr: nil,
 			want:      53000,
@@ -700,8 +705,8 @@ func TestEstimateGas(t *testing.T) {
 				To:    &randomAccounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
-			overrides: StateOverride{
-				randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(0))},
+			overrides: map[common.Address]state.OverrideAccount{
+				randomAccounts[0].addr: {Balance: uint256.MustFromBig(big.NewInt(0))},
 			},
 			expectErr: core.ErrInsufficientFunds,
 		},
@@ -760,7 +765,11 @@ func TestEstimateGas(t *testing.T) {
 		},
 	}
 	for i, tc := range testSuite {
-		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides)
+		var overrides *map[common.Address]state.OverrideAccount
+		if len(tc.overrides) != 0 {
+			overrides = &tc.overrides
+		}
+		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, overrides)
 		if tc.expectErr != nil {
 			if err == nil {
 				t.Errorf("test %d: want error %v, have nothing", i, tc.expectErr)
@@ -817,7 +826,7 @@ func TestCall(t *testing.T) {
 	var testSuite = []struct {
 		name           string
 		blockNumber    rpc.BlockNumber
-		overrides      StateOverride
+		overrides      map[common.Address]state.OverrideAccount
 		call           TransactionArgs
 		blockOverrides BlockOverrides
 		expectErr      error
@@ -879,8 +888,8 @@ func TestCall(t *testing.T) {
 				To:    &randomAccounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
-			overrides: StateOverride{
-				randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
+			overrides: map[common.Address]state.OverrideAccount{
+				randomAccounts[0].addr: {Balance: uint256.MustFromBig(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
 			},
 			want: "0x",
 		},
@@ -919,9 +928,9 @@ func TestCall(t *testing.T) {
 				To:   &randomAccounts[2].addr,
 				Data: hex2Bytes("8381f58a"), // call number()
 			},
-			overrides: StateOverride{
-				randomAccounts[2].addr: OverrideAccount{
-					Code:      hex2Bytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80638381f58a14602d575b600080fd5b60336049565b6040518082815260200191505060405180910390f35b6000548156fea2646970667358221220eab35ffa6ab2adfe380772a48b8ba78e82a1b820a18fcb6f59aa4efb20a5f60064736f6c63430007040033"),
+			overrides: map[common.Address]state.OverrideAccount{
+				randomAccounts[2].addr: {
+					Code:      hex2RawBytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80638381f58a14602d575b600080fd5b60336049565b6040518082815260200191505060405180910390f35b6000548156fea2646970667358221220eab35ffa6ab2adfe380772a48b8ba78e82a1b820a18fcb6f59aa4efb20a5f60064736f6c63430007040033"),
 					StateDiff: &map[common.Hash]common.Hash{{}: common.BigToHash(big.NewInt(123))},
 				},
 			},
@@ -962,8 +971,8 @@ func TestCall(t *testing.T) {
 				// }
 				Input: hex2Bytes("610dad6000813103600f57600080fd5b6000548060005260206000f3"),
 			},
-			overrides: StateOverride{
-				dad: OverrideAccount{
+			overrides: map[common.Address]state.OverrideAccount{
+				dad: {
 					State: &map[common.Hash]common.Hash{},
 				},
 			},
@@ -990,16 +999,20 @@ func TestCall(t *testing.T) {
 				BlobHashes: []common.Hash{{0x01, 0x22}},
 				BlobFeeCap: (*hexutil.Big)(big.NewInt(1)),
 			},
-			overrides: StateOverride{
+			overrides: map[common.Address]state.OverrideAccount{
 				randomAccounts[2].addr: {
-					Code: hex2Bytes("60004960005260206000f3"),
+					Code: hex2RawBytes("60004960005260206000f3"),
 				},
 			},
 			want: "0x0122000000000000000000000000000000000000000000000000000000000000",
 		},
 	}
 	for _, tc := range testSuite {
-		result, err := api.Call(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)
+		var overrides *map[common.Address]state.OverrideAccount
+		if len(tc.overrides) > 0 {
+			overrides = &tc.overrides
+		}
+		result, err := api.Call(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, overrides, &tc.blockOverrides)
 		if tc.expectErr != nil {
 			if err == nil {
 				t.Errorf("test %s: want error %v, have nothing", tc.name, tc.expectErr)
@@ -1144,8 +1157,8 @@ func TestSimulateV1(t *testing.T) {
 			name: "simple",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
-					randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(1000))},
+				StateOverrides: &map[common.Address]state.OverrideAccount{
+					randomAccounts[0].addr: {Balance: uint256.NewInt(1000)},
 				},
 				Calls: []TransactionArgs{{
 					From:  &randomAccounts[0].addr,
@@ -1187,8 +1200,8 @@ func TestSimulateV1(t *testing.T) {
 			name: "simple-multi-block",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
-					randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(2000))},
+				StateOverrides: &map[common.Address]state.OverrideAccount{
+					randomAccounts[0].addr: {Balance: uint256.NewInt(2000)},
 				},
 				Calls: []TransactionArgs{
 					{
@@ -1202,8 +1215,8 @@ func TestSimulateV1(t *testing.T) {
 					},
 				},
 			}, {
-				StateOverrides: &StateOverride{
-					randomAccounts[3].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(0))},
+				StateOverrides: &map[common.Address]state.OverrideAccount{
+					randomAccounts[3].addr: {Balance: uint256.NewInt(0)},
 				},
 				Calls: []TransactionArgs{
 					{
@@ -1261,8 +1274,8 @@ func TestSimulateV1(t *testing.T) {
 			name: "evm-error",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
-					randomAccounts[2].addr: OverrideAccount{Code: hex2Bytes("f3")},
+				StateOverrides: &map[common.Address]state.OverrideAccount{
+					randomAccounts[2].addr: {Code: hex2RawBytes("f3")},
 				},
 				Calls: []TransactionArgs{{
 					From: &randomAccounts[0].addr,
@@ -1378,9 +1391,9 @@ func TestSimulateV1(t *testing.T) {
 			name: "storage-contract",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
-					randomAccounts[2].addr: OverrideAccount{
-						Code: hex2Bytes("608060405234801561001057600080fd5b50600436106100365760003560e01c80632e64cec11461003b5780636057361d14610059575b600080fd5b610043610075565b60405161005091906100d9565b60405180910390f35b610073600480360381019061006e919061009d565b61007e565b005b60008054905090565b8060008190555050565b60008135905061009781610103565b92915050565b6000602082840312156100b3576100b26100fe565b5b60006100c184828501610088565b91505092915050565b6100d3816100f4565b82525050565b60006020820190506100ee60008301846100ca565b92915050565b6000819050919050565b600080fd5b61010c816100f4565b811461011757600080fd5b5056fea2646970667358221220404e37f487a89a932dca5e77faaf6ca2de3b991f93d230604b1b8daaef64766264736f6c63430008070033"),
+				StateOverrides: &map[common.Address]state.OverrideAccount{
+					randomAccounts[2].addr: {
+						Code: hex2RawBytes("608060405234801561001057600080fd5b50600436106100365760003560e01c80632e64cec11461003b5780636057361d14610059575b600080fd5b610043610075565b60405161005091906100d9565b60405180910390f35b610073600480360381019061006e919061009d565b61007e565b005b60008054905090565b8060008190555050565b60008135905061009781610103565b92915050565b6000602082840312156100b3576100b26100fe565b5b60006100c184828501610088565b91505092915050565b6100d3816100f4565b82525050565b60006020820190506100ee60008301846100ca565b92915050565b6000819050919050565b600080fd5b61010c816100f4565b811461011757600080fd5b5056fea2646970667358221220404e37f487a89a932dca5e77faaf6ca2de3b991f93d230604b1b8daaef64766264736f6c63430008070033"),
 					},
 				},
 				Calls: []TransactionArgs{{
@@ -1420,8 +1433,8 @@ func TestSimulateV1(t *testing.T) {
 			name: "logs",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
-					randomAccounts[2].addr: OverrideAccount{
+				StateOverrides: &map[common.Address]state.OverrideAccount{
+					randomAccounts[2].addr: {
 						// Yul code:
 						// object "Test" {
 						//    code {
@@ -1430,7 +1443,7 @@ func TestSimulateV1(t *testing.T) {
 						//        return (0, 0)
 						//    }
 						// }
-						Code: hex2Bytes("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80600080a1600080f3"),
+						Code: hex2RawBytes("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80600080a1600080f3"),
 					},
 				},
 				Calls: []TransactionArgs{{
@@ -1462,8 +1475,8 @@ func TestSimulateV1(t *testing.T) {
 			name: "ecrecover-override",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
-					randomAccounts[2].addr: OverrideAccount{
+				StateOverrides: &map[common.Address]state.OverrideAccount{
+					randomAccounts[2].addr: {
 						// Yul code that returns ecrecover(0, 0, 0, 0).
 						// object "Test" {
 						//    code {
@@ -1488,9 +1501,9 @@ func TestSimulateV1(t *testing.T) {
 						//        return(free_ptr, 0x14)
 						//    }
 						// }
-						Code: hex2Bytes("6040516000815260006020820152600060408201526000606082015260208160808360015afa60008103603157600080fd5b601482f3"),
+						Code: hex2RawBytes("6040516000815260006020820152600060408201526000606082015260208160808360015afa60008103603157600080fd5b601482f3"),
 					},
-					common.BytesToAddress([]byte{0x01}): OverrideAccount{
+					common.BytesToAddress([]byte{0x01}): {
 						// Yul code that returns the address of the caller.
 						// object "Test" {
 						//    code {
@@ -1499,7 +1512,7 @@ func TestSimulateV1(t *testing.T) {
 						//        return(0xc, 0x14)
 						//    }
 						// }
-						Code: hex2Bytes("33806000526014600cf3"),
+						Code: hex2RawBytes("33806000526014600cf3"),
 					},
 				},
 				Calls: []TransactionArgs{{
@@ -1527,8 +1540,8 @@ func TestSimulateV1(t *testing.T) {
 			name: "precompile-move",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
-					sha256Address: OverrideAccount{
+				StateOverrides: &map[common.Address]state.OverrideAccount{
+					sha256Address: {
 						// Yul code that returns the calldata.
 						// object "Test" {
 						//    code {
@@ -1544,8 +1557,8 @@ func TestSimulateV1(t *testing.T) {
 						//        return(memPtr, size)
 						//    }
 						// }
-						Code:             hex2Bytes("365981600082378181f3"),
-						MovePrecompileTo: &randomAccounts[2].addr,
+						Code: hex2RawBytes("365981600082378181f3"),
+						//MovePrecompileTo: &randomAccounts[2].addr,
 					},
 				},
 				Calls: []TransactionArgs{{
@@ -1582,9 +1595,9 @@ func TestSimulateV1(t *testing.T) {
 			name: "transfer-logs",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
-					randomAccounts[0].addr: OverrideAccount{
-						Balance: newRPCBalance(big.NewInt(100)),
+				StateOverrides: &map[common.Address]state.OverrideAccount{
+					randomAccounts[0].addr: {
+						Balance: uint256.NewInt(100),
 						// Yul code that transfers 100 wei to address passed in calldata:
 						// object "Test" {
 						//    code {
@@ -1596,7 +1609,7 @@ func TestSimulateV1(t *testing.T) {
 						//        }
 						//    }
 						// }
-						Code: hex2Bytes("60003560601c606460008060008084865af160008103601d57600080fd5b505050"),
+						Code: hex2RawBytes("60003560601c606460008060008084865af160008103601d57600080fd5b505050"),
 					},
 				},
 				Calls: []TransactionArgs{{
@@ -1725,11 +1738,11 @@ func TestSimulateV1(t *testing.T) {
 			name: "validation-checks-from-contract",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
-					randomAccounts[2].addr: OverrideAccount{
-						Balance: newRPCBalance(big.NewInt(2098640803896784)),
-						Code:    hex2Bytes("00"),
-						Nonce:   newUint64(1),
+				StateOverrides: &map[common.Address]state.OverrideAccount{
+					randomAccounts[2].addr: {
+						Balance: uint256.NewInt(2098640803896784),
+						Code:    hex2RawBytes("00"),
+						Nonce:   (*uint64)(newUint64(1)),
 					},
 				},
 				Calls: []TransactionArgs{{
@@ -1763,8 +1776,8 @@ func TestSimulateV1(t *testing.T) {
 				BlockOverrides: &BlockOverrides{
 					BaseFeePerGas: (*hexutil.Big)(big.NewInt(1)),
 				},
-				StateOverrides: &StateOverride{
-					randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(10000000))},
+				StateOverrides: &map[common.Address]state.OverrideAccount{
+					randomAccounts[0].addr: {Balance: uint256.NewInt(10000000)},
 				},
 				Calls: []TransactionArgs{{
 					From:         &randomAccounts[0].addr,
@@ -1793,9 +1806,9 @@ func TestSimulateV1(t *testing.T) {
 			name: "clear-storage",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
+				StateOverrides: &map[common.Address]state.OverrideAccount{
 					randomAccounts[2].addr: {
-						Code: newBytes(genesis.Alloc[bab].Code),
+						Code: (*[]byte)(newBytes(genesis.Alloc[bab].Code)),
 						StateDiff: &map[common.Hash]common.Hash{
 							common.BigToHash(big.NewInt(1)): common.BigToHash(big.NewInt(2)),
 							common.BigToHash(big.NewInt(2)): common.BigToHash(big.NewInt(3)),
@@ -1815,7 +1828,7 @@ func TestSimulateV1(t *testing.T) {
 					To:   &bab,
 				}},
 			}, {
-				StateOverrides: &StateOverride{
+				StateOverrides: &map[common.Address]state.OverrideAccount{
 					randomAccounts[2].addr: {
 						State: &map[common.Hash]common.Hash{
 							common.BigToHash(big.NewInt(1)): common.BigToHash(big.NewInt(5)),
@@ -1865,9 +1878,9 @@ func TestSimulateV1(t *testing.T) {
 				BlockOverrides: &BlockOverrides{
 					Number: (*hexutil.Big)(big.NewInt(12)),
 				},
-				StateOverrides: &StateOverride{
+				StateOverrides: &map[common.Address]state.OverrideAccount{
 					randomAccounts[2].addr: {
-						Code: hex2Bytes("600035804060008103601057600080fd5b5050"),
+						Code: hex2RawBytes("600035804060008103601057600080fd5b5050"),
 					},
 				},
 				Calls: []TransactionArgs{{
@@ -1977,9 +1990,9 @@ func TestSimulateV1(t *testing.T) {
 			name: "basefee-non-validation",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
+				StateOverrides: &map[common.Address]state.OverrideAccount{
 					randomAccounts[2].addr: {
-						Code: hex2Bytes("3a489060005260205260406000f3"),
+						Code: hex2RawBytes("3a489060005260205260406000f3"),
 					},
 				},
 				Calls: []TransactionArgs{{
@@ -2068,9 +2081,9 @@ func TestSimulateV1(t *testing.T) {
 			name: "basefee-validation-mode",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
+				StateOverrides: &map[common.Address]state.OverrideAccount{
 					randomAccounts[2].addr: {
-						Code: hex2Bytes("3a489060005260205260406000f3"),
+						Code: hex2RawBytes("3a489060005260205260406000f3"),
 					},
 				},
 				Calls: []TransactionArgs{{
@@ -2468,11 +2481,6 @@ func newAccounts(n int) (accounts []account) {
 	return accounts
 }
 
-func newRPCBalance(balance *big.Int) **hexutil.Big {
-	rpcBalance := (*hexutil.Big)(balance)
-	return &rpcBalance
-}
-
 func hex2Bytes(str string) *hexutil.Bytes {
 	rpcBytes := hexutil.Bytes(common.FromHex(str))
 	return &rpcBytes
@@ -2492,6 +2500,11 @@ func uint256ToBytes(v *uint256.Int) *hexutil.Bytes {
 	b := v.Bytes32()
 	r := hexutil.Bytes(b[:])
 	return &r
+}
+
+func hex2RawBytes(str string) *[]byte {
+	rpcBytes := common.Hex2Bytes(str)
+	return &rpcBytes
 }
 
 func TestRPCMarshalBlock(t *testing.T) {

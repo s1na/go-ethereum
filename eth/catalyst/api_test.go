@@ -321,7 +321,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create the executable data, block %d: %v", i, err)
 		}
-		block, err := engine.ExecutableDataToBlock(*execData, nil, nil, nil)
+		block, err := engine.ExecutableDataToBlock(*execData, nil, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
@@ -363,7 +363,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create the executable data %v", err)
 		}
-		block, err := engine.ExecutableDataToBlock(*execData, nil, nil, nil)
+		block, err := engine.ExecutableDataToBlock(*execData, nil, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
@@ -485,10 +485,10 @@ func TestFullAPI(t *testing.T) {
 		ethservice.TxPool().Add([]*types.Transaction{tx}, true, false)
 	}
 
-	setupBlocks(t, ethservice, 10, parent, callback, nil, nil)
+	setupBlocks(t, ethservice, 10, parent, callback, nil, nil, nil)
 }
 
-func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.Header, callback func(parent *types.Header), withdrawals [][]*types.Withdrawal, beaconRoots []common.Hash) []*types.Header {
+func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.Header, callback func(parent *types.Header), withdrawals [][]*types.Withdrawal, beaconRoots []common.Hash, targetBlobCount *uint64) []*types.Header {
 	api := NewConsensusAPI(ethservice)
 	var blocks []*types.Header
 	for i := 0; i < n; i++ {
@@ -502,8 +502,8 @@ func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.He
 			h = &beaconRoots[i]
 		}
 
-		envelope := getNewEnvelope(t, api, parent, w, h)
-		execResp, err := api.newPayload(*envelope.ExecutionPayload, []common.Hash{}, h, envelope.Requests, false)
+		envelope := getNewEnvelope(t, api, parent, w, h, targetBlobCount)
+		execResp, err := api.newPayload(*envelope.ExecutionPayload, []common.Hash{}, h, envelope.Requests, false, targetBlobCount)
 		if err != nil {
 			t.Fatalf("can't execute payload: %v", err)
 		}
@@ -673,12 +673,13 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 
 func assembleEnvelope(api *ConsensusAPI, parentHash common.Hash, params *engine.PayloadAttributes) (*engine.ExecutionPayloadEnvelope, error) {
 	args := &miner.BuildPayloadArgs{
-		Parent:       parentHash,
-		Timestamp:    params.Timestamp,
-		FeeRecipient: params.SuggestedFeeRecipient,
-		Random:       params.Random,
-		Withdrawals:  params.Withdrawals,
-		BeaconRoot:   params.BeaconRoot,
+		Parent:          parentHash,
+		Timestamp:       params.Timestamp,
+		FeeRecipient:    params.SuggestedFeeRecipient,
+		Random:          params.Random,
+		Withdrawals:     params.Withdrawals,
+		BeaconRoot:      params.BeaconRoot,
+		TargetBlobCount: params.TargetBlobCount,
 	}
 	payload, err := api.eth.Miner().BuildPayload(args, false)
 	if err != nil {
@@ -704,10 +705,10 @@ func TestEmptyBlocks(t *testing.T) {
 	api := NewConsensusAPI(ethservice)
 
 	// Setup 10 blocks on the canonical chain
-	setupBlocks(t, ethservice, 10, commonAncestor, func(parent *types.Header) {}, nil, nil)
+	setupBlocks(t, ethservice, 10, commonAncestor, func(parent *types.Header) {}, nil, nil, nil)
 
 	// (1) check LatestValidHash by sending a normal payload (P1'')
-	payload := getNewPayload(t, api, commonAncestor, nil, nil)
+	payload := getNewPayload(t, api, commonAncestor, nil, nil, nil)
 
 	status, err := api.NewPayloadV1(*payload)
 	if err != nil {
@@ -721,7 +722,7 @@ func TestEmptyBlocks(t *testing.T) {
 	}
 
 	// (2) Now send P1' which is invalid
-	payload = getNewPayload(t, api, commonAncestor, nil, nil)
+	payload = getNewPayload(t, api, commonAncestor, nil, nil, nil)
 	payload.GasUsed += 1
 	payload = setBlockhash(payload)
 	// Now latestValidHash should be the common ancestor
@@ -739,7 +740,7 @@ func TestEmptyBlocks(t *testing.T) {
 	}
 
 	// (3) Now send a payload with unknown parent
-	payload = getNewPayload(t, api, commonAncestor, nil, nil)
+	payload = getNewPayload(t, api, commonAncestor, nil, nil, nil)
 	payload.ParentHash = common.Hash{1}
 	payload = setBlockhash(payload)
 	// Now latestValidHash should be the common ancestor
@@ -755,13 +756,14 @@ func TestEmptyBlocks(t *testing.T) {
 	}
 }
 
-func getNewEnvelope(t *testing.T, api *ConsensusAPI, parent *types.Header, withdrawals []*types.Withdrawal, beaconRoot *common.Hash) *engine.ExecutionPayloadEnvelope {
+func getNewEnvelope(t *testing.T, api *ConsensusAPI, parent *types.Header, withdrawals []*types.Withdrawal, beaconRoot *common.Hash, targetBlobCount *uint64) *engine.ExecutionPayloadEnvelope {
 	params := engine.PayloadAttributes{
 		Timestamp:             parent.Time + 1,
 		Random:                crypto.Keccak256Hash([]byte{byte(1)}),
 		SuggestedFeeRecipient: parent.Coinbase,
 		Withdrawals:           withdrawals,
 		BeaconRoot:            beaconRoot,
+		TargetBlobCount:       targetBlobCount,
 	}
 
 	envelope, err := assembleEnvelope(api, parent.Hash(), &params)
@@ -771,8 +773,8 @@ func getNewEnvelope(t *testing.T, api *ConsensusAPI, parent *types.Header, withd
 	return envelope
 }
 
-func getNewPayload(t *testing.T, api *ConsensusAPI, parent *types.Header, withdrawals []*types.Withdrawal, beaconRoot *common.Hash) *engine.ExecutableData {
-	return getNewEnvelope(t, api, parent, withdrawals, beaconRoot).ExecutionPayload
+func getNewPayload(t *testing.T, api *ConsensusAPI, parent *types.Header, withdrawals []*types.Withdrawal, beaconRoot *common.Hash, targetBlobCount *uint64) *engine.ExecutableData {
+	return getNewEnvelope(t, api, parent, withdrawals, beaconRoot, targetBlobCount).ExecutionPayload
 }
 
 // setBlockhash sets the blockhash of a modified ExecutableData.
@@ -833,7 +835,7 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 	commonAncestor := ethserviceA.BlockChain().CurrentBlock()
 
 	// Setup 10 blocks on the canonical chain
-	setupBlocks(t, ethserviceA, 10, commonAncestor, func(parent *types.Header) {}, nil, nil)
+	setupBlocks(t, ethserviceA, 10, commonAncestor, func(parent *types.Header) {}, nil, nil, nil)
 	commonAncestor = ethserviceA.BlockChain().CurrentBlock()
 
 	var invalidChain []*engine.ExecutableData
@@ -842,7 +844,7 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 	//invalidChain = append(invalidChain, payload1)
 
 	// create an invalid payload2 (P2)
-	payload2 := getNewPayload(t, apiA, commonAncestor, nil, nil)
+	payload2 := getNewPayload(t, apiA, commonAncestor, nil, nil, nil)
 	//payload2.ParentHash = payload1.BlockHash
 	payload2.GasUsed += 1
 	payload2 = setBlockhash(payload2)
@@ -851,7 +853,7 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 	head := payload2
 	// create some valid payloads on top
 	for i := 0; i < 10; i++ {
-		payload := getNewPayload(t, apiA, commonAncestor, nil, nil)
+		payload := getNewPayload(t, apiA, commonAncestor, nil, nil, nil)
 		payload.ParentHash = head.BlockHash
 		payload = setBlockhash(payload)
 		invalidChain = append(invalidChain, payload)
@@ -888,10 +890,10 @@ func TestInvalidBloom(t *testing.T) {
 	api := NewConsensusAPI(ethservice)
 
 	// Setup 10 blocks on the canonical chain
-	setupBlocks(t, ethservice, 10, commonAncestor, func(parent *types.Header) {}, nil, nil)
+	setupBlocks(t, ethservice, 10, commonAncestor, func(parent *types.Header) {}, nil, nil, nil)
 
 	// (1) check LatestValidHash by sending a normal payload (P1'')
-	payload := getNewPayload(t, api, commonAncestor, nil, nil)
+	payload := getNewPayload(t, api, commonAncestor, nil, nil, nil)
 	payload.LogsBloom = append(payload.LogsBloom, byte(1))
 	status, err := api.NewPayloadV1(*payload)
 	if err != nil {
@@ -1012,7 +1014,7 @@ func TestSimultaneousNewBlock(t *testing.T) {
 				t.Fatal(testErr)
 			}
 		}
-		block, err := engine.ExecutableDataToBlock(*execData, nil, nil, nil)
+		block, err := engine.ExecutableDataToBlock(*execData, nil, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
@@ -1351,7 +1353,8 @@ func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
 	}
 
 	// Create the blocks.
-	newHeaders := setupBlocks(t, ethservice, 10, parent, callback, withdrawals, beaconRoots)
+	target := uint64(2)
+	newHeaders := setupBlocks(t, ethservice, 10, parent, callback, withdrawals, beaconRoots, &target)
 	newBlocks := make([]*types.Block, len(newHeaders))
 	for i, header := range newHeaders {
 		newBlocks[i] = ethservice.BlockChain().GetBlock(header.Hash(), header.Number.Uint64())
@@ -1610,7 +1613,7 @@ func TestBlockToPayloadWithBlobs(t *testing.T) {
 	if got := len(envelope.BlobsBundle.Blobs); got != want {
 		t.Fatalf("invalid number of blobs: got %v, want %v", got, want)
 	}
-	_, err := engine.ExecutableDataToBlock(*envelope.ExecutionPayload, make([]common.Hash, 1), nil, nil)
+	_, err := engine.ExecutableDataToBlock(*envelope.ExecutionPayload, make([]common.Hash, 1), nil, nil, nil)
 	if err != nil {
 		t.Error(err)
 	}

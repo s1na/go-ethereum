@@ -66,7 +66,7 @@ func TestSupplyOmittedFields(t *testing.T) {
 		t.Fatalf("failed to test supply tracer: %v", err)
 	}
 	compareAsJSON(t, expected, out)
-	writeArtifact(t, "omitted_fields_cancun", db, chain, expected)
+	writeArtifact(t, "omitted_fields_cancun", db, chain, expected, nil)
 }
 
 func TestSupplyGenesisAlloc(t *testing.T) {
@@ -107,7 +107,7 @@ func TestSupplyGenesisAlloc(t *testing.T) {
 		t.Fatalf("failed to test supply tracer: %v", err)
 	}
 	compareAsJSON(t, expected, out)
-	writeArtifact(t, "genesis_alloc_grayGlacier", db, chain, expected)
+	writeArtifact(t, "genesis_alloc_grayGlacier", db, chain, expected, nil)
 }
 
 func TestSupplyEip1559Burn(t *testing.T) {
@@ -174,7 +174,7 @@ func TestSupplyEip1559Burn(t *testing.T) {
 		}}
 	)
 	compareAsJSON(t, expected, out)
-	writeArtifact(t, "eip1559_burn_grayGlacier", db, chain, expected)
+	writeArtifact(t, "eip1559_burn_grayGlacier", db, chain, expected, nil)
 }
 
 func TestSupplyWithdrawals(t *testing.T) {
@@ -216,7 +216,7 @@ func TestSupplyWithdrawals(t *testing.T) {
 		}}
 	)
 	compareAsJSON(t, expected, out)
-	writeArtifact(t, "withdrawals_cancun", db, chain, expected)
+	writeArtifact(t, "withdrawals_cancun", db, chain, expected, nil)
 }
 
 // Tests fund retrieval after contract's selfdestruct.
@@ -437,13 +437,8 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 		}
 	)
 
-	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
-
 	signer := types.LatestSigner(gspec.Config)
-
 	testBlockGenerationFunc := func(b *core.BlockGen) {
-		b.SetPoS()
-
 		txdata := &types.LegacyTx{
 			Nonce:    0,
 			To:       &aa,
@@ -459,7 +454,7 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 		b.AddTx(tx)
 	}
 
-	output, _, chain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
+	output, db, chain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("failed to test supply tracer: %v", err)
 	}
@@ -485,20 +480,28 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 
 	// Check live trace output
 	block := chain.GetBlockByNumber(1)
-
-	expected := supplyInfo{
+	expected := []supplyInfo{{
+		Issuance: &supplyInfoIssuance{
+			GenesisAlloc: new(big.Int).Mul(big.NewInt(9), big.NewInt(params.Ether)),
+		},
+		Number:     0,
+		Hash:       common.HexToHash("0xaf41e72f748de317965454508c749f7e14dc4fe444cd07bca4c981c7e952364d"),
+		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+	}, {
 		Burn: &supplyInfoBurn{
 			EIP1559: new(big.Int).Mul(block.BaseFee(), big.NewInt(int64(block.GasUsed()))),
 			Misc:    eth5, // 5ETH burned from contract B
 		},
+		Issuance: &supplyInfoIssuance{
+			Reward: eth2,
+		},
 		Number:     1,
 		Hash:       block.Hash(),
 		ParentHash: block.ParentHash(),
-	}
+	}}
 
-	actual := output[expected.Number]
-
-	compareAsJSON(t, expected, actual)
+	compareAsJSON(t, expected, output)
+	writeArtifact(t, "selfdestruct_itself_and_revert_grayGlacier", db, chain, expected, nil)
 }
 
 func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockGen)) ([]supplyInfo, ethdb.Database, *core.BlockChain, error) {
@@ -566,12 +569,12 @@ func compareAsJSON(t *testing.T, expected interface{}, actual interface{}) {
 		t.Fatalf("failed to marshal actual value to JSON: %v", err)
 	}
 	if !bytes.Equal(want, have) {
-		t.Fatalf("incorrect supply info: expected %s, got %s", string(want), string(have))
+		t.Fatalf("incorrect supply info:\nexpected:\n%s\ngot:\n%s", string(want), string(have))
 	}
 }
 
-func writeArtifact(t *testing.T, name string, db ethdb.Database, chain *core.BlockChain, expected []supplyInfo) {
-	bt, err := btFromChain(db, chain)
+func writeArtifact(t *testing.T, name string, db ethdb.Database, chain *core.BlockChain, expected []supplyInfo, post *types.GenesisAlloc) {
+	bt, err := btFromChain(db, chain, post)
 	if err != nil {
 		t.Fatalf("failed to fill tests from chain: %v", err)
 	}

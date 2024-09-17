@@ -31,7 +31,6 @@ var Modules = map[string]string{
 	"les":      LESJs,
 	"vflux":    VfluxJs,
 	"dev":      DevJs,
-	"geth":     GethJs,
 }
 
 const CliqueJs = `
@@ -883,20 +882,6 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'setFeeRecipient',
 			call: 'dev_setFeeRecipient',
-			params: 1
-		}),
-	],
-});
-`
-
-const GethJs = `
-web3._extend({
-	property: 'geth',
-	methods:
-	[
-		new web3._extend.Method({
-			name: 'fork',
-			call: 'geth_fork',
 			params: 1
 		}),
 	],

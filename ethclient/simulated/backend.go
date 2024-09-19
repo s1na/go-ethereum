@@ -79,7 +79,7 @@ func NewBackend(alloc types.GenesisAlloc, options ...func(nodeConf *node.Config,
 	if err != nil {
 		panic(err) // this should never happen
 	}
-	sim, err := newWithNode(stack, &ethConf, 0, 0)
+	sim, err := newWithNode(stack, &ethConf, 0, false)
 	if err != nil {
 		panic(err) // this should never happen
 	}
@@ -108,14 +108,14 @@ func makeConfigs(alloc types.GenesisAlloc, options []func(nodeConf *node.Config,
 	return nodeConf, ethConf
 }
 
-func NewBackendWithTimestampIncrement(alloc types.GenesisAlloc, timestampIncrement uint64, options ...func(nodeConf *node.Config, ethConf *ethconfig.Config)) *Backend {
+func NewDeterministicBackend(alloc types.GenesisAlloc, options ...func(nodeConf *node.Config, ethConf *ethconfig.Config)) *Backend {
 	nodeConf, ethConf := makeConfigs(alloc, options)
 	// Assemble the Ethereum stack to run the chain with
 	stack, err := node.New(&nodeConf)
 	if err != nil {
 		panic(err) // this should never happen
 	}
-	sim, err := newWithNode(stack, &ethConf, 0, timestampIncrement)
+	sim, err := newWithNode(stack, &ethConf, 0, true)
 	if err != nil {
 		panic(err) // this should never happen
 	}
@@ -124,7 +124,7 @@ func NewBackendWithTimestampIncrement(alloc types.GenesisAlloc, timestampIncreme
 
 // newWithNode sets up a simulated backend on an existing node. The provided node
 // must not be started and will be started by this method.
-func newWithNode(stack *node.Node, conf *eth.Config, blockPeriod, timestampIncrement uint64) (*Backend, error) {
+func newWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64, deterministic bool) (*Backend, error) {
 	backend, err := eth.New(stack, conf)
 	if err != nil {
 		return nil, err
@@ -140,7 +140,7 @@ func newWithNode(stack *node.Node, conf *eth.Config, blockPeriod, timestampIncre
 		return nil, err
 	}
 	// Set up the simulated beacon
-	beacon, err := catalyst.NewSimulatedBeacon(blockPeriod, backend, timestampIncrement)
+	beacon, err := catalyst.NewSimulatedBeacon(blockPeriod, backend, deterministic)
 	if err != nil {
 		return nil, err
 	}

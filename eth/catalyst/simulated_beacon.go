@@ -95,13 +95,13 @@ type SimulatedBeacon struct {
 	engineAPI          *ConsensusAPI
 	curForkchoiceState engine.ForkchoiceStateV1
 	lastBlockTime      uint64
-	timestampIncrement uint64
+	deterministic      bool
 }
 
 // NewSimulatedBeacon constructs a new simulated beacon chain.
-// If timestampIncrement is > 0 then the blocks will be mined with
-// deterministic timestamps.
-func NewSimulatedBeacon(period uint64, eth *eth.Ethereum, timestampIncrement uint64) (*SimulatedBeacon, error) {
+// In deterministic mode running the same simulation will produce
+// the exact same history.
+func NewSimulatedBeacon(period uint64, eth *eth.Ethereum, deterministic bool) (*SimulatedBeacon, error) {
 	block := eth.BlockChain().CurrentBlock()
 	current := engine.ForkchoiceStateV1{
 		HeadBlockHash:      block.Hash(),
@@ -123,7 +123,7 @@ func NewSimulatedBeacon(period uint64, eth *eth.Ethereum, timestampIncrement uin
 		engineAPI:          engineAPI,
 		lastBlockTime:      block.Time,
 		curForkchoiceState: current,
-		timestampIncrement: timestampIncrement,
+		deterministic:      deterministic,
 	}, nil
 }
 
@@ -178,7 +178,9 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	}
 
 	var random [32]byte
-	rand.Read(random[:])
+	if !c.deterministic {
+		rand.Read(random[:])
+	}
 	fcResponse, err := c.engineAPI.forkchoiceUpdated(c.curForkchoiceState, &engine.PayloadAttributes{
 		Timestamp:             timestamp,
 		SuggestedFeeRecipient: feeRecipient,
@@ -246,8 +248,8 @@ func (c *SimulatedBeacon) loop() {
 			return
 		case <-timer.C:
 			timestamp := uint64(time.Now().Unix())
-			if c.timestampIncrement > 0 {
-				timestamp = c.lastBlockTime + c.timestampIncrement
+			if c.deterministic {
+				timestamp = c.lastBlockTime + 1
 			}
 			if err := c.sealBlock(c.withdrawals.pop(10), timestamp); err != nil {
 				log.Warn("Error performing sealing work", "err", err)
@@ -287,8 +289,8 @@ func (c *SimulatedBeacon) setCurrentState(headHash, finalizedHash common.Hash) {
 func (c *SimulatedBeacon) Commit() common.Hash {
 	withdrawals := c.withdrawals.pop(10)
 	timestamp := uint64(time.Now().Unix())
-	if c.timestampIncrement > 0 {
-		timestamp = c.lastBlockTime + c.timestampIncrement
+	if c.deterministic {
+		timestamp = c.lastBlockTime + 1
 	}
 	if err := c.sealBlock(withdrawals, timestamp); err != nil {
 		log.Warn("Error performing sealing work", "err", err)

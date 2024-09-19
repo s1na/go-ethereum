@@ -95,10 +95,13 @@ type SimulatedBeacon struct {
 	engineAPI          *ConsensusAPI
 	curForkchoiceState engine.ForkchoiceStateV1
 	lastBlockTime      uint64
+	timestampIncrement uint64
 }
 
 // NewSimulatedBeacon constructs a new simulated beacon chain.
-func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, error) {
+// If timestampIncrement is > 0 then the blocks will be mined with
+// deterministic timestamps.
+func NewSimulatedBeacon(period uint64, eth *eth.Ethereum, timestampIncrement uint64) (*SimulatedBeacon, error) {
 	block := eth.BlockChain().CurrentBlock()
 	current := engine.ForkchoiceStateV1{
 		HeadBlockHash:      block.Hash(),
@@ -120,6 +123,7 @@ func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, err
 		engineAPI:          engineAPI,
 		lastBlockTime:      block.Time,
 		curForkchoiceState: current,
+		timestampIncrement: timestampIncrement,
 	}, nil
 }
 
@@ -241,7 +245,11 @@ func (c *SimulatedBeacon) loop() {
 		case <-c.shutdownCh:
 			return
 		case <-timer.C:
-			if err := c.sealBlock(c.withdrawals.pop(10), uint64(time.Now().Unix())); err != nil {
+			timestamp := uint64(time.Now().Unix())
+			if c.timestampIncrement > 0 {
+				timestamp = c.lastBlockTime + c.timestampIncrement
+			}
+			if err := c.sealBlock(c.withdrawals.pop(10), timestamp); err != nil {
 				log.Warn("Error performing sealing work", "err", err)
 			} else {
 				timer.Reset(time.Second * time.Duration(c.period))
@@ -278,7 +286,11 @@ func (c *SimulatedBeacon) setCurrentState(headHash, finalizedHash common.Hash) {
 // Commit seals a block on demand.
 func (c *SimulatedBeacon) Commit() common.Hash {
 	withdrawals := c.withdrawals.pop(10)
-	if err := c.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
+	timestamp := uint64(time.Now().Unix())
+	if c.timestampIncrement > 0 {
+		timestamp = c.lastBlockTime + c.timestampIncrement
+	}
+	if err := c.sealBlock(withdrawals, timestamp); err != nil {
 		log.Warn("Error performing sealing work", "err", err)
 	}
 	return c.eth.BlockChain().CurrentBlock().Hash()

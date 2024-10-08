@@ -33,8 +33,10 @@ type revision struct {
 // journal is a state change journal to be wrapped around a tracer.
 // It will emit the state change hooks with reverse values when a call reverts.
 type journal struct {
-	entries []entry
-	hooks   *Hooks
+	entries  []entry
+	hooks    *Hooks
+	curTx    *types.Transaction
+	callType byte
 
 	validRevisions []revision
 	nextRevisionId int
@@ -166,6 +168,9 @@ func (j *journal) revertToSnapshot(revid int, hooks *Hooks) {
 		return j.validRevisions[i].id >= revid
 	})
 	if idx == len(j.validRevisions) || j.validRevisions[idx].id != revid {
+		fmt.Printf("curTx: %s\n", j.curTx.Hash())
+		fmt.Printf("call type: %v\n", j.callType)
+		fmt.Printf("Revisions: %v\n", j.validRevisions)
 		panic(fmt.Errorf("revision id %v cannot be reverted", revid))
 	}
 	snapshot := j.validRevisions[idx].journalIndex
@@ -189,11 +194,16 @@ func (j *journal) length() int {
 	return len(j.entries)
 }
 
+func (j *journal) OnTxStart(tx *types.Transaction) {
+	j.curTx = tx
+}
+
 func (j *journal) OnTxEnd(receipt *types.Receipt, err error) {
 	j.reset()
 }
 
 func (j *journal) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	j.callType = typ
 	j.curRevisionId = j.snapshot()
 	if j.hooks != nil && j.hooks.OnEnter != nil {
 		j.hooks.OnEnter(depth, typ, from, to, input, gas, value)

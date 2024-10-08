@@ -12,7 +12,13 @@ import (
 )
 
 func init() {
-	tracers.LiveDirectory.Register("noop", newNoopTracer)
+	tracers.LiveDirectory.Register("noop", func(cfg json.RawMessage) (*tracing.Hooks, error) {
+		t, err := newNoopTracer(cfg)
+		if err != nil {
+			return nil, err
+		}
+		return tracing.WrapWithJournal(t)
+	})
 }
 
 // noop is a no-op live tracer. It's there to

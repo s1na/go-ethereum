@@ -59,9 +59,10 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	var (
 		j       = &journal{entries: make([]entry, 0), hooks: hooks}
 		wrapped = &Hooks{
-			OnTxEnd: j.OnTxEnd,
-			OnEnter: j.OnEnter,
-			OnExit:  j.OnExit,
+			OnTxStart: j.OnTxStart,
+			OnTxEnd:   j.OnTxEnd,
+			OnEnter:   j.OnEnter,
+			OnExit:    j.OnExit,
 		}
 	)
 	// State change hooks.
@@ -194,7 +195,7 @@ func (j *journal) length() int {
 	return len(j.entries)
 }
 
-func (j *journal) OnTxStart(tx *types.Transaction) {
+func (j *journal) OnTxStart(ctx *VMContext, tx *types.Transaction, from common.Address) {
 	j.curTx = tx
 }
 

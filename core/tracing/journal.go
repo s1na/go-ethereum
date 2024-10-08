@@ -79,9 +79,9 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 		wrapped.OnStorageChange = j.OnStorageChange
 	}
 	// Pass through the remaining hooks.
-	if hooks.OnTxStart != nil {
+	/*if hooks.OnTxStart != nil {
 		wrapped.OnTxStart = hooks.OnTxStart
-	}
+	}*/
 	if hooks.OnOpcode != nil {
 		wrapped.OnOpcode = hooks.OnOpcode
 	}

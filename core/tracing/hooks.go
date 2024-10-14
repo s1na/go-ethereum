@@ -17,6 +17,7 @@
 package tracing
 
 import (
+	"encoding/json"
 	"math/big"
 	"reflect"
 
@@ -71,6 +72,12 @@ type BlockEvent struct {
 }
 
 type (
+	// LiveConstructor is the constructor for a live tracer.
+	LiveConstructor = func(config json.RawMessage) (*Hooks, error)
+
+	// LiveConstructorV2 is the v2 constructor for a live tracer.
+	LiveConstructorV2 = func(config json.RawMessage) (*HooksV2, error)
+
 	/*
 		- VM events -
 	*/
@@ -148,7 +155,11 @@ type (
 	//
 	// Note that system call happens outside normal transaction execution, so the `OnTxStart/OnTxEnd` hooks
 	// will not be invoked.
-	OnSystemCallStartHook = func(vm *VMContext)
+	OnSystemCallStartHook = func()
+
+	// OnSystemCallStartHookV2 is called when a system call is about to be executed. Refer
+	// to docs for OnSystemCallStartHook.
+	OnSystemCallStartHookV2 = func(vm *VMContext)
 
 	// OnSystemCallEndHook is called when a system call has finished executing. Today,
 	// this hook is invoked when the EIP-4788 system call is about to be executed to set the
@@ -212,7 +223,6 @@ type Hooks struct {
 	OnBlockEnd        BlockEndHook
 	OnSkippedBlock    SkippedBlockHook
 	OnGenesisBlock    GenesisBlockHook
-	OnReorg           ReorgHook
 	OnSystemCallStart OnSystemCallStartHook
 	OnSystemCallEnd   OnSystemCallEndHook
 	// State events
@@ -221,6 +231,36 @@ type Hooks struct {
 	OnCodeChange    CodeChangeHook
 	OnStorageChange StorageChangeHook
 	OnLog           LogHook
+}
+
+type HooksV2 struct {
+	// V1 hooks minus OnBlockchainInit which is removed.
+	// VM events
+	OnTxStart   TxStartHook
+	OnTxEnd     TxEndHook
+	OnEnter     EnterHook
+	OnExit      ExitHook
+	OnOpcode    OpcodeHook
+	OnFault     FaultHook
+	OnGasChange GasChangeHook
+	// Chain events
+	OnBlockchainInit BlockchainInitHook
+	OnClose          CloseHook
+	OnBlockStart     BlockStartHook
+	OnBlockEnd       BlockEndHook
+	OnSkippedBlock   SkippedBlockHook
+	OnGenesisBlock   GenesisBlockHook
+	OnSystemCallEnd  OnSystemCallEndHook
+	// State events
+	OnBalanceChange BalanceChangeHook
+	OnNonceChange   NonceChangeHook
+	OnCodeChange    CodeChangeHook
+	OnStorageChange StorageChangeHook
+	OnLog           LogHook
+
+	// V2 changes
+	OnReorg           ReorgHook
+	OnSystemCallStart OnSystemCallStartHookV2
 	// State reads
 	OnBalanceRead  BalanceReadHook
 	OnNonceRead    NonceReadHook
@@ -232,9 +272,9 @@ type Hooks struct {
 	OnBlockHashRead BlockHashReadHook
 }
 
-// Copy creates a new Hooks instance with all implemented hooks copied from the original.
-func (h *Hooks) Copy() *Hooks {
-	copied := &Hooks{}
+// copyHooks creates a new instance of T with all implemented hooks copied from the original.
+func copyHooks[T any](h *T) *T {
+	copied := new(T)
 	srcValue := reflect.ValueOf(h).Elem()
 	dstValue := reflect.ValueOf(copied).Elem()
 
@@ -245,6 +285,16 @@ func (h *Hooks) Copy() *Hooks {
 		}
 	}
 	return copied
+}
+
+// Copy creates a new Hooks instance with all implemented hooks copied from the original.
+func (h *Hooks) Copy() *Hooks {
+	return copyHooks(h)
+}
+
+// Copy creates a new HooksV2 instance with all implemented hooks copied from the original.
+func (h *HooksV2) Copy() *HooksV2 {
+	return copyHooks(h)
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful

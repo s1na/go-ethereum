@@ -19,7 +19,7 @@ import (
 )
 
 func init() {
-	tracers.LiveDirectory.Register("supply", newSupply)
+	tracers.LiveDirectory.RegisterV2("supply", newSupply)
 }
 
 type supplyInfoIssuance struct {
@@ -74,7 +74,7 @@ type supplyTracerConfig struct {
 	MaxSize int    `json:"maxSize"` // MaxSize is the maximum size in megabytes of the tracer log file before it gets rotated. It defaults to 100 megabytes.
 }
 
-func newSupply(cfg json.RawMessage) (*tracing.Hooks, error) {
+func newSupply(cfg json.RawMessage) (*tracing.HooksV2, error) {
 	var config supplyTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
@@ -97,7 +97,7 @@ func newSupply(cfg json.RawMessage) (*tracing.Hooks, error) {
 		delta:  newSupplyInfo(),
 		logger: logger,
 	}
-	return &tracing.Hooks{
+	return &tracing.HooksV2{
 		OnBlockStart:    t.OnBlockStart,
 		OnBlockEnd:      t.OnBlockEnd,
 		OnGenesisBlock:  t.OnGenesisBlock,

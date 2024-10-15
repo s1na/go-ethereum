@@ -161,7 +161,7 @@ func (c *Contract) Caller() common.Address {
 }
 
 // UseGas attempts the use gas and subtracts it and returns true on success
-func (c *Contract) UseGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
+func (c *Contract) UseGas(gas uint64, logger *tracing.HooksV2, reason tracing.GasChangeReason) (ok bool) {
 	if c.Gas < gas {
 		return false
 	}
@@ -173,7 +173,7 @@ func (c *Contract) UseGas(gas uint64, logger *tracing.Hooks, reason tracing.GasC
 }
 
 // RefundGas refunds gas to the contract
-func (c *Contract) RefundGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) {
+func (c *Contract) RefundGas(gas uint64, logger *tracing.HooksV2, reason tracing.GasChangeReason) {
 	if gas == 0 {
 		return
 	}

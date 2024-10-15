@@ -24,31 +24,25 @@ type noop struct{}
 func newNoopTracer(_ json.RawMessage) (*tracing.Hooks, error) {
 	t := &noop{}
 	return &tracing.Hooks{
-		OnTxStart:        t.OnTxStart,
-		OnTxEnd:          t.OnTxEnd,
-		OnEnter:          t.OnEnter,
-		OnExit:           t.OnExit,
-		OnOpcode:         t.OnOpcode,
-		OnFault:          t.OnFault,
-		OnGasChange:      t.OnGasChange,
-		OnBlockchainInit: t.OnBlockchainInit,
-		OnBlockStart:     t.OnBlockStart,
-		OnBlockEnd:       t.OnBlockEnd,
-		OnSkippedBlock:   t.OnSkippedBlock,
-		OnGenesisBlock:   t.OnGenesisBlock,
-		OnReorg:          t.OnReorg,
-		OnBalanceChange:  t.OnBalanceChange,
-		OnNonceChange:    t.OnNonceChange,
-		OnCodeChange:     t.OnCodeChange,
-		OnStorageChange:  t.OnStorageChange,
-		OnLog:            t.OnLog,
-		OnBalanceRead:    t.OnBalanceRead,
-		OnNonceRead:      t.OnNonceRead,
-		OnCodeRead:       t.OnCodeRead,
-		OnCodeSizeRead:   t.OnCodeSizeRead,
-		OnCodeHashRead:   t.OnCodeHashRead,
-		OnStorageRead:    t.OnStorageRead,
-		OnBlockHashRead:  t.OnBlockHashRead,
+		OnTxStart:         t.OnTxStart,
+		OnTxEnd:           t.OnTxEnd,
+		OnEnter:           t.OnEnter,
+		OnExit:            t.OnExit,
+		OnOpcode:          t.OnOpcode,
+		OnFault:           t.OnFault,
+		OnGasChange:       t.OnGasChange,
+		OnBlockchainInit:  t.OnBlockchainInit,
+		OnBlockStart:      t.OnBlockStart,
+		OnBlockEnd:        t.OnBlockEnd,
+		OnSkippedBlock:    t.OnSkippedBlock,
+		OnGenesisBlock:    t.OnGenesisBlock,
+		OnSystemCallStart: t.OnSystemCallStart,
+		OnSystemCallEnd:   t.OnSystemCallEnd,
+		OnBalanceChange:   t.OnBalanceChange,
+		OnNonceChange:     t.OnNonceChange,
+		OnCodeChange:      t.OnCodeChange,
+		OnStorageChange:   t.OnStorageChange,
+		OnLog:             t.OnLog,
 	}, nil
 }
 
@@ -83,6 +77,10 @@ func (t *noop) OnBlockchainInit(chainConfig *params.ChainConfig) {
 
 func (t *noop) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
 }
+
+func (t *noop) OnSystemCallStart() {}
+
+func (t *noop) OnSystemCallEnd() {}
 
 func (t *noop) OnReorg(reverted []*types.Block) {}
 

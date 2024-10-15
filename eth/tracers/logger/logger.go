@@ -132,8 +132,8 @@ func NewStructLogger(cfg *Config) *StructLogger {
 	return logger
 }
 
-func (l *StructLogger) Hooks() *tracing.Hooks {
-	return &tracing.Hooks{
+func (l *StructLogger) Hooks() *tracing.HooksV2 {
+	return &tracing.HooksV2{
 		OnTxStart: l.OnTxStart,
 		OnTxEnd:   l.OnTxEnd,
 		OnExit:    l.OnExit,
@@ -345,8 +345,8 @@ func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
 	return l
 }
 
-func (t *mdLogger) Hooks() *tracing.Hooks {
-	return &tracing.Hooks{
+func (t *mdLogger) Hooks() *tracing.HooksV2 {
+	return &tracing.HooksV2{
 		OnTxStart: t.OnTxStart,
 		OnEnter:   t.OnEnter,
 		OnExit:    t.OnExit,

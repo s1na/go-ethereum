@@ -61,7 +61,7 @@ func newFourByteTracer(ctx *tracers.Context, _ json.RawMessage) (*tracers.Tracer
 		ids: make(map[string]int),
 	}
 	return &tracers.Tracer{
-		Hooks: &tracing.Hooks{
+		HooksV2: &tracing.HooksV2{
 			OnTxStart: t.OnTxStart,
 			OnEnter:   t.OnEnter,
 		},

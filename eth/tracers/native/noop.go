@@ -38,7 +38,7 @@ type noopTracer struct{}
 func newNoopTracer(ctx *tracers.Context, _ json.RawMessage) (*tracers.Tracer, error) {
 	t := &noopTracer{}
 	return &tracers.Tracer{
-		Hooks: &tracing.Hooks{
+		HooksV2: &tracing.HooksV2{
 			OnTxStart:       t.OnTxStart,
 			OnTxEnd:         t.OnTxEnd,
 			OnEnter:         t.OnEnter,

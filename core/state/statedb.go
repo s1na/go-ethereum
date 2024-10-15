@@ -82,7 +82,7 @@ type StateDB struct {
 	db         Database
 	prefetcher *triePrefetcher
 	trie       Trie
-	logger     *tracing.Hooks
+	logger     *tracing.HooksV2
 	reader     Reader
 
 	// originalRoot is the pre-state root, before any changes were made.
@@ -191,7 +191,7 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 }
 
 // SetLogger sets the logger for account update hooks.
-func (s *StateDB) SetLogger(l *tracing.Hooks) {
+func (s *StateDB) SetLogger(l *tracing.HooksV2) {
 	s.logger = l
 }
 

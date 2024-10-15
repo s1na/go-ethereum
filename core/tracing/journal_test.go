@@ -56,7 +56,7 @@ func (t *testTracer) OnStorageChange(addr common.Address, slot common.Hash, prev
 
 func TestJournalIntegration(t *testing.T) {
 	tr := &testTracer{}
-	wr, err := WrapWithJournal(&Hooks{OnBalanceChange: tr.OnBalanceChange, OnNonceChange: tr.OnNonceChange, OnCodeChange: tr.OnCodeChange, OnStorageChange: tr.OnStorageChange})
+	wr, err := WrapWithJournal(&HooksV2{OnBalanceChange: tr.OnBalanceChange, OnNonceChange: tr.OnNonceChange, OnCodeChange: tr.OnCodeChange, OnStorageChange: tr.OnStorageChange})
 	if err != nil {
 		t.Fatalf("failed to wrap test tracer: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestJournalIntegration(t *testing.T) {
 
 func TestJournalTopRevert(t *testing.T) {
 	tr := &testTracer{}
-	wr, err := WrapWithJournal(&Hooks{OnBalanceChange: tr.OnBalanceChange, OnNonceChange: tr.OnNonceChange})
+	wr, err := WrapWithJournal(&HooksV2{OnBalanceChange: tr.OnBalanceChange, OnNonceChange: tr.OnNonceChange})
 	if err != nil {
 		t.Fatalf("failed to wrap test tracer: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestJournalTopRevert(t *testing.T) {
 
 func TestJournalNestedCalls(t *testing.T) {
 	tr := &testTracer{}
-	wr, err := WrapWithJournal(&Hooks{OnBalanceChange: tr.OnBalanceChange, OnNonceChange: tr.OnNonceChange})
+	wr, err := WrapWithJournal(&HooksV2{OnBalanceChange: tr.OnBalanceChange, OnNonceChange: tr.OnNonceChange})
 	if err != nil {
 		t.Fatalf("failed to wrap test tracer: %v", err)
 	}

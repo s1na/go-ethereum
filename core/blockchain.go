@@ -258,7 +258,7 @@ type BlockChain struct {
 	prefetcher Prefetcher
 	processor  Processor // Block transaction processor interface
 	vmConfig   vm.Config
-	logger     *tracing.Hooks
+	logger     *tracing.HooksV2
 }
 
 // NewBlockChain returns a fully initialised block chain using information

@@ -272,29 +272,51 @@ type HooksV2 struct {
 	OnBlockHashRead BlockHashReadHook
 }
 
-// copyHooks creates a new instance of T with all implemented hooks copied from the original.
-func copyHooks[T any](h *T) *T {
-	copied := new(T)
+// copyHooks creates a new instance of U with all implemented hooks copied from the original T,
+// except for those specified in the exclude parameter.
+func copyHooks[T, U any](h *T, exclude ...string) *U {
+	copied := new(U)
 	srcValue := reflect.ValueOf(h).Elem()
 	dstValue := reflect.ValueOf(copied).Elem()
 
+	excludeMap := make(map[string]bool)
+	for _, field := range exclude {
+		excludeMap[field] = true
+	}
+
 	for i := 0; i < srcValue.NumField(); i++ {
-		field := srcValue.Field(i)
-		if !field.IsNil() {
-			dstValue.Field(i).Set(field)
+		srcField := srcValue.Type().Field(i)
+		srcFieldValue := srcValue.Field(i)
+
+		if srcFieldValue.IsNil() || excludeMap[srcField.Name] {
+			continue
+		}
+
+		dstField := dstValue.FieldByName(srcField.Name)
+		if dstField.IsValid() && dstField.CanSet() {
+			dstField.Set(srcFieldValue)
 		}
 	}
+
 	return copied
 }
 
 // Copy creates a new Hooks instance with all implemented hooks copied from the original.
 func (h *Hooks) Copy() *Hooks {
-	return copyHooks(h)
+	return copyHooks[Hooks, Hooks](h)
 }
 
 // Copy creates a new HooksV2 instance with all implemented hooks copied from the original.
 func (h *HooksV2) Copy() *HooksV2 {
-	return copyHooks(h)
+	return copyHooks[HooksV2, HooksV2](h)
+}
+
+// ToV2 converts a Hooks instance to a HooksV2 instance.
+//
+// Note that OnSystemCallStart hook is excluded from the copy as it is
+// changed in a backwards-incompatible way.
+func (h *Hooks) ToV2() *HooksV2 {
+	return copyHooks[Hooks, HooksV2](h, "OnSystemCallStart")
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful

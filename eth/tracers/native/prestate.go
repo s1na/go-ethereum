@@ -89,7 +89,7 @@ func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Trac
 		deleted: make(map[common.Address]bool),
 	}
 	return &tracers.Tracer{
-		Hooks: &tracing.Hooks{
+		HooksV2: &tracing.HooksV2{
 			OnTxStart: t.OnTxStart,
 			OnTxEnd:   t.OnTxEnd,
 			OnOpcode:  t.OnOpcode,

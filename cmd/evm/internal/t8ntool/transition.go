@@ -102,14 +102,14 @@ func Transition(ctx *cli.Context) error {
 			if err != nil {
 				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
-			var l *tracing.Hooks
+			var l *tracing.HooksV2
 			if ctx.Bool(TraceEnableCallFramesFlag.Name) {
 				l = logger.NewJSONLoggerWithCallFrames(logConfig, traceFile)
 			} else {
 				l = logger.NewJSONLogger(logConfig, traceFile)
 			}
 			tracer := &tracers.Tracer{
-				Hooks: l,
+				HooksV2: l,
 				// jsonLogger streams out result to file.
 				GetResult: func() (json.RawMessage, error) { return nil, nil },
 				Stop:      func(err error) {},

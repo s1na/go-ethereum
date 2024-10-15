@@ -58,17 +58,17 @@ type jsonLogger struct {
 	encoder *json.Encoder
 	cfg     *Config
 	env     *tracing.VMContext
-	hooks   *tracing.Hooks
+	hooks   *tracing.HooksV2
 }
 
 // NewJSONLogger creates a new EVM tracer that prints execution steps as JSON objects
 // into the provided stream.
-func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
+func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.HooksV2 {
 	l := &jsonLogger{encoder: json.NewEncoder(writer), cfg: cfg}
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
-	l.hooks = &tracing.Hooks{
+	l.hooks = &tracing.HooksV2{
 		OnTxStart:         l.OnTxStart,
 		OnSystemCallStart: l.onSystemCallStart,
 		OnExit:            l.OnEnd,
@@ -80,12 +80,12 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
 
 // NewJSONLoggerWithCallFrames creates a new EVM tracer that prints execution steps as JSON objects
 // into the provided stream. It also includes call frames in the output.
-func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.Hooks {
+func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.HooksV2 {
 	l := &jsonLogger{encoder: json.NewEncoder(writer), cfg: cfg}
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
-	l.hooks = &tracing.Hooks{
+	l.hooks = &tracing.HooksV2{
 		OnTxStart:         l.OnTxStart,
 		OnSystemCallStart: l.onSystemCallStart,
 		OnEnter:           l.OnEnter,
@@ -130,7 +130,7 @@ func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracin
 func (l *jsonLogger) onSystemCallStart(_ *tracing.VMContext) {
 	// Process no events while in system call.
 	hooks := *l.hooks
-	*l.hooks = tracing.Hooks{
+	*l.hooks = tracing.HooksV2{
 		OnSystemCallEnd: func() {
 			*l.hooks = hooks
 		},

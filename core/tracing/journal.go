@@ -34,7 +34,7 @@ type revision struct {
 // It will emit the state change hooks with reverse values when a call reverts.
 type journal struct {
 	entries []entry
-	hooks   *Hooks
+	hooks   *HooksV2
 
 	validRevisions []revision
 	nextRevisionId int
@@ -42,11 +42,11 @@ type journal struct {
 }
 
 type entry interface {
-	revert(tracer *Hooks)
+	revert(tracer *HooksV2)
 }
 
 // WrapWithJournal wraps the given tracer with a journaling layer.
-func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
+func WrapWithJournal(hooks *HooksV2) (*HooksV2, error) {
 	if hooks == nil {
 		return nil, fmt.Errorf("wrapping nil tracer")
 	}
@@ -98,7 +98,7 @@ func (j *journal) snapshot() int {
 }
 
 // revertToSnapshot reverts all state changes made since the given revision.
-func (j *journal) revertToSnapshot(revid int, hooks *Hooks) {
+func (j *journal) revertToSnapshot(revid int, hooks *HooksV2) {
 	// Find the snapshot in the stack of valid snapshots.
 	idx := sort.Search(len(j.validRevisions), func(i int) bool {
 		return j.validRevisions[i].id >= revid
@@ -114,7 +114,7 @@ func (j *journal) revertToSnapshot(revid int, hooks *Hooks) {
 }
 
 // revert undoes a batch of journaled modifications.
-func (j *journal) revert(hooks *Hooks, snapshot int) {
+func (j *journal) revert(hooks *HooksV2, snapshot int) {
 	for i := len(j.entries) - 1; i >= snapshot; i-- {
 		// Undo the changes made by the operation
 		j.entries[i].revert(hooks)
@@ -212,25 +212,25 @@ type (
 	}
 )
 
-func (b balanceChange) revert(hooks *Hooks) {
+func (b balanceChange) revert(hooks *HooksV2) {
 	if hooks.OnBalanceChange != nil {
 		hooks.OnBalanceChange(b.addr, b.new, b.prev, BalanceChangeRevert)
 	}
 }
 
-func (n nonceChange) revert(hooks *Hooks) {
+func (n nonceChange) revert(hooks *HooksV2) {
 	if hooks.OnNonceChange != nil {
 		hooks.OnNonceChange(n.addr, n.new, n.prev)
 	}
 }
 
-func (c codeChange) revert(hooks *Hooks) {
+func (c codeChange) revert(hooks *HooksV2) {
 	if hooks.OnCodeChange != nil {
 		hooks.OnCodeChange(c.addr, c.newCodeHash, c.newCode, c.prevCodeHash, c.prevCode)
 	}
 }
 
-func (s storageChange) revert(hooks *Hooks) {
+func (s storageChange) revert(hooks *HooksV2) {
 	if hooks.OnStorageChange != nil {
 		hooks.OnStorageChange(s.addr, s.slot, s.new, s.prev)
 	}

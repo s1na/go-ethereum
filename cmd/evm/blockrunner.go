@@ -51,7 +51,7 @@ func blockTestCmd(ctx *cli.Context) error {
 		return errors.New("path-to-test argument required")
 	}
 
-	var tracer *tracing.Hooks
+	var tracer *tracing.HooksV2
 	// Configure the EVM logger
 	if ctx.Bool(MachineFlag.Name) {
 		tracer = logger.NewJSONLogger(&logger.Config{

@@ -125,8 +125,8 @@ func NewAccessListTracer(acl types.AccessList, from, to common.Address, precompi
 	}
 }
 
-func (a *AccessListTracer) Hooks() *tracing.Hooks {
-	return &tracing.Hooks{
+func (a *AccessListTracer) Hooks() *tracing.HooksV2 {
+	return &tracing.HooksV2{
 		OnOpcode: a.OnOpcode,
 	}
 }

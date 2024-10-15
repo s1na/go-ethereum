@@ -38,10 +38,15 @@ type Context struct {
 // This involves a method to retrieve results and one to
 // stop tracing.
 type Tracer struct {
-	*tracing.Hooks
+	*tracing.HooksV2
 	GetResult func() (json.RawMessage, error)
 	// Stop terminates execution of the tracer at the first opportune moment.
 	Stop func(err error)
+}
+
+// Hooks returns the hooks of the tracer.
+func (t *Tracer) Hooks() *tracing.HooksV2 {
+	return t.HooksV2
 }
 
 type ctorFn func(*Context, json.RawMessage) (*Tracer, error)

@@ -1,3 +1,19 @@
+// Copyright 2024 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package live
 
 import (
@@ -24,25 +40,23 @@ type noop struct{}
 func newNoopTracer(_ json.RawMessage) (*tracing.Hooks, error) {
 	t := &noop{}
 	return &tracing.Hooks{
-		OnTxStart:         t.OnTxStart,
-		OnTxEnd:           t.OnTxEnd,
-		OnEnter:           t.OnEnter,
-		OnExit:            t.OnExit,
-		OnOpcode:          t.OnOpcode,
-		OnFault:           t.OnFault,
-		OnGasChange:       t.OnGasChange,
-		OnBlockchainInit:  t.OnBlockchainInit,
-		OnBlockStart:      t.OnBlockStart,
-		OnBlockEnd:        t.OnBlockEnd,
-		OnSkippedBlock:    t.OnSkippedBlock,
-		OnGenesisBlock:    t.OnGenesisBlock,
-		OnSystemCallStart: t.OnSystemCallStart,
-		OnSystemCallEnd:   t.OnSystemCallEnd,
-		OnBalanceChange:   t.OnBalanceChange,
-		OnNonceChange:     t.OnNonceChange,
-		OnCodeChange:      t.OnCodeChange,
-		OnStorageChange:   t.OnStorageChange,
-		OnLog:             t.OnLog,
+		OnTxStart:        t.OnTxStart,
+		OnTxEnd:          t.OnTxEnd,
+		OnEnter:          t.OnEnter,
+		OnExit:           t.OnExit,
+		OnOpcode:         t.OnOpcode,
+		OnFault:          t.OnFault,
+		OnGasChange:      t.OnGasChange,
+		OnBlockchainInit: t.OnBlockchainInit,
+		OnBlockStart:     t.OnBlockStart,
+		OnBlockEnd:       t.OnBlockEnd,
+		OnSkippedBlock:   t.OnSkippedBlock,
+		OnGenesisBlock:   t.OnGenesisBlock,
+		OnBalanceChange:  t.OnBalanceChange,
+		OnNonceChange:    t.OnNonceChange,
+		OnCodeChange:     t.OnCodeChange,
+		OnStorageChange:  t.OnStorageChange,
+		OnLog:            t.OnLog,
 	}, nil
 }
 
@@ -82,8 +96,6 @@ func (t *noop) OnSystemCallStart() {}
 
 func (t *noop) OnSystemCallEnd() {}
 
-func (t *noop) OnReorg(reverted []*types.Block) {}
-
 func (t *noop) OnBalanceChange(a common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
 }
 
@@ -99,20 +111,6 @@ func (t *noop) OnStorageChange(a common.Address, k, prev, new common.Hash) {
 func (t *noop) OnLog(l *types.Log) {
 
 }
-
-func (t *noop) OnBalanceRead(addr common.Address, bal *big.Int) {}
-
-func (t *noop) OnNonceRead(addr common.Address, nonce uint64) {}
-
-func (t *noop) OnCodeRead(addr common.Address, code []byte) {}
-
-func (t *noop) OnCodeSizeRead(addr common.Address, size int) {}
-
-func (t *noop) OnCodeHashRead(addr common.Address, hash common.Hash) {}
-
-func (t *noop) OnStorageRead(addr common.Address, slot, val common.Hash) {}
-
-func (t *noop) OnBlockHashRead(number uint64, hash common.Hash) {}
 
 func (t *noop) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {
 }

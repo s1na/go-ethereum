@@ -543,6 +543,7 @@ var (
 	VMTraceJsonConfigFlag = &cli.StringFlag{
 		Name:     "vmtrace.jsonconfig",
 		Usage:    "Tracer configuration (JSON)",
+		Value:    "{}",
 		Category: flags.VMCategory,
 	}
 	// API options.
@@ -1866,9 +1867,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 				if err != nil {
 					Fatalf("Could not read genesis from database: %v", err)
 				}
-				if !genesis.Config.TerminalTotalDifficultyPassed {
-					Fatalf("Bad developer-mode genesis configuration: terminalTotalDifficultyPassed must be true")
-				}
 				if genesis.Config.TerminalTotalDifficulty == nil {
 					Fatalf("Bad developer-mode genesis configuration: terminalTotalDifficulty must be specified")
 				} else if genesis.Config.TerminalTotalDifficulty.Cmp(big.NewInt(0)) != 0 {
@@ -1899,13 +1897,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// VM tracing config.
 	if ctx.IsSet(VMTraceFlag.Name) {
 		if name := ctx.String(VMTraceFlag.Name); name != "" {
-			var config string
-			if ctx.IsSet(VMTraceJsonConfigFlag.Name) {
-				config = ctx.String(VMTraceJsonConfigFlag.Name)
-			}
-
 			cfg.VMTrace = name
-			cfg.VMTraceJsonConfig = config
+			cfg.VMTraceJsonConfig = ctx.String(VMTraceJsonConfigFlag.Name)
 		}
 	}
 }
@@ -2186,10 +2179,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	}
 	if ctx.IsSet(VMTraceFlag.Name) {
 		if name := ctx.String(VMTraceFlag.Name); name != "" {
-			var config json.RawMessage
-			if ctx.IsSet(VMTraceJsonConfigFlag.Name) {
-				config = json.RawMessage(ctx.String(VMTraceJsonConfigFlag.Name))
-			}
+			config := json.RawMessage(ctx.String(VMTraceJsonConfigFlag.Name))
 			t, err := tracers.LiveDirectory.NewV2(name, config)
 			if err != nil {
 				Fatalf("Failed to create tracer %q: %v", name, err)

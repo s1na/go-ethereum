@@ -75,9 +75,6 @@ type (
 	// LiveConstructor is the constructor for a live tracer.
 	LiveConstructor = func(config json.RawMessage) (*Hooks, error)
 
-	// LiveConstructorV2 is the v2 constructor for a live tracer.
-	LiveConstructorV2 = func(config json.RawMessage) (*HooksV2, error)
-
 	/*
 		- VM events -
 	*/
@@ -157,10 +154,6 @@ type (
 	// will not be invoked.
 	OnSystemCallStartHook = func()
 
-	// OnSystemCallStartHookV2 is called when a system call is about to be executed. Refer
-	// to docs for OnSystemCallStartHook.
-	OnSystemCallStartHookV2 = func(vm *VMContext)
-
 	// OnSystemCallEndHook is called when a system call has finished executing. Today,
 	// this hook is invoked when the EIP-4788 system call is about to be executed to set the
 	// beacon block root.
@@ -184,27 +177,6 @@ type (
 
 	// LogHook is called when a log is emitted.
 	LogHook = func(log *types.Log)
-
-	// BalanceReadHook is called when EVM reads the balance of an account.
-	BalanceReadHook = func(addr common.Address, bal *big.Int)
-
-	// NonceReadHook is called when EVM reads the nonce of an account.
-	NonceReadHook = func(addr common.Address, nonce uint64)
-
-	// CodeReadHook is called when EVM reads the code of an account.
-	CodeReadHook = func(addr common.Address, code []byte)
-
-	// CodeSizeReadHook is called when EVM reads the code size of an account.
-	CodeSizeReadHook = func(addr common.Address, size int)
-
-	// CodeHashReadHook is called when EVM reads the code hash of an account.
-	CodeHashReadHook = func(addr common.Address, hash common.Hash)
-
-	// StorageReadHook is called when EVM reads a storage slot of an account.
-	StorageReadHook = func(addr common.Address, slot, value common.Hash)
-
-	// BlockHashReadHook is called when EVM reads the blockhash of a block.
-	BlockHashReadHook = func(blockNumber uint64, hash common.Hash)
 )
 
 type Hooks struct {
@@ -233,48 +205,9 @@ type Hooks struct {
 	OnLog           LogHook
 }
 
-type HooksV2 struct {
-	// V1 hooks minus OnBlockchainInit which is removed.
-	// VM events
-	OnTxStart   TxStartHook
-	OnTxEnd     TxEndHook
-	OnEnter     EnterHook
-	OnExit      ExitHook
-	OnOpcode    OpcodeHook
-	OnFault     FaultHook
-	OnGasChange GasChangeHook
-	// Chain events
-	OnBlockchainInit BlockchainInitHook
-	OnClose          CloseHook
-	OnBlockStart     BlockStartHook
-	OnBlockEnd       BlockEndHook
-	OnSkippedBlock   SkippedBlockHook
-	OnGenesisBlock   GenesisBlockHook
-	OnSystemCallEnd  OnSystemCallEndHook
-	// State events
-	OnBalanceChange BalanceChangeHook
-	OnNonceChange   NonceChangeHook
-	OnCodeChange    CodeChangeHook
-	OnStorageChange StorageChangeHook
-	OnLog           LogHook
-
-	// V2 changes
-	OnReorg           ReorgHook
-	OnSystemCallStart OnSystemCallStartHookV2
-	// State reads
-	OnBalanceRead  BalanceReadHook
-	OnNonceRead    NonceReadHook
-	OnCodeRead     CodeReadHook
-	OnCodeSizeRead CodeSizeReadHook
-	OnCodeHashRead CodeHashReadHook
-	OnStorageRead  StorageReadHook
-	// Block hash read
-	OnBlockHashRead BlockHashReadHook
-}
-
-// copyHooks creates a new instance of U with all implemented hooks copied from the original T,
+// CopyHooks creates a new instance of U with all implemented hooks copied from the original T,
 // except for those specified in the exclude parameter.
-func copyHooks[T, U any](h *T, exclude ...string) *U {
+func CopyHooks[T, U any](h *T, exclude ...string) *U {
 	copied := new(U)
 	srcValue := reflect.ValueOf(h).Elem()
 	dstValue := reflect.ValueOf(copied).Elem()
@@ -303,20 +236,7 @@ func copyHooks[T, U any](h *T, exclude ...string) *U {
 
 // Copy creates a new Hooks instance with all implemented hooks copied from the original.
 func (h *Hooks) Copy() *Hooks {
-	return copyHooks[Hooks, Hooks](h)
-}
-
-// Copy creates a new HooksV2 instance with all implemented hooks copied from the original.
-func (h *HooksV2) Copy() *HooksV2 {
-	return copyHooks[HooksV2, HooksV2](h)
-}
-
-// ToV2 converts a Hooks instance to a HooksV2 instance.
-//
-// Note that OnSystemCallStart hook is excluded from the copy as it is
-// changed in a backwards-incompatible way.
-func (h *Hooks) ToV2() *HooksV2 {
-	return copyHooks[Hooks, HooksV2](h, "OnSystemCallStart")
+	return CopyHooks[Hooks, Hooks](h)
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful

@@ -20,7 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/tracing"
+	tracing "github.com/ethereum/go-ethereum/core/tracing/v2"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
@@ -68,8 +68,8 @@ func newTracer(traceTransfers bool, blockNumber uint64, blockHash, txHash common
 	}
 }
 
-func (t *tracer) Hooks() *tracing.HooksV2 {
-	return &tracing.HooksV2{
+func (t *tracer) Hooks() *tracing.Hooks {
+	return &tracing.Hooks{
 		OnEnter: t.onEnter,
 		OnExit:  t.onExit,
 		OnLog:   t.onLog,

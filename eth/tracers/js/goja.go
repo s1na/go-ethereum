@@ -25,7 +25,7 @@ import (
 	"sync"
 
 	"github.com/dop251/goja"
-	"github.com/ethereum/go-ethereum/core/tracing"
+	tracing "github.com/ethereum/go-ethereum/core/tracing/v2"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/internal"
@@ -235,7 +235,7 @@ func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage, chainCo
 	t.logValue = t.log.setupObject()
 
 	return &tracers.Tracer{
-		HooksV2: &tracing.HooksV2{
+		Hooks: &tracing.Hooks{
 			OnTxStart: t.OnTxStart,
 			OnTxEnd:   t.OnTxEnd,
 			OnEnter:   t.OnEnter,

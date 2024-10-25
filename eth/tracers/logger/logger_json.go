@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/tracing"
+	tracing "github.com/ethereum/go-ethereum/core/tracing/v2"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
@@ -58,17 +58,17 @@ type jsonLogger struct {
 	encoder *json.Encoder
 	cfg     *Config
 	env     *tracing.VMContext
-	hooks   *tracing.HooksV2
+	hooks   *tracing.Hooks
 }
 
 // NewJSONLogger creates a new EVM tracer that prints execution steps as JSON objects
 // into the provided stream.
-func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.HooksV2 {
+func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
 	l := &jsonLogger{encoder: json.NewEncoder(writer), cfg: cfg}
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
-	l.hooks = &tracing.HooksV2{
+	l.hooks = &tracing.Hooks{
 		OnTxStart:         l.OnTxStart,
 		OnSystemCallStart: l.onSystemCallStart,
 		OnExit:            l.OnEnd,
@@ -80,12 +80,12 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.HooksV2 {
 
 // NewJSONLoggerWithCallFrames creates a new EVM tracer that prints execution steps as JSON objects
 // into the provided stream. It also includes call frames in the output.
-func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.HooksV2 {
+func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.Hooks {
 	l := &jsonLogger{encoder: json.NewEncoder(writer), cfg: cfg}
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
-	l.hooks = &tracing.HooksV2{
+	l.hooks = &tracing.Hooks{
 		OnTxStart:         l.OnTxStart,
 		OnSystemCallStart: l.onSystemCallStart,
 		OnEnter:           l.OnEnter,
@@ -130,7 +130,7 @@ func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracin
 func (l *jsonLogger) onSystemCallStart(ctx *tracing.VMContext) {
 	// Process no events while in system call.
 	hooks := *l.hooks
-	*l.hooks = tracing.HooksV2{
+	*l.hooks = tracing.Hooks{
 		OnSystemCallEnd: func() {
 			*l.hooks = hooks
 		},

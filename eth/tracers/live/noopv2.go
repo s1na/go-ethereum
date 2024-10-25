@@ -21,14 +21,13 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/tracing"
+	tracing "github.com/ethereum/go-ethereum/core/tracing/v2"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 func init() {
-	tracers.LiveDirectory.RegisterV2("noopv2", newNoopV2Tracer)
+	tracing.LiveDirectory.Register("noopv2", newNoopV2Tracer)
 }
 
 // noopV2 is a no-op live tracer. It's there to
@@ -37,9 +36,9 @@ func init() {
 // as soon as we have a real live tracer.
 type noopV2 struct{}
 
-func newNoopV2Tracer(_ json.RawMessage) (*tracing.HooksV2, error) {
+func newNoopV2Tracer(_ json.RawMessage) (*tracing.Hooks, error) {
 	t := &noopV2{}
-	return &tracing.HooksV2{
+	return &tracing.Hooks{
 		OnTxStart:         t.OnTxStart,
 		OnTxEnd:           t.OnTxEnd,
 		OnEnter:           t.OnEnter,
@@ -54,7 +53,6 @@ func newNoopV2Tracer(_ json.RawMessage) (*tracing.HooksV2, error) {
 		OnGenesisBlock:    t.OnGenesisBlock,
 		OnSystemCallStart: t.OnSystemCallStart,
 		OnSystemCallEnd:   t.OnSystemCallEnd,
-		OnReorg:           t.OnReorg,
 		OnBalanceChange:   t.OnBalanceChange,
 		OnNonceChange:     t.OnNonceChange,
 		OnCodeChange:      t.OnCodeChange,

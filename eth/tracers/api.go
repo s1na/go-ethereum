@@ -1006,7 +1006,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 	if config.Tracer == nil {
 		logger := logger.NewStructLogger(config.Config)
 		tracer = &Tracer{
-			HooksV2:   logger.Hooks(),
+			Hooks:     logger.Hooks(),
 			GetResult: logger.GetResult,
 			Stop:      logger.Stop,
 		}
@@ -1017,7 +1017,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 		}
 	}
 	// The actual TxContext will be created as part of ApplyTransactionWithEVM.
-	vmenv := vm.NewEVM(vmctx, vm.TxContext{GasPrice: message.GasPrice, BlobFeeCap: message.BlobGasFeeCap}, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer.Hooks(), NoBaseFee: true})
+	vmenv := vm.NewEVM(vmctx, vm.TxContext{GasPrice: message.GasPrice, BlobFeeCap: message.BlobGasFeeCap}, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer.Hooks, NoBaseFee: true})
 
 	// Define a meaningful timeout of a single transaction trace
 	if config.Timeout != nil {

@@ -26,16 +26,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
-	"github.com/ethereum/go-ethereum/core/tracing"
+	tracing "github.com/ethereum/go-ethereum/core/tracing/v2"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 func init() {
-	tracers.LiveDirectory.RegisterV2("supply", newSupplyTracer)
+	tracing.LiveDirectory.Register("supply", newSupplyTracer)
 }
 
 type supplyInfoIssuance struct {
@@ -90,7 +89,7 @@ type supplyTracerConfig struct {
 	MaxSize int    `json:"maxSize"` // MaxSize is the maximum size in megabytes of the tracer log file before it gets rotated. It defaults to 100 megabytes.
 }
 
-func newSupplyTracer(cfg json.RawMessage) (*tracing.HooksV2, error) {
+func newSupplyTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 	var config supplyTracerConfig
 	if err := json.Unmarshal(cfg, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config: %v", err)
@@ -111,7 +110,7 @@ func newSupplyTracer(cfg json.RawMessage) (*tracing.HooksV2, error) {
 		delta:  newSupplyInfo(),
 		logger: logger,
 	}
-	return &tracing.HooksV2{
+	return &tracing.Hooks{
 		OnBlockStart:    t.onBlockStart,
 		OnBlockEnd:      t.onBlockEnd,
 		OnGenesisBlock:  t.onGenesisBlock,

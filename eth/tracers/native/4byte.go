@@ -23,7 +23,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/tracing"
+	tracing "github.com/ethereum/go-ethereum/core/tracing/v2"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
@@ -64,7 +64,7 @@ func newFourByteTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *p
 		chainConfig: chainConfig,
 	}
 	return &tracers.Tracer{
-		HooksV2: &tracing.HooksV2{
+		Hooks: &tracing.Hooks{
 			OnTxStart: t.OnTxStart,
 			OnEnter:   t.OnEnter,
 		},

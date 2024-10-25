@@ -21,7 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/tracing"
+	tracing "github.com/ethereum/go-ethereum/core/tracing/v2"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
@@ -57,7 +57,7 @@ func newMuxTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params
 
 	t := &muxTracer{names: names, tracers: objects}
 	return &tracers.Tracer{
-		HooksV2: &tracing.HooksV2{
+		Hooks: &tracing.Hooks{
 			OnTxStart:       t.OnTxStart,
 			OnTxEnd:         t.OnTxEnd,
 			OnEnter:         t.OnEnter,

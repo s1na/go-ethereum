@@ -21,7 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/stateless"
-	"github.com/ethereum/go-ethereum/core/tracing"
+	tracing "github.com/ethereum/go-ethereum/core/tracing/v2"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -33,14 +33,14 @@ import (
 // on state operations.
 type hookedStateDB struct {
 	inner *StateDB
-	hooks *tracing.HooksV2
+	hooks *tracing.Hooks
 }
 
 // NewHookedState wraps the given stateDb with the given hooks
-func NewHookedState(stateDb *StateDB, hooks *tracing.HooksV2) *hookedStateDB {
+func NewHookedState(stateDb *StateDB, hooks *tracing.Hooks) *hookedStateDB {
 	s := &hookedStateDB{stateDb, hooks}
 	if s.hooks == nil {
-		s.hooks = new(tracing.HooksV2)
+		s.hooks = new(tracing.Hooks)
 	}
 	return s
 }

@@ -21,7 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/tracing"
+	tracing "github.com/ethereum/go-ethereum/core/tracing/v2"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -39,15 +39,10 @@ type Context struct {
 // This involves a method to retrieve results and one to
 // stop tracing.
 type Tracer struct {
-	*tracing.HooksV2
+	*tracing.Hooks
 	GetResult func() (json.RawMessage, error)
 	// Stop terminates execution of the tracer at the first opportune moment.
 	Stop func(err error)
-}
-
-// Hooks returns the hooks of the tracer.
-func (t *Tracer) Hooks() *tracing.HooksV2 {
-	return t.HooksV2
 }
 
 type ctorFn func(*Context, json.RawMessage, *params.ChainConfig) (*Tracer, error)

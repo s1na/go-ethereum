@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/tracing"
+	tracing "github.com/ethereum/go-ethereum/core/tracing/v2"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
@@ -132,8 +132,8 @@ func NewStructLogger(cfg *Config) *StructLogger {
 	return logger
 }
 
-func (l *StructLogger) Hooks() *tracing.HooksV2 {
-	return &tracing.HooksV2{
+func (l *StructLogger) Hooks() *tracing.Hooks {
+	return &tracing.Hooks{
 		OnTxStart: l.OnTxStart,
 		OnTxEnd:   l.OnTxEnd,
 		OnExit:    l.OnExit,
@@ -345,8 +345,8 @@ func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
 	return l
 }
 
-func (t *mdLogger) Hooks() *tracing.HooksV2 {
-	return &tracing.HooksV2{
+func (t *mdLogger) Hooks() *tracing.Hooks {
+	return &tracing.Hooks{
 		OnTxStart: t.OnTxStart,
 		OnEnter:   t.OnEnter,
 		OnExit:    t.OnExit,

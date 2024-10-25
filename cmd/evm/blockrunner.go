@@ -26,7 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/tracing"
+	tracing "github.com/ethereum/go-ethereum/core/tracing/v2"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
@@ -51,7 +51,7 @@ func blockTestCmd(ctx *cli.Context) error {
 		return errors.New("path-to-test argument required")
 	}
 
-	var tracer *tracing.HooksV2
+	var tracer *tracing.Hooks
 	// Configure the EVM logger
 	if ctx.Bool(MachineFlag.Name) {
 		tracer = logger.NewJSONLogger(&logger.Config{

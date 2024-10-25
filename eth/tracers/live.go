@@ -18,46 +18,41 @@ package tracers
 
 import (
 	"encoding/json"
-	"errors"
+	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	tracingV2 "github.com/ethereum/go-ethereum/core/tracing/v2"
 )
 
 // LiveDirectory is the collection of tracers which can be used
 // during normal block import operations.
-var LiveDirectory = liveDirectory{elems: make(map[string]tracing.LiveConstructorV2)}
+//
+// Deprecated: It is left for backwards-compatibility with v1 tracers.
+var LiveDirectory = liveDirectory{}
 
-type liveDirectory struct {
-	elems map[string]tracing.LiveConstructorV2
-}
+type liveDirectory struct{}
 
 // Register registers a tracer constructor by name.
 func (d *liveDirectory) Register(name string, f tracing.LiveConstructor) {
-	d.elems[name] = wrapV1(f)
+	tracingV2.LiveDirectory.Register(name, wrapV1(f))
 }
 
-// RegisterV2 registers a tracer constructor by name.
-func (d *liveDirectory) RegisterV2(name string, f tracing.LiveConstructorV2) {
-	d.elems[name] = f
-}
-
-// NewV2 instantiates a tracer by name.
-func (d *liveDirectory) NewV2(name string, config json.RawMessage) (*tracing.HooksV2, error) {
-	if f, ok := d.elems[name]; ok {
-		return f(config)
-	}
-	return nil, errors.New("not found")
-}
-
-func wrapV1(ctor tracing.LiveConstructor) tracing.LiveConstructorV2 {
-	return func(config json.RawMessage) (*tracing.HooksV2, error) {
+func wrapV1(ctor tracing.LiveConstructor) tracingV2.NewLiveTracer {
+	return func(config json.RawMessage) (*tracingV2.Hooks, error) {
 		hooks, err := ctor(config)
 		if err != nil {
 			return nil, err
 		}
-		v2 := hooks.ToV2()
-		v2.OnSystemCallStart = func(ctx *tracing.VMContext) {
+		v2 := tracingV2.ToV2(hooks)
+		v2.OnSystemCallStart = func(ctx *tracingV2.VMContext) {
 			hooks.OnSystemCallStart()
+		}
+		v2.OnBalanceChange = func(addr common.Address, prev, new *big.Int, reason tracingV2.BalanceChangeReason) {
+			hooks.OnBalanceChange(addr, prev, new, tracing.BalanceChangeReason(reason))
+		}
+		v2.OnGasChange = func(prev, new uint64, reason tracingV2.GasChangeReason) {
+			hooks.OnGasChange(prev, new, tracing.GasChangeReason(reason))
 		}
 		return v2, nil
 	}

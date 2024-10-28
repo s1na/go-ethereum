@@ -179,6 +179,9 @@ type (
 	LogHook = func(log *types.Log)
 )
 
+// Hooks is a collection of hooks in EVM execution, blockchain, and state logic.
+// It is used by live tracers which run parallel to the node's execution, as well
+// as the debug tracing API.
 type Hooks struct {
 	// VM events
 	OnTxStart   TxStartHook

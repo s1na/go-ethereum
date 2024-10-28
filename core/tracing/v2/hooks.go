@@ -11,10 +11,19 @@ import (
 
 // Type aliases so tracers don't have to import both versions.
 type (
-	VMContext  = tracing.VMContext
-	OpContext  = tracing.OpContext
+	// VMContext provides the context for the EVM execution.
+	VMContext = tracing.VMContext
+
+	// OpContext provides the context at which the opcode is being
+	// executed in, including the memory, stack and various contract-level information.
+	OpContext = tracing.OpContext
+
+	// BlockEvent is emitted upon tracing an incoming block.
+	// It contains the block as well as consensus related information.
 	BlockEvent = tracing.BlockEvent
-	StateDB    = tracing.StateDB
+
+	// StateDB gives tracers access to the whole state.
+	StateDB = tracing.StateDB
 )
 
 type (
@@ -27,9 +36,9 @@ type (
 	// GasChangeHook is invoked when the gas changes.
 	GasChangeHook = func(old, new uint64, reason GasChangeReason)
 
-	// OnSystemCallStartHookV2 is called when a system call is about to be executed. Refer
+	// OnSystemCallStartHook is called when a system call is about to be executed. Refer
 	// to docs for OnSystemCallStartHook.
-	OnSystemCallStartHookV2 = func(vm *tracing.VMContext)
+	OnSystemCallStartHook = func(vm *tracing.VMContext)
 
 	// BalanceReadHook is called when EVM reads the balance of an account.
 	BalanceReadHook = func(addr common.Address, bal *big.Int)
@@ -53,6 +62,9 @@ type (
 	BlockHashReadHook = func(blockNumber uint64, hash common.Hash)
 )
 
+// Hooks is a collection of hooks in EVM execution, blockchain, and state logic.
+// It is used by live tracers which run parallel to the node's execution, as well
+// as the debug tracing API.
 type Hooks struct {
 	// V1 hooks minus OnBlockchainInit which is removed.
 	// VM events
@@ -80,7 +92,7 @@ type Hooks struct {
 	OnGasChange     GasChangeHook
 
 	// V2 changes
-	OnSystemCallStart OnSystemCallStartHookV2
+	OnSystemCallStart OnSystemCallStartHook
 	// State reads
 	OnBalanceRead  BalanceReadHook
 	OnNonceRead    NonceReadHook

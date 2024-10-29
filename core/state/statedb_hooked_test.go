@@ -46,6 +46,7 @@ func TestBurn(t *testing.T) {
 			}
 		},
 	})
+	defer hooked.Close()
 	createAndDestroy := func(addr common.Address) {
 		hooked.AddBalance(addr, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
 		hooked.CreateContract(addr)
@@ -135,6 +136,7 @@ func TestHooks(t *testing.T) {
 			emitF("%v.code hash read: %v", addr, hash)
 		},
 	})
+	defer sdb.Close()
 	sdb.AddBalance(common.Address{0xaa}, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
 	sdb.SubBalance(common.Address{0xaa}, uint256.NewInt(50), tracing.BalanceChangeTransfer)
 	sdb.SetNonce(common.Address{0xaa}, 1337)

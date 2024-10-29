@@ -189,7 +189,9 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	)
 	var tracingStateDB = vm.StateDB(sim.state)
 	if hooks := tracer.Hooks(); hooks != nil {
-		tracingStateDB = state.NewHookedState(sim.state, hooks)
+		tsd := state.NewHookedState(sim.state, hooks)
+		defer tsd.Close()
+		tracingStateDB = tsd
 	}
 	// It is possible to override precompiles with EVM bytecode, or
 	// move them to another address.

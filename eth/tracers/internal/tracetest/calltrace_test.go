@@ -127,7 +127,9 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			}
 			logState := vm.StateDB(st.StateDB)
 			if tracer.Hooks != nil {
-				logState = state.NewHookedState(st.StateDB, tracer.Hooks)
+				tsd := state.NewHookedState(st.StateDB, tracer.Hooks)
+				defer tsd.Close()
+				logState = tsd
 			}
 			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 			if err != nil {
@@ -365,7 +367,9 @@ func TestInternals(t *testing.T) {
 
 			logState := vm.StateDB(st.StateDB)
 			if hooks := tc.tracer.Hooks; hooks != nil {
-				logState = state.NewHookedState(st.StateDB, hooks)
+				tsd := state.NewHookedState(st.StateDB, hooks)
+				defer tsd.Close()
+				logState = tsd
 			}
 
 			tx, err := types.SignNewTx(key, signer, &types.LegacyTx{

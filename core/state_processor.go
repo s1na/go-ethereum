@@ -79,7 +79,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
 	var tracingStateDB = vm.StateDB(statedb)
 	if hooks := cfg.Tracer; hooks != nil {
-		tracingStateDB = state.NewHookedState(statedb, hooks)
+		tsd := state.NewHookedState(statedb, hooks)
+		defer tsd.Close()
+		tracingStateDB = tsd
 	}
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, vmenv, tracingStateDB)
@@ -137,7 +139,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (receipt *types.Receipt, err error) {
 	var tracingStateDB = vm.StateDB(statedb)
 	if hooks := evm.Config.Tracer; hooks != nil {
-		tracingStateDB = state.NewHookedState(statedb, hooks)
+		tsd := state.NewHookedState(statedb, hooks)
+		defer tsd.Close()
+		tracingStateDB = tsd
 		if hooks.OnTxStart != nil {
 			hooks.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}

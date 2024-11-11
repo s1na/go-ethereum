@@ -329,6 +329,28 @@ func (r *hookedReader) Storage(addr common.Address, slot common.Hash) (common.Ha
 	return value, err
 }
 
+// Code implements Reader, retrieving the code associated with a particular account.
+func (r *hookedReader) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
+	code, err := r.inner.Code(addr, codeHash)
+	if err == nil && r.hooks.OnCodeLoad != nil {
+		r.hooks.OnCodeLoad(addr, code)
+	}
+	return code, err
+}
+
+// CodeSize implements Reader, returning the size of the code associated with a particular account.
+func (r *hookedReader) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
+	size, err := r.inner.CodeSize(addr, codeHash)
+	if err != nil {
+		return 0, err
+	}
+	code, err := r.inner.Code(addr, codeHash)
+	if err == nil && r.hooks.OnCodeLoad != nil {
+		r.hooks.OnCodeLoad(addr, code)
+	}
+	return size, err
+}
+
 // Copy implements Reader
 func (r *hookedReader) Copy() Reader {
 	return &hookedReader{

@@ -204,6 +204,9 @@ type (
 
 	// StorageLoadHook is called when a storage slot is loaded from the state.
 	StorageLoadHook = func(addr common.Address, slot common.Hash, value common.Hash)
+
+	// CodeLoadHook is called when the code of an account is loaded from the state.
+	CodeLoadHook = func(addr common.Address, code []byte)
 )
 
 type Hooks struct {
@@ -243,6 +246,7 @@ type Hooks struct {
 	// Account load
 	OnAccountLoad AccountLoadHook
 	OnStorageLoad StorageLoadHook
+	OnCodeLoad    CodeLoadHook
 }
 
 // Copy creates a new Hooks instance with all implemented hooks copied from the original.

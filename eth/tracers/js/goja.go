@@ -25,7 +25,7 @@ import (
 	"sync"
 
 	"github.com/dop251/goja"
-	"github.com/ethereum/go-ethereum/core/tracing"
+	tracing "github.com/ethereum/go-ethereum/core/tracing/v2"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/internal"

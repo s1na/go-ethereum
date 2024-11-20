@@ -18,33 +18,42 @@ package tracers
 
 import (
 	"encoding/json"
-	"errors"
+	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	tracingV2 "github.com/ethereum/go-ethereum/core/tracing/v2"
 )
-
-type ctorFunc func(config json.RawMessage) (*tracing.Hooks, error)
 
 // LiveDirectory is the collection of tracers which can be used
 // during normal block import operations.
-var LiveDirectory = liveDirectory{elems: make(map[string]ctorFunc)}
+//
+// Deprecated: It is left for backwards-compatibility with v1 tracers.
+var LiveDirectory = liveDirectory{}
 
-type liveDirectory struct {
-	elems map[string]ctorFunc
-}
+type liveDirectory struct{}
 
 // Register registers a tracer constructor by name.
-func (d *liveDirectory) Register(name string, f ctorFunc) {
-	d.elems[name] = f
+func (d *liveDirectory) Register(name string, f tracing.LiveConstructor) {
+	tracingV2.LiveDirectory.Register(name, wrapV1(f))
 }
 
-// New instantiates a tracer by name.
-func (d *liveDirectory) New(name string, config json.RawMessage) (*tracing.Hooks, error) {
-	if len(config) == 0 {
-		config = json.RawMessage("{}")
+func wrapV1(ctor tracing.LiveConstructor) tracingV2.NewLiveTracer {
+	return func(config json.RawMessage) (*tracingV2.Hooks, error) {
+		hooks, err := ctor(config)
+		if err != nil {
+			return nil, err
+		}
+		v2 := tracingV2.ToV2(hooks)
+		v2.OnSystemCallStart = func(ctx *tracingV2.VMContext) {
+			hooks.OnSystemCallStart()
+		}
+		v2.OnBalanceChange = func(addr common.Address, prev, new *big.Int, reason tracingV2.BalanceChangeReason) {
+			hooks.OnBalanceChange(addr, prev, new, tracing.BalanceChangeReason(reason))
+		}
+		v2.OnGasChange = func(prev, new uint64, reason tracingV2.GasChangeReason) {
+			hooks.OnGasChange(prev, new, tracing.GasChangeReason(reason))
+		}
+		return v2, nil
 	}
-	if f, ok := d.elems[name]; ok {
-		return f(config)
-	}
-	return nil, errors.New("not found")
 }

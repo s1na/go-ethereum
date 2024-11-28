@@ -198,6 +198,15 @@ type (
 
 	// BlockHashReadHook is called when EVM reads the blockhash of a block.
 	BlockHashReadHook = func(blockNumber uint64, hash common.Hash)
+
+	// AccountLoadHook is called when an account is loaded from the state.
+	AccountLoadHook = func(addr common.Address, acc *types.StateAccount)
+
+	// StorageLoadHook is called when a storage slot is loaded from the state.
+	StorageLoadHook = func(addr common.Address, slot common.Hash, value common.Hash)
+
+	// CodeLoadHook is called when the code of an account is loaded from the state.
+	CodeLoadHook = func(addr common.Address, code []byte)
 )
 
 type Hooks struct {
@@ -234,6 +243,10 @@ type Hooks struct {
 	OnStorageRead  StorageReadHook
 	// Block hash read
 	OnBlockHashRead BlockHashReadHook
+	// Account load
+	OnAccountLoad AccountLoadHook
+	OnStorageLoad StorageLoadHook
+	OnCodeLoad    CodeLoadHook
 }
 
 // Copy creates a new Hooks instance with all implemented hooks copied from the original.

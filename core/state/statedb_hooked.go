@@ -42,7 +42,15 @@ func NewHookedState(stateDb *StateDB, hooks *tracing.Hooks) *hookedStateDB {
 	if s.hooks == nil {
 		s.hooks = new(tracing.Hooks)
 	}
+	s.inner.reader = newHookedReader(s.inner.reader, s.hooks)
 	return s
+}
+
+// Close unwraps the inner reader.
+func (s *hookedStateDB) Close() {
+	if rd, ok := s.inner.reader.(*hookedReader); ok {
+		s.inner.reader = rd.inner
+	}
 }
 
 func (s *hookedStateDB) CreateAccount(addr common.Address) {
@@ -286,5 +294,67 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 				s.hooks.OnBalanceChange(addr, bal.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestructBurn)
 			}
 		}
+	}
+}
+
+// hookedReader wraps a Reader and invokes hooks when accounts and storage are loaded
+type hookedReader struct {
+	inner Reader
+	hooks *tracing.Hooks
+}
+
+// newHookedReader creates a new hookedReader that wraps the given reader
+func newHookedReader(reader Reader, hooks *tracing.Hooks) *hookedReader {
+	return &hookedReader{
+		inner: reader,
+		hooks: hooks,
+	}
+}
+
+// Account implements Reader, retrieving the account and invoking OnAccountLoad hook
+func (r *hookedReader) Account(addr common.Address) (*types.StateAccount, error) {
+	acct, err := r.inner.Account(addr)
+	if err == nil && r.hooks.OnAccountLoad != nil {
+		r.hooks.OnAccountLoad(addr, acct)
+	}
+	return acct, err
+}
+
+// Storage implements Reader, retrieving storage and invoking OnStorageLoad hook
+func (r *hookedReader) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
+	value, err := r.inner.Storage(addr, slot)
+	if err == nil && r.hooks.OnStorageLoad != nil {
+		r.hooks.OnStorageLoad(addr, slot, value)
+	}
+	return value, err
+}
+
+// Code implements Reader, retrieving the code associated with a particular account.
+func (r *hookedReader) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
+	code, err := r.inner.Code(addr, codeHash)
+	if err == nil && r.hooks.OnCodeLoad != nil {
+		r.hooks.OnCodeLoad(addr, code)
+	}
+	return code, err
+}
+
+// CodeSize implements Reader, returning the size of the code associated with a particular account.
+func (r *hookedReader) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
+	size, err := r.inner.CodeSize(addr, codeHash)
+	if err != nil {
+		return 0, err
+	}
+	code, err := r.inner.Code(addr, codeHash)
+	if err == nil && r.hooks.OnCodeLoad != nil {
+		r.hooks.OnCodeLoad(addr, code)
+	}
+	return size, err
+}
+
+// Copy implements Reader
+func (r *hookedReader) Copy() Reader {
+	return &hookedReader{
+		inner: r.inner.Copy(),
+		hooks: r.hooks,
 	}
 }

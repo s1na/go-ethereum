@@ -59,6 +59,20 @@ func setDefaults(cfg *Config) {
 			EIP150Block:    new(big.Int),
 			EIP155Block:    new(big.Int),
 			EIP158Block:    new(big.Int),
+			ByzantiumBlock: new(big.Int),
+			XDPoS: &params.XDPoSConfig{
+				Period:              2,
+				Epoch:               900,
+				Reward:              5000,
+				RewardCheckpoint:    900,
+				Gap:                 450,
+				FoudationWalletAddr: common.HexToAddress("xdc92a289fe95a85c53b8d0d113cbaef0c1ec98ac65"),
+				V2: &params.V2{
+					SwitchBlock:   common.TIPV2SwitchBlock,
+					CurrentConfig: params.MainnetV2Configs[0],
+					AllConfigs:    params.MainnetV2Configs,
+				},
+			},
 		}
 	}
 

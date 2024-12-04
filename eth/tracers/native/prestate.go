@@ -37,7 +37,7 @@ import (
 //go:generate go run github.com/fjl/gencodec -type account -field-override accountMarshaling -out gen_account_json.go
 
 func init() {
-	tracers.DefaultDirectory.Register("prestateTracer", newPrestateTracer, false)
+	tracers.DefaultDirectory.Register("prestateTracer", NewPrestateTracer, false)
 }
 
 type stateMap = map[common.Address]*account
@@ -59,7 +59,7 @@ type accountMarshaling struct {
 	Code    hexutil.Bytes
 }
 
-type prestateTracer struct {
+type PrestateTracer struct {
 	env       *tracing.VMContext
 	pre       stateMap
 	post      stateMap
@@ -77,12 +77,12 @@ type prestateTracerConfig struct {
 	DisableStorage bool `json:"disableStorage"` // If true, this tracer will not return the contract storage
 }
 
-func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
+func NewPrestateTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
 	var config prestateTracerConfig
 	if err := json.Unmarshal(cfg, &config); err != nil {
 		return nil, err
 	}
-	t := &prestateTracer{
+	t := &PrestateTracer{
 		pre:     stateMap{},
 		post:    stateMap{},
 		config:  config,
@@ -101,7 +101,7 @@ func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *p
 }
 
 // OnOpcode implements the EVMLogger interface to trace a single step of VM execution.
-func (t *prestateTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *PrestateTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	if err != nil {
 		return
 	}
@@ -147,7 +147,7 @@ func (t *prestateTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scop
 	}
 }
 
-func (t *prestateTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (t *PrestateTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
 	if tx.To() == nil {
 		t.to = crypto.CreateAddress(from, env.StateDB.GetNonce(from))
@@ -161,7 +161,7 @@ func (t *prestateTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction
 	t.lookupAccount(env.Coinbase)
 }
 
-func (t *prestateTracer) OnTxEnd(receipt *types.Receipt, err error) {
+func (t *PrestateTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	if err != nil {
 		return
 	}
@@ -179,7 +179,7 @@ func (t *prestateTracer) OnTxEnd(receipt *types.Receipt, err error) {
 
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).
-func (t *prestateTracer) GetResult() (json.RawMessage, error) {
+func (t *PrestateTracer) GetResult() (json.RawMessage, error) {
 	var res []byte
 	var err error
 	if t.config.DiffMode {
@@ -196,13 +196,26 @@ func (t *prestateTracer) GetResult() (json.RawMessage, error) {
 	return json.RawMessage(res), t.reason
 }
 
+func (t *PrestateTracer) Prestate() *types.GenesisAlloc {
+	alloc := make(types.GenesisAlloc)
+	for addr, state := range t.pre {
+		alloc[addr] = types.Account{
+			Balance: state.Balance,
+			Code:    state.Code,
+			Nonce:   state.Nonce,
+			Storage: state.Storage,
+		}
+	}
+	return &alloc
+}
+
 // Stop terminates execution of the tracer at the first opportune moment.
-func (t *prestateTracer) Stop(err error) {
+func (t *PrestateTracer) Stop(err error) {
 	t.reason = err
 	t.interrupt.Store(true)
 }
 
-func (t *prestateTracer) processDiffState() {
+func (t *PrestateTracer) processDiffState() {
 	for addr, state := range t.pre {
 		// The deleted account's state is pruned from `post` but kept in `pre`
 		if _, ok := t.deleted[addr]; ok {
@@ -260,7 +273,7 @@ func (t *prestateTracer) processDiffState() {
 
 // lookupAccount fetches details of an account and adds it to the prestate
 // if it doesn't exist there.
-func (t *prestateTracer) lookupAccount(addr common.Address) {
+func (t *PrestateTracer) lookupAccount(addr common.Address) {
 	if _, ok := t.pre[addr]; ok {
 		return
 	}
@@ -286,7 +299,7 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 // lookupStorage fetches the requested storage slot and adds
 // it to the prestate of the given contract. It assumes `lookupAccount`
 // has been performed on the contract before.
-func (t *prestateTracer) lookupStorage(addr common.Address, key common.Hash) {
+func (t *PrestateTracer) lookupStorage(addr common.Address, key common.Hash) {
 	if t.config.DisableStorage {
 		return
 	}

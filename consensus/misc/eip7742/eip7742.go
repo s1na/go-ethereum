@@ -44,11 +44,6 @@ func VerifyEIP7742Header(parent, header *types.Header) error {
 	if header.TargetBlobCount == nil {
 		return errors.New("header is missing target blob count")
 	}
-	// Verify that the blob gas used remains within reasonable limits.
-	maxBlobGas := (*header.TargetBlobCount * params.BlobTargetQuotient) * params.BlobTxBlobGasPerBlob
-	if *header.BlobGasUsed > maxBlobGas {
-		return fmt.Errorf("blob gas used %d exceeds maximum allowance %d", *header.BlobGasUsed, maxBlobGas)
-	}
 	if *header.BlobGasUsed%params.BlobTxBlobGasPerBlob != 0 {
 		return fmt.Errorf("blob gas used %d not a multiple of blob gas per blob %d", header.BlobGasUsed, params.BlobTxBlobGasPerBlob)
 	}

@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip7742"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/stateless"
@@ -223,6 +224,8 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 	// Apply EIP-7742.
 	if miner.chainConfig.IsPrague(header.Number, header.Time) {
 		header.TargetBlobCount = genParams.blobTarget
+		excessBlobGas := eip7742.CalcExcessBlobGas(*parent.ExcessBlobGas, *parent.BlobGasUsed, *header.TargetBlobCount)
+		header.ExcessBlobGas = &excessBlobGas
 	}
 	// Could potentially happen if starting to mine in an odd state.
 	// Note genParams.coinbase can be different with header.Coinbase

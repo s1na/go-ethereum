@@ -330,6 +330,26 @@ func (api *ConsensusAPI) ForkchoiceUpdatedWithWitnessV3(update engine.Forkchoice
 	return api.forkchoiceUpdated(update, params, engine.PayloadV3, true)
 }
 
+// ForkchoiceUpdatedWithWitnessV4 is analogous to ForkchoiceUpdatedV4, only it
+// generates an execution witness too if block building was requested.
+func (api *ConsensusAPI) ForkchoiceUpdatedWithWitnessV4(update engine.ForkchoiceStateV1, params *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+	if params != nil {
+		if params.Withdrawals == nil {
+			return engine.STATUS_INVALID, engine.InvalidPayloadAttributes.With(errors.New("missing withdrawals"))
+		}
+		if params.BeaconRoot == nil {
+			return engine.STATUS_INVALID, engine.InvalidPayloadAttributes.With(errors.New("missing beacon root"))
+		}
+		if params.TargetBlobCount == nil {
+			return engine.STATUS_INVALID, engine.InvalidPayloadAttributes.With(errors.New("missing target blob count"))
+		}
+		if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Prague && api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Prague {
+			return engine.STATUS_INVALID, engine.UnsupportedFork.With(errors.New("forkchoiceUpdatedV4 must only be called for prague payloads"))
+		}
+	}
+	return api.forkchoiceUpdated(update, params, engine.PayloadV4, true)
+}
+
 func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes, payloadVersion engine.PayloadVersion, payloadWitness bool) (engine.ForkChoiceResponse, error) {
 	api.forkchoiceLock.Lock()
 	defer api.forkchoiceLock.Unlock()

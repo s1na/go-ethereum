@@ -265,6 +265,9 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV4(update engine.ForkchoiceStateV1, pa
 		if params.TargetBlobCount == nil {
 			return engine.STATUS_INVALID, engine.InvalidPayloadAttributes.With(errors.New("missing target blob count"))
 		}
+		if params.MaxBlobCount == nil {
+			return engine.STATUS_INVALID, engine.InvalidPayloadAttributes.With(errors.New("missing max blob count"))
+		}
 		if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Prague && api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Prague {
 			return engine.STATUS_INVALID, engine.UnsupportedFork.With(errors.New("forkchoiceUpdatedV4 must only be called for prague payloads"))
 		}
@@ -486,6 +489,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			Withdrawals:     payloadAttributes.Withdrawals,
 			BeaconRoot:      payloadAttributes.BeaconRoot,
 			TargetBlobCount: payloadAttributes.TargetBlobCount,
+			MaxBlobCount:    payloadAttributes.MaxBlobCount,
 			Version:         payloadVersion,
 		}
 		id := args.Id()

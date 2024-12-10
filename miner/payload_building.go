@@ -37,13 +37,14 @@ import (
 // Check engine-api specification for more details.
 // https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#payloadattributesv3
 type BuildPayloadArgs struct {
-	Parent          common.Hash       // The parent block to build payload on top
-	Timestamp       uint64            // The provided timestamp of generated payload
-	FeeRecipient    common.Address    // The provided recipient address for collecting transaction fee
-	Random          common.Hash       // The provided randomness value
-	Withdrawals     types.Withdrawals // The provided withdrawals
-	BeaconRoot      *common.Hash      // The provided beaconRoot (Cancun)
-	TargetBlobCount *uint64
+	Parent          common.Hash           // The parent block to build payload on top
+	Timestamp       uint64                // The provided timestamp of generated payload
+	FeeRecipient    common.Address        // The provided recipient address for collecting transaction fee
+	Random          common.Hash           // The provided randomness value
+	Withdrawals     types.Withdrawals     // The provided withdrawals
+	BeaconRoot      *common.Hash          // The provided beaconRoot (Cancun)
+	TargetBlobCount *uint64               // The provided target blob count (Prague)
+	MaxBlobCount    *uint64               // The provided max blob count (Prague)
 	Version         engine.PayloadVersion // Versioning byte for payload id calculation.
 }
 
@@ -246,15 +247,16 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 		endTimer := time.NewTimer(time.Second * 12)
 
 		fullParams := &generateParams{
-			timestamp:   args.Timestamp,
-			forceTime:   true,
-			parentHash:  args.Parent,
-			coinbase:    args.FeeRecipient,
-			random:      args.Random,
-			withdrawals: args.Withdrawals,
-			beaconRoot:  args.BeaconRoot,
-			blobTarget:  args.TargetBlobCount,
-			noTxs:       false,
+			timestamp:    args.Timestamp,
+			forceTime:    true,
+			parentHash:   args.Parent,
+			coinbase:     args.FeeRecipient,
+			random:       args.Random,
+			withdrawals:  args.Withdrawals,
+			beaconRoot:   args.BeaconRoot,
+			blobTarget:   args.TargetBlobCount,
+			maxBlobCount: args.MaxBlobCount,
+			noTxs:        false,
 		}
 
 		for {

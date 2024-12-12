@@ -38,6 +38,11 @@ import (
 
 const devEpochLength = 32
 
+var (
+	targetBlobCount uint64 = 3
+	maxBlobCount    uint64 = 6
+)
+
 // withdrawalQueue implements a FIFO queue which holds withdrawals that are
 // pending inclusion.
 type withdrawalQueue struct {
@@ -107,7 +112,7 @@ func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, err
 
 	// if genesis block, send forkchoiceUpdated to trigger transition to PoS
 	if block.Number.Sign() == 0 {
-		if _, err := engineAPI.ForkchoiceUpdatedV3(current, nil); err != nil {
+		if _, err := engineAPI.ForkchoiceUpdatedV4(current, nil); err != nil {
 			return nil, err
 		}
 	}
@@ -179,7 +184,9 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		Withdrawals:           withdrawals,
 		Random:                random,
 		BeaconRoot:            &common.Hash{},
-	}, engine.PayloadV3, false)
+		TargetBlobCount:       &targetBlobCount,
+		MaxBlobCount:          &maxBlobCount,
+	}, engine.PayloadV4, false)
 	if err != nil {
 		return err
 	}
@@ -218,14 +225,14 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		}
 	}
 	// Mark the payload as canon
-	_, err = c.engineAPI.newPayload(*payload, blobHashes, &common.Hash{}, envelope.Requests, false, nil)
+	_, err = c.engineAPI.newPayload(*payload, blobHashes, &common.Hash{}, envelope.Requests, false, &targetBlobCount)
 	if err != nil {
 		return err
 	}
 	c.setCurrentState(payload.BlockHash, finalizedHash)
 
 	// Mark the block containing the payload as canonical
-	if _, err = c.engineAPI.ForkchoiceUpdatedV3(c.curForkchoiceState, nil); err != nil {
+	if _, err = c.engineAPI.ForkchoiceUpdatedV4(c.curForkchoiceState, nil); err != nil {
 		return err
 	}
 	c.lastBlockTime = payload.Timestamp

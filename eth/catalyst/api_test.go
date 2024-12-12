@@ -672,6 +672,7 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 }
 
 func assembleEnvelope(api *ConsensusAPI, parentHash common.Hash, params *engine.PayloadAttributes) (*engine.ExecutionPayloadEnvelope, error) {
+	maxBlobCount := uint64(4)
 	args := &miner.BuildPayloadArgs{
 		Parent:          parentHash,
 		Timestamp:       params.Timestamp,
@@ -680,6 +681,7 @@ func assembleEnvelope(api *ConsensusAPI, parentHash common.Hash, params *engine.
 		Withdrawals:     params.Withdrawals,
 		BeaconRoot:      params.BeaconRoot,
 		TargetBlobCount: params.TargetBlobCount,
+		MaxBlobCount:    &maxBlobCount,
 	}
 	payload, err := api.eth.Miner().BuildPayload(args, false)
 	if err != nil {

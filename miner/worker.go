@@ -226,7 +226,14 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 	// Apply EIP-7742.
 	if miner.chainConfig.IsPrague(header.Number, header.Time) {
 		header.TargetBlobCount = genParams.blobTarget
-		excessBlobGas := eip7742.CalcExcessBlobGas(*parent.ExcessBlobGas, *parent.BlobGasUsed, *header.TargetBlobCount)
+		parentExcessBlobGas := parent.ExcessBlobGas
+		parentBlobGasUsed := parent.BlobGasUsed
+		// If Cancun and Prague activate on the same block.
+		if !miner.chainConfig.IsCancun(parent.Number, parent.Time) {
+			parentExcessBlobGas = new(uint64)
+			parentBlobGasUsed = new(uint64)
+		}
+		excessBlobGas := eip7742.CalcExcessBlobGas(*parentExcessBlobGas, *parentBlobGasUsed, *header.TargetBlobCount)
 		header.ExcessBlobGas = &excessBlobGas
 	}
 	// Could potentially happen if starting to mine in an odd state.

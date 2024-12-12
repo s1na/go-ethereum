@@ -216,15 +216,16 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 	// enough to run. The empty payload can at least make sure there is something
 	// to deliver for not missing slot.
 	emptyParams := &generateParams{
-		timestamp:   args.Timestamp,
-		forceTime:   true,
-		parentHash:  args.Parent,
-		coinbase:    args.FeeRecipient,
-		random:      args.Random,
-		withdrawals: args.Withdrawals,
-		beaconRoot:  args.BeaconRoot,
-		blobTarget:  args.TargetBlobCount,
-		noTxs:       true,
+		timestamp:    args.Timestamp,
+		forceTime:    true,
+		parentHash:   args.Parent,
+		coinbase:     args.FeeRecipient,
+		random:       args.Random,
+		withdrawals:  args.Withdrawals,
+		beaconRoot:   args.BeaconRoot,
+		blobTarget:   args.TargetBlobCount,
+		maxBlobCount: args.MaxBlobCount,
+		noTxs:        true,
 	}
 	empty := miner.generateWork(emptyParams, witness)
 	if empty.err != nil {

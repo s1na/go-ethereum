@@ -1062,6 +1062,9 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	if head.RequestsHash != nil {
 		result["requestsRoot"] = head.RequestsHash
 	}
+	if head.TargetBlobCount != nil {
+		result["targetBlobCount"] = hexutil.Uint64(*head.TargetBlobCount)
+	}
 	return result
 }
 

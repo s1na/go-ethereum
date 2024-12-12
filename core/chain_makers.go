@@ -45,11 +45,12 @@ type BlockGen struct {
 	header  *types.Header
 	statedb *state.StateDB
 
-	gasPool     *GasPool
-	txs         []*types.Transaction
-	receipts    []*types.Receipt
-	uncles      []*types.Header
-	withdrawals []*types.Withdrawal
+	gasPool         *GasPool
+	txs             []*types.Transaction
+	receipts        []*types.Receipt
+	uncles          []*types.Header
+	withdrawals     []*types.Withdrawal
+	targetBlobCount *uint64
 
 	engine consensus.Engine
 }
@@ -100,6 +101,11 @@ func (b *BlockGen) SetParentBeaconRoot(root common.Hash) {
 	b.header.ParentBeaconRoot = &root
 	blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
 	ProcessBeaconBlockRoot(root, vm.NewEVM(blockContext, b.statedb, b.cm.config, vm.Config{}))
+}
+
+// SetTargetBlobCount sets the target blob count field of the generated block.
+func (b *BlockGen) SetTargetBlobCount(count uint64) {
+	b.header.TargetBlobCount = &count
 }
 
 // addTx adds a transaction to the generated block. If no coinbase has
@@ -580,6 +586,10 @@ func (cm *chainMaker) makeHeader(parent *types.Block, state *state.StateDB, engi
 		header.ExcessBlobGas = &excessBlobGas
 		header.BlobGasUsed = new(uint64)
 		header.ParentBeaconRoot = new(common.Hash)
+	}
+	if cm.config.IsPrague(header.Number, header.Time) {
+		// EIP-7742
+		header.TargetBlobCount = new(uint64)
 	}
 	return header
 }

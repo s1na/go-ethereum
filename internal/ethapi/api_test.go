@@ -57,6 +57,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -3013,16 +3014,16 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		}
 		if tt.expectErr != nil {
 			if err == nil {
-				t.Errorf("test %d: want error %v, have nothing", i, tt.expectErr)
+				t.Errorf("test %s: want error %v, have nothing", tt.file, tt.expectErr)
 				continue
 			}
 			if !errors.Is(err, tt.expectErr) {
-				t.Errorf("test %d: error mismatch, want %v, have %v", i, tt.expectErr, err)
+				t.Errorf("test %s: error mismatch, want %v, have %v", tt.file, tt.expectErr, err)
 			}
 			continue
 		}
 		if err != nil {
-			t.Errorf("test %d: want no error, have %v", i, err)
+			t.Errorf("test %s: want no error, have %v", tt.file, err)
 			continue
 		}
 
@@ -3181,7 +3182,7 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 		)
 		result, err = api.GetTransactionReceipt(context.Background(), tt.txHash)
 		if err != nil {
-			t.Errorf("test %d: want no error, have %v", i, err)
+			t.Errorf("test %s: want no error, have %v", tt.file, err)
 			continue
 		}
 		testRPCResponseWithFile(t, i, result, "eth_getTransactionReceipt", tt.file)
@@ -3279,7 +3280,7 @@ func TestRPCGetBlockReceipts(t *testing.T) {
 		)
 		result, err = api.GetBlockReceipts(context.Background(), tt.test)
 		if err != nil {
-			t.Errorf("test %d: want no error, have %v", i, err)
+			t.Errorf("test %s: want no error, have %v", tt.file, err)
 			continue
 		}
 		testRPCResponseWithFile(t, i, result, "eth_getBlockReceipts", tt.file)
@@ -3391,7 +3392,7 @@ func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc s
 	if err != nil {
 		t.Fatalf("error reading expected test file: %s output: %v", outputFile, err)
 	}
-	require.JSONEqf(t, string(want), string(data), "test %d: json not match, want: %s, have: %s", testid, string(want), string(data))
+	assert.JSONEqf(t, string(want), string(data), "test %s: json not match", file)
 }
 
 func addressToHash(a common.Address) common.Hash {

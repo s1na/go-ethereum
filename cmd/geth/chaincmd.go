@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"runtime"
 	"slices"
@@ -184,6 +185,18 @@ It's deprecated, please use "geth db import" instead.
 		Description: `
 This command dumps out the state for a given block (or latest, if none provided).
 `,
+	}
+
+	pruneCommand = &cli.Command{
+		Action:    pruneHistory,
+		Name:      "prune-history",
+		Usage:     "Prune blockchain history (block bodies and receipts) up to the merge block",
+		ArgsUsage: "",
+		Flags:     slices.Concat(utils.DatabaseFlags),
+		Description: `
+The prune-history command removes historical block bodies and receipts from the
+blockchain database up to the merge block, while preserving block headers. This
+helps reduce storage requirements for nodes that don't need full historical data.`,
 	}
 )
 
@@ -591,4 +604,85 @@ func dump(ctx *cli.Context) error {
 func hashish(x string) bool {
 	_, err := strconv.Atoi(x)
 	return err != nil
+}
+
+func pruneHistory(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	// Open the chain database
+	chain, chaindb := utils.MakeChain(ctx, stack, false)
+	defer chaindb.Close()
+	defer chain.Stop()
+
+	// Only prune for mainnet.
+	if chain.Config().ChainID.Cmp(big.NewInt(1)) != 0 {
+		return nil
+	}
+
+	// Find the merge block
+	currentHeader := chain.CurrentHeader()
+	if currentHeader == nil {
+		return errors.New("current header not found")
+	}
+
+	const (
+		mergeBlock     = uint64(15537393)
+		mergeBlockHash = "0x55b11b918355b1ef9c5db810302ebad0bf2544255b530cdce90674d5887bb286"
+	)
+
+	log.Info("Starting chain pruning",
+		"currentHeight", currentHeader.Number,
+		"mergeBlock", mergeBlock,
+		"mergeBlockHash", mergeBlockHash)
+
+	// Verify we have the correct merge block
+	hash := rawdb.ReadCanonicalHash(chaindb, mergeBlock)
+	if hash != common.HexToHash(mergeBlockHash) {
+		return fmt.Errorf("merge block hash mismatch: got %s, want %s", hash.Hex(), mergeBlockHash)
+	}
+
+	// Start a batch for efficient database operations
+	batch := chaindb.NewBatch()
+	deleted := 0
+	start := time.Now()
+
+	// Iterate from genesis to merge block
+	for height := uint64(1); height < mergeBlock; height++ {
+		// Get the canonical hash for this height
+		hash := rawdb.ReadCanonicalHash(chaindb, height)
+		if hash == (common.Hash{}) {
+			continue
+		}
+
+		// Delete body and receipts but keep the header
+		rawdb.DeleteBody(batch, hash, height)
+		rawdb.DeleteReceipts(batch, hash, height)
+
+		deleted++
+
+		// Commit batch every 10k blocks to avoid memory explosion
+		if deleted%10000 == 0 {
+			if err := batch.Write(); err != nil {
+				return err
+			}
+			batch.Reset()
+
+			log.Info("Pruning in progress",
+				"blocks", deleted,
+				"elapsed", common.PrettyDuration(time.Since(start)),
+				"height", height)
+		}
+	}
+
+	// Write any remaining items
+	if err := batch.Write(); err != nil {
+		return err
+	}
+
+	log.Info("Chain pruning completed",
+		"blocks", deleted,
+		"elapsed", common.PrettyDuration(time.Since(start)))
+
+	return nil
 }

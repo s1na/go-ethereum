@@ -178,6 +178,10 @@ const (
 	BlobTxTargetBlobGasPerBlock = 3 * BlobTxBlobGasPerBlob // Target consumable blob gas for data blobs per block (for 1559-like pricing)
 	MaxBlobGasPerBlock          = 6 * BlobTxBlobGasPerBlob // Maximum consumable blob gas for data blobs per block
 
+	TargetBlobGasPerBlockEIP7691     = 6 * BlobTxBlobGasPerBlob // Target consumable blob gas for data blobs per block (for EIP-7691-like pricing)
+	MaxBlobGasPerBlockEIP7691        = 9 * BlobTxBlobGasPerBlob // Maximum consumable blob gas for data blobs per block (for EIP-7691-like pricing)
+	BlobBaseFeeUpdateFractionEIP7691 = 5007716                  // Controls the maximum rate of change for blob base fee (for EIP-7691-like pricing)
+
 	HistoryServeWindow = 8192 // Number of blocks to serve historical block hashes for, EIP-2935.
 )
 

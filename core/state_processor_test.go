@@ -430,7 +430,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 			pExcess = *parent.ExcessBlobGas()
 			pUsed = *parent.BlobGasUsed()
 		}
-		excess := eip4844.CalcExcessBlobGas(pExcess, pUsed)
+		excess := eip4844.CalcExcessBlobGas(pExcess, pUsed, config.IsPrague(header.Number, header.Time))
 		used := uint64(nBlobs * params.BlobTxBlobGasPerBlob)
 		header.ExcessBlobGas = &excess
 		header.BlobGasUsed = &used

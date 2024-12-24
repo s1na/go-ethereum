@@ -45,16 +45,6 @@ var (
 	limboShelfSlotusedGaugeName = "blobpool/limbo/shelf_%d/slotused"
 	limboShelfSlotgapsGaugeName = "blobpool/limbo/shelf_%d/slotgaps"
 
-	// The oversized metrics aggregate the shelf stats above the max blob count
-	// limits to track transactions that are just huge, but don't contain blobs.
-	//
-	// There are no oversized data in the limbo, it only contains blobs and some
-	// constant metadata.
-	oversizedDatausedGauge = metrics.NewRegisteredGauge("blobpool/oversized/dataused", nil)
-	oversizedDatagapsGauge = metrics.NewRegisteredGauge("blobpool/oversized/datagaps", nil)
-	oversizedSlotusedGauge = metrics.NewRegisteredGauge("blobpool/oversized/slotused", nil)
-	oversizedSlotgapsGauge = metrics.NewRegisteredGauge("blobpool/oversized/slotgaps", nil)
-
 	// basefeeGauge and blobfeeGauge track the current network 1559 base fee and
 	// 4844 blob fee respectively.
 	basefeeGauge = metrics.NewRegisteredGauge("blobpool/basefee", nil)

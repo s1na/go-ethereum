@@ -134,7 +134,11 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		if len(hashes) == 0 {
 			return errors.New("blobless blob transaction")
 		}
-		if len(hashes) > params.MaxBlobGasPerBlock/params.BlobTxBlobGasPerBlob {
+		if opts.Config.IsPrague(head.Number, head.Time) {
+			if len(hashes) > params.MaxBlobGasPerBlockEIP7691/params.BlobTxBlobGasPerBlob {
+				return fmt.Errorf("too many blobs in transaction: have %d, permitted %d", len(hashes), params.MaxBlobGasPerBlockEIP7691/params.BlobTxBlobGasPerBlob)
+			}
+		} else if len(hashes) > params.MaxBlobGasPerBlock/params.BlobTxBlobGasPerBlob {
 			return fmt.Errorf("too many blobs in transaction: have %d, permitted %d", len(hashes), params.MaxBlobGasPerBlock/params.BlobTxBlobGasPerBlob)
 		}
 		// Ensure commitments, proofs and hashes are valid

@@ -51,11 +51,6 @@ const (
 	// transaction. There can be multiple of these embedded into a single tx.
 	blobSize = params.BlobTxFieldElementsPerBlob * params.BlobTxBytesPerFieldElement
 
-	// maxBlobsPerTransaction is the maximum number of blobs a single transaction
-	// is allowed to contain. Whilst the spec states it's unlimited, the block
-	// data slots are protocol bound, which implicitly also limit this.
-	maxBlobsPerTransaction = params.MaxBlobGasPerBlock / params.BlobTxBlobGasPerBlob
-
 	// txAvgSize is an approximate byte size of a transaction metadata to avoid
 	// tiny overflows causing all txs to move a shelf higher, wasting disk space.
 	txAvgSize = 4 * 1024
@@ -414,7 +409,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserve txpool.Addres
 		blobfee = uint256.NewInt(params.BlobTxMinBlobGasprice)
 	)
 	if p.head.ExcessBlobGas != nil {
-		blobfee = uint256.MustFromBig(eip4844.CalcBlobFee(*p.head.ExcessBlobGas))
+		blobfee = uint256.MustFromBig(eip4844.CalcBlobFee(*p.head.ExcessBlobGas, p.chain.Config().IsPrague(p.head.Number, p.head.Time)))
 	}
 	p.evict = newPriceHeap(basefee, blobfee, p.index)
 
@@ -834,7 +829,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 		blobfee = uint256.MustFromBig(big.NewInt(params.BlobTxMinBlobGasprice))
 	)
 	if newHead.ExcessBlobGas != nil {
-		blobfee = uint256.MustFromBig(eip4844.CalcBlobFee(*newHead.ExcessBlobGas))
+		blobfee = uint256.MustFromBig(eip4844.CalcBlobFee(*newHead.ExcessBlobGas, p.chain.Config().IsPrague(p.head.Number, p.head.Time)))
 	}
 	p.evict.reinit(basefee, blobfee, false)
 
@@ -1579,11 +1574,6 @@ func (p *BlobPool) updateStorageMetrics() {
 		dataused uint64
 		datareal uint64
 		slotused uint64
-
-		oversizedDataused uint64
-		oversizedDatagaps uint64
-		oversizedSlotused uint64
-		oversizedSlotgaps uint64
 	)
 	for _, shelf := range stats.Shelves {
 		slotDataused := shelf.FilledSlots * uint64(shelf.SlotSize)
@@ -1597,22 +1587,10 @@ func (p *BlobPool) updateStorageMetrics() {
 		metrics.GetOrRegisterGauge(fmt.Sprintf(shelfDatagapsGaugeName, shelf.SlotSize/blobSize), nil).Update(int64(slotDatagaps))
 		metrics.GetOrRegisterGauge(fmt.Sprintf(shelfSlotusedGaugeName, shelf.SlotSize/blobSize), nil).Update(int64(shelf.FilledSlots))
 		metrics.GetOrRegisterGauge(fmt.Sprintf(shelfSlotgapsGaugeName, shelf.SlotSize/blobSize), nil).Update(int64(shelf.GappedSlots))
-
-		if shelf.SlotSize/blobSize > maxBlobsPerTransaction {
-			oversizedDataused += slotDataused
-			oversizedDatagaps += slotDatagaps
-			oversizedSlotused += shelf.FilledSlots
-			oversizedSlotgaps += shelf.GappedSlots
-		}
 	}
 	datausedGauge.Update(int64(dataused))
 	datarealGauge.Update(int64(datareal))
 	slotusedGauge.Update(int64(slotused))
-
-	oversizedDatausedGauge.Update(int64(oversizedDataused))
-	oversizedDatagapsGauge.Update(int64(oversizedDatagaps))
-	oversizedSlotusedGauge.Update(int64(oversizedSlotused))
-	oversizedSlotgapsGauge.Update(int64(oversizedSlotgaps))
 
 	p.updateLimboMetrics()
 }

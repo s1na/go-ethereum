@@ -26,14 +26,13 @@ import (
 )
 
 var (
-	minBlobGasPrice            = big.NewInt(params.BlobTxMinBlobGasprice)
-	blobGaspriceUpdateFraction = big.NewInt(params.BlobTxBlobGaspriceUpdateFraction)
+	minBlobGasPrice = big.NewInt(params.BlobTxMinBlobGasprice)
 )
 
 // VerifyEIP4844Header verifies the presence of the excessBlobGas field and that
 // if the current block contains no transactions, the excessBlobGas is updated
 // accordingly.
-func VerifyEIP4844Header(parent, header *types.Header) error {
+func VerifyEIP4844Header(parent, header *types.Header, chainConfig *params.ChainConfig) error {
 	// Verify the header is not malformed
 	if header.ExcessBlobGas == nil {
 		return errors.New("header is missing excessBlobGas")
@@ -41,8 +40,15 @@ func VerifyEIP4844Header(parent, header *types.Header) error {
 	if header.BlobGasUsed == nil {
 		return errors.New("header is missing blobGasUsed")
 	}
+	var (
+		maxBlobGas = uint64(params.MaxBlobGasPerBlock)
+		isPrague   = chainConfig.IsPrague(header.Number, header.Time)
+	)
+	if isPrague {
+		maxBlobGas = params.MaxBlobGasPerBlockEIP7691
+	}
 	// Verify that the blob gas used remains within reasonable limits.
-	if *header.BlobGasUsed > params.MaxBlobGasPerBlock {
+	if *header.BlobGasUsed > maxBlobGas {
 		return fmt.Errorf("blob gas used %d exceeds maximum allowance %d", *header.BlobGasUsed, params.MaxBlobGasPerBlock)
 	}
 	if *header.BlobGasUsed%params.BlobTxBlobGasPerBlob != 0 {
@@ -57,7 +63,7 @@ func VerifyEIP4844Header(parent, header *types.Header) error {
 		parentExcessBlobGas = *parent.ExcessBlobGas
 		parentBlobGasUsed = *parent.BlobGasUsed
 	}
-	expectedExcessBlobGas := CalcExcessBlobGas(parentExcessBlobGas, parentBlobGasUsed)
+	expectedExcessBlobGas := CalcExcessBlobGas(parentExcessBlobGas, parentBlobGasUsed, isPrague)
 	if *header.ExcessBlobGas != expectedExcessBlobGas {
 		return fmt.Errorf("invalid excessBlobGas: have %d, want %d, parent excessBlobGas %d, parent blobDataUsed %d",
 			*header.ExcessBlobGas, expectedExcessBlobGas, parentExcessBlobGas, parentBlobGasUsed)
@@ -67,17 +73,25 @@ func VerifyEIP4844Header(parent, header *types.Header) error {
 
 // CalcExcessBlobGas calculates the excess blob gas after applying the set of
 // blobs on top of the excess blob gas.
-func CalcExcessBlobGas(parentExcessBlobGas uint64, parentBlobGasUsed uint64) uint64 {
+func CalcExcessBlobGas(parentExcessBlobGas uint64, parentBlobGasUsed uint64, isEIP7691 bool) uint64 {
 	excessBlobGas := parentExcessBlobGas + parentBlobGasUsed
-	if excessBlobGas < params.BlobTxTargetBlobGasPerBlock {
+	targetBlobGas := uint64(params.BlobTxTargetBlobGasPerBlock)
+	if isEIP7691 {
+		targetBlobGas = params.TargetBlobGasPerBlockEIP7691
+	}
+	if excessBlobGas < targetBlobGas {
 		return 0
 	}
-	return excessBlobGas - params.BlobTxTargetBlobGasPerBlock
+	return excessBlobGas - targetBlobGas
 }
 
 // CalcBlobFee calculates the blobfee from the header's excess blob gas field.
-func CalcBlobFee(excessBlobGas uint64) *big.Int {
-	return fakeExponential(minBlobGasPrice, new(big.Int).SetUint64(excessBlobGas), blobGaspriceUpdateFraction)
+func CalcBlobFee(excessBlobGas uint64, isEIP7691 bool) *big.Int {
+	updateFraction := big.NewInt(params.BlobTxBlobGaspriceUpdateFraction)
+	if isEIP7691 {
+		updateFraction = big.NewInt(params.BlobBaseFeeUpdateFractionEIP7691)
+	}
+	return fakeExponential(minBlobGasPrice, new(big.Int).SetUint64(excessBlobGas), updateFraction)
 }
 
 // fakeExponential approximates factor * e ** (numerator / denominator) using

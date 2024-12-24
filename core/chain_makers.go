@@ -113,8 +113,12 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 	if b.gasPool == nil {
 		b.SetCoinbase(common.Address{})
 	}
+	chainContext := ChainContext(bc)
+	if bc == nil {
+		chainContext = b.cm
+	}
 	var (
-		blockContext = NewEVMBlockContext(b.header, bc, &b.header.Coinbase)
+		blockContext = NewEVMBlockContext(b.header, chainContext, &b.header.Coinbase)
 		evm          = vm.NewEVM(blockContext, b.statedb, b.cm.config, vmConfig)
 	)
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
@@ -440,7 +444,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 		var blobGasPrice *big.Int
 		if block.ExcessBlobGas() != nil {
-			blobGasPrice = eip4844.CalcBlobFee(*block.ExcessBlobGas())
+			blobGasPrice = eip4844.CalcBlobFee(*block.ExcessBlobGas(), config.IsPrague(block.Number(), block.Time()))
 		}
 		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), block.BaseFee(), blobGasPrice, txs); err != nil {
 			panic(err)
@@ -545,7 +549,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		}
 		var blobGasPrice *big.Int
 		if block.ExcessBlobGas() != nil {
-			blobGasPrice = eip4844.CalcBlobFee(*block.ExcessBlobGas())
+			blobGasPrice = eip4844.CalcBlobFee(*block.ExcessBlobGas(), config.IsPrague(block.Number(), block.Time()))
 		}
 		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), block.BaseFee(), blobGasPrice, txs); err != nil {
 			panic(err)
@@ -603,7 +607,7 @@ func (cm *chainMaker) makeHeader(parent *types.Block, state *state.StateDB, engi
 			parentExcessBlobGas = *parent.ExcessBlobGas()
 			parentBlobGasUsed = *parent.BlobGasUsed()
 		}
-		excessBlobGas := eip4844.CalcExcessBlobGas(parentExcessBlobGas, parentBlobGasUsed)
+		excessBlobGas := eip4844.CalcExcessBlobGas(parentExcessBlobGas, parentBlobGasUsed, cm.config.IsPrague(header.Number, header.Time))
 		header.ExcessBlobGas = &excessBlobGas
 		header.BlobGasUsed = new(uint64)
 		header.ParentBeaconRoot = new(common.Hash)

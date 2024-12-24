@@ -121,7 +121,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 		mid := new(big.Int).Add(lo, hi)
 		mid.Div(mid, big.NewInt(2))
 
-		if eip4844.CalcBlobFee(mid.Uint64()).Cmp(bc.blobfee.ToBig()) > 0 {
+		if eip4844.CalcBlobFee(mid.Uint64(), false).Cmp(bc.blobfee.ToBig()) > 0 {
 			hi = mid
 		} else {
 			lo = mid

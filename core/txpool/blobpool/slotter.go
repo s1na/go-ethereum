@@ -16,6 +16,15 @@
 
 package blobpool
 
+const (
+	// billyMaxBlobsPerTransaction is the maximum number of blobs that can be
+	// written to billy as part of a single tx. This is not a protocol limit.
+	// With 128Kib blobs, this is 4MiB per transaction. This limit should
+	// be high enough to cover future blob count increases. Billy has no
+	// significant overhead for the number of shelves.
+	billyMaxBlobsPerTransaction = 32
+)
+
 // newSlotter creates a helper method for the Billy datastore that returns the
 // individual shelf sizes used to store transactions in.
 //
@@ -31,7 +40,7 @@ func newSlotter() func() (uint32, bool) {
 
 	return func() (size uint32, done bool) {
 		slotsize += blobSize
-		finished := slotsize > maxBlobsPerTransaction*blobSize+txMaxSize
+		finished := slotsize > billyMaxBlobsPerTransaction*blobSize+txMaxSize
 
 		return slotsize, finished
 	}

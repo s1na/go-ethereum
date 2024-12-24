@@ -210,10 +210,10 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 	if miner.chainConfig.IsCancun(header.Number, header.Time) {
 		var excessBlobGas uint64
 		if miner.chainConfig.IsCancun(parent.Number, parent.Time) {
-			excessBlobGas = eip4844.CalcExcessBlobGas(*parent.ExcessBlobGas, *parent.BlobGasUsed)
+			excessBlobGas = eip4844.CalcExcessBlobGas(*parent.ExcessBlobGas, *parent.BlobGasUsed, miner.chainConfig.IsPrague(header.Number, header.Time))
 		} else {
 			// For the first post-fork block, both parent.data_gas_used and parent.excess_data_gas are evaluated as 0
-			excessBlobGas = eip4844.CalcExcessBlobGas(0, 0)
+			excessBlobGas = eip4844.CalcExcessBlobGas(0, 0, false)
 		}
 		header.BlobGasUsed = new(uint64)
 		header.ExcessBlobGas = &excessBlobGas
@@ -284,7 +284,11 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 	// isn't really a better place right now. The blob gas limit is checked at block validation time
 	// and not during execution. This means core.ApplyTransaction will not return an error if the
 	// tx has too many blobs. So we have to explicitly check it here.
-	if (env.blobs+len(sc.Blobs))*params.BlobTxBlobGasPerBlob > params.MaxBlobGasPerBlock {
+	maxBlobs := params.MaxBlobGasPerBlock / params.BlobTxBlobGasPerBlob
+	if miner.chainConfig.IsPrague(env.header.Number, env.header.Time) {
+		maxBlobs = params.MaxBlobGasPerBlockEIP7691 / params.BlobTxBlobGasPerBlob
+	}
+	if (env.blobs + len(sc.Blobs)) > maxBlobs {
 		return errors.New("max data blobs reached")
 	}
 	receipt, err := miner.applyTransaction(env, tx)
@@ -319,6 +323,10 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
 	}
+	maxBlobs := params.MaxBlobGasPerBlock
+	if miner.chainConfig.IsPrague(env.header.Number, env.header.Time) {
+		maxBlobs = params.MaxBlobGasPerBlockEIP7691
+	}
 	for {
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {
@@ -333,10 +341,12 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 		}
 		// If we don't have enough blob space for any further blob transactions,
 		// skip that list altogether
-		if !blobTxs.Empty() && env.blobs*params.BlobTxBlobGasPerBlob >= params.MaxBlobGasPerBlock {
-			log.Trace("Not enough blob space for further blob transactions")
-			blobTxs.Clear()
-			// Fall though to pick up any plain txs
+		if !blobTxs.Empty() {
+			if env.blobs*params.BlobTxBlobGasPerBlob >= maxBlobs {
+				log.Trace("Not enough blob space for further blob transactions")
+				blobTxs.Clear()
+				// Fall though to pick up any plain txs
+			}
 		}
 		// Retrieve the next transaction and abort if all done.
 		var (
@@ -367,7 +377,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 			txs.Pop()
 			continue
 		}
-		if left := uint64(params.MaxBlobGasPerBlock - env.blobs*params.BlobTxBlobGasPerBlob); left < ltx.BlobGas {
+		if left := uint64(maxBlobs - env.blobs*params.BlobTxBlobGasPerBlob); left < ltx.BlobGas {
 			log.Trace("Not enough blob gas left for transaction", "hash", ltx.Hash, "left", left, "needed", ltx.BlobGas)
 			txs.Pop()
 			continue
@@ -430,7 +440,7 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 		filter.BaseFee = uint256.MustFromBig(env.header.BaseFee)
 	}
 	if env.header.ExcessBlobGas != nil {
-		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(*env.header.ExcessBlobGas))
+		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(*env.header.ExcessBlobGas, miner.chainConfig.IsPrague(env.header.Number, env.header.Time)))
 	}
 	filter.OnlyPlainTxs, filter.OnlyBlobTxs = true, false
 	pendingPlainTxs := miner.txpool.Pending(filter)

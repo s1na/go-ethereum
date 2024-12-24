@@ -775,13 +775,14 @@ func (s *Suite) makeBlobTxs(count, blobs int, discriminator byte) (txs types.Tra
 			blobdata[i] = discriminator
 			blobs -= 1
 		}
+		head := s.chain.Head()
 		inner := &types.BlobTx{
 			ChainID:    uint256.MustFromBig(s.chain.config.ChainID),
 			Nonce:      nonce + uint64(i),
 			GasTipCap:  uint256.NewInt(1),
 			GasFeeCap:  uint256.MustFromBig(s.chain.Head().BaseFee()),
 			Gas:        100000,
-			BlobFeeCap: uint256.MustFromBig(eip4844.CalcBlobFee(*s.chain.Head().ExcessBlobGas())),
+			BlobFeeCap: uint256.MustFromBig(eip4844.CalcBlobFee(*s.chain.Head().ExcessBlobGas(), s.chain.config.IsPrague(head.Number(), head.Time()))),
 			BlobHashes: makeSidecar(blobdata...).BlobHashes(),
 			Sidecar:    makeSidecar(blobdata...),
 		}

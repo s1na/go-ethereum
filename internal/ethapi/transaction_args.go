@@ -37,10 +37,6 @@ import (
 	"github.com/holiman/uint256"
 )
 
-var (
-	maxBlobsPerTransaction = params.MaxBlobGasPerBlock / params.BlobTxBlobGasPerBlob
-)
-
 // TransactionArgs represents the arguments to construct a new transaction
 // or a message call.
 type TransactionArgs struct {
@@ -100,10 +96,11 @@ func (args *TransactionArgs) data() []byte {
 
 // setDefaults fills in default values for unspecified tx fields.
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGasEstimation bool) error {
+	head := b.CurrentHeader()
 	if err := args.setBlobTxSidecar(ctx); err != nil {
 		return err
 	}
-	if err := args.setFeeDefaults(ctx, b, b.CurrentHeader()); err != nil {
+	if err := args.setFeeDefaults(ctx, b, head); err != nil {
 		return err
 	}
 
@@ -125,8 +122,14 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 	if args.BlobHashes != nil && len(args.BlobHashes) == 0 {
 		return errors.New(`need at least 1 blob for a blob transaction`)
 	}
-	if args.BlobHashes != nil && len(args.BlobHashes) > maxBlobsPerTransaction {
-		return fmt.Errorf(`too many blobs in transaction (have=%d, max=%d)`, len(args.BlobHashes), maxBlobsPerTransaction)
+	if args.BlobHashes != nil {
+		maxBlobsPerTransaction := params.MaxBlobGasPerBlock / params.BlobTxBlobGasPerBlob
+		if b.ChainConfig().IsPrague(head.Number, head.Time) {
+			maxBlobsPerTransaction = params.MaxBlobGasPerBlockEIP7691 / params.BlobTxBlobGasPerBlob
+		}
+		if len(args.BlobHashes) > maxBlobsPerTransaction {
+			return fmt.Errorf(`too many blobs in transaction (have=%d, max=%d)`, len(args.BlobHashes), maxBlobsPerTransaction)
+		}
 	}
 
 	// create check
@@ -191,7 +194,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head
 	if args.BlobFeeCap != nil && args.BlobFeeCap.ToInt().Sign() == 0 {
 		return errors.New("maxFeePerBlobGas, if specified, must be non-zero")
 	}
-	args.setCancunFeeDefaults(head)
+	args.setCancunFeeDefaults(head, b.ChainConfig())
 	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
@@ -243,7 +246,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head
 }
 
 // setCancunFeeDefaults fills in reasonable default fee values for unspecified fields.
-func (args *TransactionArgs) setCancunFeeDefaults(head *types.Header) {
+func (args *TransactionArgs) setCancunFeeDefaults(head *types.Header, chainConfig *params.ChainConfig) {
 	// Set maxFeePerBlobGas if it is missing.
 	if args.BlobHashes != nil && args.BlobFeeCap == nil {
 		var excessBlobGas uint64
@@ -251,7 +254,7 @@ func (args *TransactionArgs) setCancunFeeDefaults(head *types.Header) {
 			excessBlobGas = *head.ExcessBlobGas
 		}
 		// ExcessBlobGas must be set for a Cancun block.
-		blobBaseFee := eip4844.CalcBlobFee(excessBlobGas)
+		blobBaseFee := eip4844.CalcBlobFee(excessBlobGas, chainConfig.IsPrague(head.Number, head.Time))
 		// Set the max fee to be 2 times larger than the previous block's blob base fee.
 		// The additional slack allows the tx to not become invalidated if the base
 		// fee is rising.

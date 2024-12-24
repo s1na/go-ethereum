@@ -362,8 +362,9 @@ func (b *EthAPIBackend) FeeHistory(ctx context.Context, blockCount uint64, lastB
 }
 
 func (b *EthAPIBackend) BlobBaseFee(ctx context.Context) *big.Int {
-	if excess := b.CurrentHeader().ExcessBlobGas; excess != nil {
-		return eip4844.CalcBlobFee(*excess)
+	head := b.CurrentHeader()
+	if excess := head.ExcessBlobGas; excess != nil {
+		return eip4844.CalcBlobFee(*excess, b.ChainConfig().IsPrague(head.Number, head.Time))
 	}
 	return nil
 }

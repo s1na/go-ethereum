@@ -50,7 +50,7 @@ func TestCalcExcessBlobGas(t *testing.T) {
 		{params.BlobTxBlobGasPerBlob - 1, (params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob) - 1, 0},
 	}
 	for i, tt := range tests {
-		result := CalcExcessBlobGas(tt.excess, tt.blobs*params.BlobTxBlobGasPerBlob)
+		result := CalcExcessBlobGas(tt.excess, tt.blobs*params.BlobTxBlobGasPerBlob, false)
 		if result != tt.want {
 			t.Errorf("test %d: excess blob gas mismatch: have %v, want %v", i, result, tt.want)
 		}
@@ -68,7 +68,7 @@ func TestCalcBlobFee(t *testing.T) {
 		{10 * 1024 * 1024, 23},
 	}
 	for i, tt := range tests {
-		have := CalcBlobFee(tt.excessBlobGas)
+		have := CalcBlobFee(tt.excessBlobGas, false)
 		if have.Int64() != tt.blobfee {
 			t.Errorf("test %d: blobfee mismatch: have %v want %v", i, have, tt.blobfee)
 		}

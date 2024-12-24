@@ -84,7 +84,10 @@ type txGasAndReward struct {
 // the block field filled in, retrieves the block from the backend if not present yet and
 // fills in the rest of the fields.
 func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
-	config := oracle.backend.ChainConfig()
+	var (
+		config   = oracle.backend.ChainConfig()
+		isPrague = config.IsPrague(bf.header.Number, bf.header.Time)
+	)
 
 	// Fill in base fee and next base fee.
 	if bf.results.baseFee = bf.header.BaseFee; bf.results.baseFee == nil {
@@ -97,8 +100,8 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	}
 	// Fill in blob base fee and next blob base fee.
 	if excessBlobGas := bf.header.ExcessBlobGas; excessBlobGas != nil {
-		bf.results.blobBaseFee = eip4844.CalcBlobFee(*excessBlobGas)
-		bf.results.nextBlobBaseFee = eip4844.CalcBlobFee(eip4844.CalcExcessBlobGas(*excessBlobGas, *bf.header.BlobGasUsed))
+		bf.results.blobBaseFee = eip4844.CalcBlobFee(*excessBlobGas, isPrague)
+		bf.results.nextBlobBaseFee = eip4844.CalcBlobFee(eip4844.CalcExcessBlobGas(*excessBlobGas, *bf.header.BlobGasUsed, isPrague), isPrague)
 	} else {
 		bf.results.blobBaseFee = new(big.Int)
 		bf.results.nextBlobBaseFee = new(big.Int)
@@ -106,7 +109,11 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	// Compute gas used ratio for normal and blob gas.
 	bf.results.gasUsedRatio = float64(bf.header.GasUsed) / float64(bf.header.GasLimit)
 	if blobGasUsed := bf.header.BlobGasUsed; blobGasUsed != nil {
-		bf.results.blobGasUsedRatio = float64(*blobGasUsed) / params.MaxBlobGasPerBlock
+		if isPrague {
+			bf.results.blobGasUsedRatio = float64(*blobGasUsed) / params.MaxBlobGasPerBlockEIP7691
+		} else {
+			bf.results.blobGasUsedRatio = float64(*blobGasUsed) / params.MaxBlobGasPerBlock
+		}
 	}
 
 	if len(percentiles) == 0 {

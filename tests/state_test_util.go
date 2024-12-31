@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -298,8 +299,9 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		}
 	}
 
+	chainctx := &chainContext{config: config}
 	// Prepare the EVM.
-	context := core.NewEVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase)
+	context := core.NewEVMBlockContext(block.Header(), chainctx, &t.json.Env.Coinbase)
 	context.GetHash = vmTestBlockHash
 	context.BaseFee = baseFee
 	context.Random = nil
@@ -542,4 +544,20 @@ func (st *StateTestState) Close() {
 		st.Snapshots.Release()
 		st.Snapshots = nil
 	}
+}
+
+type chainContext struct {
+	config *params.ChainConfig
+}
+
+func (c *chainContext) Engine() consensus.Engine {
+	return nil
+}
+
+func (c *chainContext) GetHeader(common.Hash, uint64) *types.Header {
+	return nil
+}
+
+func (c *chainContext) Config() *params.ChainConfig {
+	return c.config
 }

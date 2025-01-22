@@ -26,6 +26,15 @@ Each freezer table consists of:
 
 Create a new freezer type similar to state freezer, with its own directory and tables. This will store only headers and hashes, allowing us to maintain blockchain history while pruning other data.
 
+### Integrate Header Freezer
+
+The implementation will focus on abstracting the header freezer changes at the chainFreezer level to minimize downstream impacts:
+
+1. Modify chainFreezer to handle separate header storage:
+   - Add header-specific freezer instance
+   - Route header/hash requests to appropriate freezer through wrapper
+   - Maintain consistent interface for downstream code
+
 ### Implement Header Migration Function
 
 Create a function to move headers from chain freezer to headers-only freezer:
@@ -39,6 +48,17 @@ Important Notes:
 - Migration occurs while the node is offline during the pruneHistory command
 - Headers will be completely moved (not copied) from the chain freezer to the new headers-only freezer
 - The freezer should not be started until after migration is complete
+
+### Migration Process Safety
+
+1. Check if headers/ directory exists - fail if it does
+2. Copy all header-related files to new location
+3. Validate copied files for integrity/completeness
+4. Only after validation passes, delete original files
+5. If interrupted:
+   - Process will fail on restart if headers/ directory exists
+   - User must manually remove headers/ directory
+   - Migration can be restarted from beginning
 
 ### Key Implementation Details
 
@@ -54,6 +74,7 @@ Important Notes:
 2. Validation: Implement thorough validation of migrated data
 3. Rollback: Provide rollback mechanism in case of failure
 4. Progress Tracking: Add progress indicators for long migrations
+5. Clear error messages instructing users how to recover from interruption
 
 ### Testing Strategy
 
@@ -62,6 +83,7 @@ Important Notes:
 3. Verify data integrity post-migration
 4. Test with different database sizes
 5. Benchmark performance with different approaches
+6. Test recovery from interrupted migrations
 
 ## Technical Notes
 
@@ -105,7 +127,29 @@ Important Notes:
 [ ] Document upgrade process
 
 ## Open Questions
-1. How to handle partial migrations if process is interrupted?
-2. What changes will be needed to header data access patterns in Geth?
-3. What block size provides optimal performance?
-4. Should we add compression options?
+1. What changes will be needed to header data access patterns in Geth?
+
+### Implementation Strategy
+
+The implementation will focus on abstracting the header freezer changes at the chainFreezer level to minimize downstream impacts:
+
+1. Modify chainFreezer to handle separate header storage:
+   - Add header-specific freezer instance
+   - Route header/hash requests to appropriate freezer
+   - Maintain consistent interface for downstream code
+
+2. Keep existing interfaces intact:
+   - No changes to HeaderChain access patterns
+   - No changes to BlockChain access patterns
+   - Maintain backward compatibility
+
+3. Handle migration during pruning:
+   - Move headers to separate freezer during prune operation
+   - Validate consistency between freezers
+   - Ensure atomic operations during migration
+
+This approach allows us to:
+- Minimize changes to downstream code
+- Keep the complexity contained within chainFreezer
+- Maintain existing access patterns and interfaces
+- Enable separate pruning of non-header data

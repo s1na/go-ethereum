@@ -620,21 +620,20 @@ func pruneHistory(ctx *cli.Context) error {
 		return nil
 	}
 
-	// Find the merge block
-	currentHeader := chain.CurrentHeader()
-	if currentHeader == nil {
-		return errors.New("current header not found")
-	}
-
 	const (
 		mergeBlock     = uint64(15537393)
 		mergeBlockHash = "0x55b11b918355b1ef9c5db810302ebad0bf2544255b530cdce90674d5887bb286"
 	)
 
-	log.Info("Starting chain pruning",
-		"currentHeight", currentHeader.Number,
-		"mergeBlock", mergeBlock,
-		"mergeBlockHash", mergeBlockHash)
+	// Check we're far enough past merge to ensure all data is in freezer
+	currentHeader := chain.CurrentHeader()
+	if currentHeader == nil {
+		return errors.New("current header not found")
+	}
+	if currentHeader.Number.Uint64() < mergeBlock+params.FullImmutabilityThreshold {
+		return fmt.Errorf("chain not far enough past merge block, need %d more blocks",
+			mergeBlock+params.FullImmutabilityThreshold-currentHeader.Number.Uint64())
+	}
 
 	// Verify we have the correct merge block
 	hash := rawdb.ReadCanonicalHash(chaindb, mergeBlock)
@@ -642,46 +641,20 @@ func pruneHistory(ctx *cli.Context) error {
 		return fmt.Errorf("merge block hash mismatch: got %s, want %s", hash.Hex(), mergeBlockHash)
 	}
 
-	// Start a batch for efficient database operations
-	batch := chaindb.NewBatch()
-	deleted := 0
+	log.Info("Starting chain pruning",
+		"currentHeight", currentHeader.Number,
+		"mergeBlock", mergeBlock,
+		"mergeBlockHash", mergeBlockHash)
+
 	start := time.Now()
 
-	// Iterate from genesis to merge block
-	for height := uint64(1); height < mergeBlock; height++ {
-		// Get the canonical hash for this height
-		hash := rawdb.ReadCanonicalHash(chaindb, height)
-		if hash == (common.Hash{}) {
-			continue
-		}
-
-		// Delete body and receipts but keep the header
-		rawdb.DeleteBody(batch, hash, height)
-		rawdb.DeleteReceipts(batch, hash, height)
-
-		deleted++
-
-		// Commit batch every 10k blocks to avoid memory explosion
-		if deleted%10000 == 0 {
-			if err := batch.Write(); err != nil {
-				return err
-			}
-			batch.Reset()
-
-			log.Info("Pruning in progress",
-				"blocks", deleted,
-				"elapsed", common.PrettyDuration(time.Since(start)),
-				"height", height)
-		}
-	}
-
-	// Write any remaining items
-	if err := batch.Write(); err != nil {
-		return err
+	// Truncate everything up to merge block
+	if _, err := chaindb.TruncateTail(mergeBlock); err != nil {
+		return fmt.Errorf("failed to truncate ancient data: %v", err)
 	}
 
 	log.Info("Chain pruning completed",
-		"blocks", deleted,
+		"prunedUpTo", mergeBlock,
 		"elapsed", common.PrettyDuration(time.Since(start)))
 
 	return nil

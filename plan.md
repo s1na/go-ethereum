@@ -153,3 +153,54 @@ This approach allows us to:
 - Keep the complexity contained within chainFreezer
 - Maintain existing access patterns and interfaces
 - Enable separate pruning of non-header data
+
+## Alternative Approach: Variable-Length Tables
+
+Instead of creating a separate freezer instance for headers, we could modify the existing freezer to allow tables to have different lengths at the tail end, while maintaining aligned heads. This would allow us to keep headers and hashes in the main freezer while pruning other tables.
+
+### Benefits
+- Simpler migration path (no data movement required)
+- No need to modify header access patterns
+- Less disk I/O during pruning
+- Single freezer instance to manage
+
+### Technical Changes Required
+
+1. Modify Freezer Validation:
+   - Update `freezer.validate()` to allow different tail positions
+   - Only enforce alignment at the head
+   - Track tail position per table
+
+2. Update Repair Mechanism:
+   - Modify `freezer.repair()` to handle misaligned tables
+   - Only truncate tables to align heads, not tails
+   - Ensure crash recovery can handle misaligned tables
+
+3. Adapt Truncation Logic:
+   - Allow `TruncateTail()` to operate on specific tables
+   - Keep headers/hashes when pruning other tables
+   - Maintain proper metadata for different table lengths
+
+4. Safety Considerations:
+   - Ensure all operations respect table-specific boundaries
+   - Maintain data consistency during crashes/restarts
+   - Add validation for table-specific operations
+
+### Implementation Strategy
+
+1. Modify freezer internals:
+   - Add per-table metadata tracking
+   - Update validation logic
+   - Modify truncation operations
+
+2. Update pruning process:
+   - Skip headers/hashes during pruning
+   - Maintain proper index updates
+   - Handle different table lengths in ancient reads
+
+3. Ensure backward compatibility:
+   - Maintain existing interfaces
+   - Handle migration from old format
+   - Preserve crash recovery capabilities
+
+This approach trades implementation complexity in the freezer for simpler overall architecture and operations.

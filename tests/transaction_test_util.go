@@ -92,49 +92,49 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 	for _, testcase := range []struct {
 		name        string
 		signer      types.Signer
-		fork        *ttFork
 		isHomestead bool
 		isIstanbul  bool
 		isShanghai  bool
 	}{
-		{"Frontier", types.FrontierSigner{}, tt.Result["Frontier"], false, false, false},
-		{"Homestead", types.HomesteadSigner{}, tt.Result["Homestead"], true, false, false},
-		{"EIP150", types.HomesteadSigner{}, tt.Result["EIP150"], true, false, false},
-		{"EIP158", types.NewEIP155Signer(config.ChainID), tt.Result["EIP158"], true, false, false},
-		{"Byzantium", types.NewEIP155Signer(config.ChainID), tt.Result["Byzantium"], true, false, false},
-		{"Constantinople", types.NewEIP155Signer(config.ChainID), tt.Result["Constantinople"], true, false, false},
-		{"Istanbul", types.NewEIP155Signer(config.ChainID), tt.Result["Istanbul"], true, true, false},
-		{"Berlin", types.NewEIP2930Signer(config.ChainID), tt.Result["Berlin"], true, true, false},
-		{"London", types.NewLondonSigner(config.ChainID), tt.Result["London"], true, true, false},
-		{"Paris", types.NewLondonSigner(config.ChainID), tt.Result["Paris"], true, true, false},
-		{"Shanghai", types.NewLondonSigner(config.ChainID), tt.Result["Shanghai"], true, true, true},
-		{"Cancun", types.NewCancunSigner(config.ChainID), tt.Result["Cancun"], true, true, true},
-		{"Prague", types.NewPragueSigner(config.ChainID), tt.Result["Prague"], true, true, true},
+		{"Frontier", types.FrontierSigner{}, false, false, false},
+		{"Homestead", types.HomesteadSigner{}, true, false, false},
+		{"EIP150", types.HomesteadSigner{}, true, false, false},
+		{"EIP158", types.NewEIP155Signer(config.ChainID), true, false, false},
+		{"Byzantium", types.NewEIP155Signer(config.ChainID), true, false, false},
+		{"Constantinople", types.NewEIP155Signer(config.ChainID), true, false, false},
+		{"Istanbul", types.NewEIP155Signer(config.ChainID), true, true, false},
+		{"Berlin", types.NewEIP2930Signer(config.ChainID), true, true, false},
+		{"London", types.NewLondonSigner(config.ChainID), true, true, false},
+		{"Paris", types.NewLondonSigner(config.ChainID), true, true, false},
+		{"Shanghai", types.NewLondonSigner(config.ChainID), true, true, true},
+		{"Cancun", types.NewCancunSigner(config.ChainID), true, true, true},
+		{"Prague", types.NewPragueSigner(config.ChainID), true, true, true},
 	} {
-		if testcase.fork == nil {
+		fork := tt.Result[testcase.name]
+		if fork == nil {
 			continue
 		}
 		sender, hash, gas, err := validateTx(tt.Txbytes, testcase.signer, testcase.isHomestead, testcase.isIstanbul, testcase.isShanghai)
 		if err != nil {
-			if testcase.fork.Hash != nil {
+			if fork.Hash != nil {
 				return fmt.Errorf("unexpected error: %v", err)
 			}
 			continue
 		}
-		if testcase.fork.Exception != nil {
-			return fmt.Errorf("expected error %v, got none (%v)", *testcase.fork.Exception, err)
+		if fork.Exception != nil {
+			return fmt.Errorf("expected error %v, got none (%v)", *fork.Exception, err)
 		}
-		if common.Hash(*testcase.fork.Hash) != hash {
-			return fmt.Errorf("hash mismatch: got %x, want %x", hash, common.Hash(*testcase.fork.Hash))
+		if common.Hash(*fork.Hash) != hash {
+			return fmt.Errorf("hash mismatch: got %x, want %x", hash, common.Hash(*fork.Hash))
 		}
-		if common.Address(*testcase.fork.Sender) != sender {
-			return fmt.Errorf("sender mismatch: got %x, want %x", sender, testcase.fork.Sender)
+		if common.Address(*fork.Sender) != sender {
+			return fmt.Errorf("sender mismatch: got %x, want %x", sender, fork.Sender)
 		}
-		if hash != common.Hash(*testcase.fork.Hash) {
-			return fmt.Errorf("hash mismatch: got %x, want %x", hash, testcase.fork.Hash)
+		if hash != common.Hash(*fork.Hash) {
+			return fmt.Errorf("hash mismatch: got %x, want %x", hash, fork.Hash)
 		}
-		if uint64(testcase.fork.IntrinsicGas) != gas {
-			return fmt.Errorf("intrinsic gas mismatch: got %d, want %d", gas, uint64(testcase.fork.IntrinsicGas))
+		if uint64(fork.IntrinsicGas) != gas {
+			return fmt.Errorf("intrinsic gas mismatch: got %d, want %d", gas, uint64(fork.IntrinsicGas))
 		}
 	}
 	return nil

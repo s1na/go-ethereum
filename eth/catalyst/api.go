@@ -535,6 +535,7 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 	}
 	res := make([]*engine.BlobAndProofV1, len(hashes))
 
+	fmt.Printf("GetBlobsV1: len=%v\n", len(hashes))
 	blobs, proofs := api.eth.TxPool().GetBlobs(hashes)
 	for i := 0; i < len(blobs); i++ {
 		if blobs[i] != nil {
@@ -544,6 +545,7 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 			}
 		}
 	}
+	fmt.Printf("GetBlobsV1: res=%v\n", len(res))
 	return res, nil
 }
 

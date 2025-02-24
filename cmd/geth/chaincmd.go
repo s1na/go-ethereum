@@ -615,15 +615,24 @@ func pruneHistory(ctx *cli.Context) error {
 	defer chaindb.Close()
 	defer chain.Stop()
 
-	// Only prune for mainnet.
-	if chain.Config().ChainID.Cmp(big.NewInt(1)) != 0 {
+	// Only prune for mainnet or sepolia.
+	if chain.Config().ChainID.Cmp(big.NewInt(1)) != 0 && chain.Config().ChainID.Cmp(big.NewInt(11155111)) != 0 {
+		log.Info("Chain pruning not supported for this network")
 		return nil
 	}
 
-	const (
-		mergeBlock     = uint64(15537393)
-		mergeBlockHash = "0x55b11b918355b1ef9c5db810302ebad0bf2544255b530cdce90674d5887bb286"
+	// Choose the merge block and its hash based on the network.
+	var (
+		mergeBlock     uint64
+		mergeBlockHash string
 	)
+	if ctx.Bool(utils.SepoliaFlag.Name) {
+		mergeBlock = uint64(1450409)
+		mergeBlockHash = "0x229f6b18ca1552f1d5146deceb5387333f40dc6275aebee3f2c5c4ece07d02db"
+	} else {
+		mergeBlock = uint64(15537393)
+		mergeBlockHash = "0x55b11b918355b1ef9c5db810302ebad0bf2544255b530cdce90674d5887bb286"
+	}
 
 	// Check we're far enough past merge to ensure all data is in freezer
 	currentHeader := chain.CurrentHeader()

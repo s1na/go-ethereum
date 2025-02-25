@@ -192,7 +192,10 @@ This command dumps out the state for a given block (or latest, if none provided)
 		Name:      "prune-history",
 		Usage:     "Prune blockchain history (block bodies and receipts) up to the merge block",
 		ArgsUsage: "",
-		Flags:     slices.Concat(utils.DatabaseFlags),
+		Flags: slices.Concat([]cli.Flag{
+			utils.PruneNumberFlag,
+			utils.PruneHashFlag,
+		}, utils.DatabaseFlags),
 		Description: `
 The prune-history command removes historical block bodies and receipts from the
 blockchain database up to the merge block, while preserving block headers. This
@@ -625,7 +628,16 @@ func pruneHistory(ctx *cli.Context) error {
 		mergeBlock     uint64
 		mergeBlockHash string
 	)
-	if ctx.Bool(utils.SepoliaFlag.Name) {
+	if ctx.IsSet(utils.PruneNumberFlag.Name) && !ctx.IsSet(utils.PruneHashFlag.Name) {
+		return errors.New("prune block number provided without hash")
+	}
+	if !ctx.IsSet(utils.PruneNumberFlag.Name) && ctx.IsSet(utils.PruneHashFlag.Name) {
+		return errors.New("prune block hash provided without number")
+	}
+	if ctx.IsSet(utils.PruneNumberFlag.Name) && ctx.IsSet(utils.PruneHashFlag.Name) {
+		mergeBlock = ctx.Uint64(utils.PruneNumberFlag.Name)
+		mergeBlockHash = ctx.String(utils.PruneHashFlag.Name)
+	} else if ctx.Bool(utils.SepoliaFlag.Name) {
 		mergeBlock = uint64(1450409)
 		mergeBlockHash = "0x229f6b18ca1552f1d5146deceb5387333f40dc6275aebee3f2c5c4ece07d02db"
 	} else {

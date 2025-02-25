@@ -474,13 +474,28 @@ func (tx *Transaction) WithBlobTxSidecar(sideCar *BlobTxSidecar) *Transaction {
 	return cpy
 }
 
-// AuthList returns the authorizations list of the transaction.
-func (tx *Transaction) AuthList() []SetCodeAuthorization {
+// SetCodeAuthorizations returns the authorizations list of the transaction.
+func (tx *Transaction) SetCodeAuthorizations() []SetCodeAuthorization {
 	setcodetx, ok := tx.inner.(*SetCodeTx)
 	if !ok {
 		return nil
 	}
 	return setcodetx.AuthList
+}
+
+// SetCodeAuthorities returns a list of each authorization's corresponding authority.
+func (tx *Transaction) SetCodeAuthorities() []common.Address {
+	setcodetx, ok := tx.inner.(*SetCodeTx)
+	if !ok {
+		return nil
+	}
+	auths := make([]common.Address, 0, len(setcodetx.AuthList))
+	for _, auth := range setcodetx.AuthList {
+		if addr, err := auth.Authority(); err == nil {
+			auths = append(auths, addr)
+		}
+	}
+	return auths
 }
 
 // SetTime sets the decoding time of a transaction. This is used by tests to set

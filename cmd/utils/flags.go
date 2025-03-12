@@ -928,6 +928,17 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	// Prune command flags
+	PruneNumberFlag = &cli.IntFlag{
+		Name:  "prune.number",
+		Usage: "Prune the database to a specific block number",
+		Value: 0,
+	}
+	PruneHashFlag = &cli.StringFlag{
+		Name:  "prune.hash",
+		Usage: "Prune the database to a specific block hash",
+	}
 )
 
 var (

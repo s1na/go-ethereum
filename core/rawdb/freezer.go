@@ -301,7 +301,32 @@ func (f *Freezer) TruncateHead(items uint64) (uint64, error) {
 	return oitems, nil
 }
 
-// TruncateTail discards any recent data below the provided threshold number.
+// TruncateTailBlocks discards all data below the provided threshold block number.
+// This is intended to be used with the chain freezer. Unlike TruncateTail, it
+// only truncates blocks and receipts, leaving the header table where it is.
+func (f *Freezer) TruncateTailBlocks(tailBlock uint64) (uint64, error) {
+	if f.readonly {
+		return 0, errReadOnly
+	}
+	f.writeLock.Lock()
+	defer f.writeLock.Unlock()
+
+	old := f.tail.Load()
+	if old >= tailBlock {
+		return old, nil
+	}
+	for kind, table := range f.tables {
+		if kind == ChainFreezerBodiesTable || kind == ChainFreezerReceiptTable {
+			if err := table.truncateTail(tailBlock); err != nil {
+				return 0, err
+			}
+		}
+	}
+	f.tail.Store(tailBlock)
+	return old, nil
+}
+
+// TruncateTail discards all data below the provided threshold number.
 func (f *Freezer) TruncateTail(tail uint64) (uint64, error) {
 	if f.readonly {
 		return 0, errReadOnly
@@ -336,33 +361,68 @@ func (f *Freezer) Sync() error {
 	return nil
 }
 
+// splitTables splits tables in header and non-header tables
+func splitTables(tables map[string]*freezerTable) (map[string]*freezerTable, map[string]*freezerTable) {
+	var (
+		headTables  = make(map[string]*freezerTable)
+		otherTables = make(map[string]*freezerTable)
+	)
+	for kind, table := range tables {
+		if kind == ChainFreezerHeaderTable || kind == ChainFreezerHashTable {
+			headTables[kind] = table
+		} else {
+			otherTables[kind] = table
+		}
+	}
+	return headTables, otherTables
+}
+
 // validate checks that every table has the same boundary.
 // Used instead of `repair` in readonly mode.
 func (f *Freezer) validate() error {
 	if len(f.tables) == 0 {
 		return nil
 	}
-	var (
-		head uint64
-		tail uint64
-		name string
-	)
-	// Hack to get boundary of any table
-	for kind, table := range f.tables {
-		head = table.items.Load()
-		tail = table.itemHidden.Load()
-		name = kind
-		break
-	}
-	// Now check every table against those boundaries.
-	for kind, table := range f.tables {
-		if head != table.items.Load() {
-			return fmt.Errorf("freezer tables %s and %s have differing head: %d != %d", kind, name, table.items.Load(), head)
+
+	check := func(tables map[string]*freezerTable) (uint64, uint64, error) {
+		var (
+			head uint64
+			tail uint64
+			name string
+		)
+		// Hack to get boundary of any table
+		for kind, table := range tables {
+			head = table.items.Load()
+			tail = table.itemHidden.Load()
+			name = kind
+			break
 		}
-		if tail != table.itemHidden.Load() {
-			return fmt.Errorf("freezer tables %s and %s have differing tail: %d != %d", kind, name, table.itemHidden.Load(), tail)
+		// Now check every table against those boundaries.
+		for kind, table := range tables {
+			if head != table.items.Load() {
+				return 0, 0, fmt.Errorf("freezer tables %s and %s have differing head: %d != %d", kind, name, table.items.Load(), head)
+			}
+			if tail != table.itemHidden.Load() {
+				return 0, 0, fmt.Errorf("freezer tables %s and %s have differing tail: %d != %d", kind, name, table.itemHidden.Load(), tail)
+			}
+		}
+		return head, tail, nil
+	}
+
+	headTables, otherTables := splitTables(f.tables)
+	// verify that all the non-header tables have the same size
+	head, tail, err := check(otherTables)
+	if err != nil {
+		return err
+	}
+	// verify that the header tables have the same size
+	if len(headTables) != 0 {
+		head, tail, err = check(headTables)
+		if err != nil {
+			return err
 		}
 	}
+
 	f.frozen.Store(head)
 	f.tail.Store(tail)
 	return nil
@@ -370,28 +430,40 @@ func (f *Freezer) validate() error {
 
 // repair truncates all data tables to the same length.
 func (f *Freezer) repair() error {
-	var (
-		head = uint64(math.MaxUint64)
-		tail = uint64(0)
-	)
-	for _, table := range f.tables {
-		items := table.items.Load()
-		if head > items {
-			head = items
+	repair := func(tables map[string]*freezerTable) (uint64, uint64, error) {
+		var (
+			head = uint64(math.MaxUint64)
+			tail = uint64(0)
+		)
+		for _, table := range tables {
+			head = min(head, table.items.Load())
+			tail = max(tail, table.itemHidden.Load())
 		}
-		hidden := table.itemHidden.Load()
-		if hidden > tail {
-			tail = hidden
+		for _, table := range tables {
+			if err := table.truncateHead(head); err != nil {
+				return 0, 0, err
+			}
+			if err := table.truncateTail(tail); err != nil {
+				return 0, 0, err
+			}
 		}
+		return head, tail, nil
 	}
-	for _, table := range f.tables {
-		if err := table.truncateHead(head); err != nil {
+
+	headTables, otherTables := splitTables(f.tables)
+	// verify that all the non-header tables have the same size
+	head, tail, err := repair(otherTables)
+	if err != nil {
+		return err
+	}
+	// verify that the header tables have the same size
+	if len(headTables) != 0 {
+		head, tail, err = repair(headTables)
+		if err != nil {
 			return err
 		}
-		if err := table.truncateTail(tail); err != nil {
-			return err
-		}
 	}
+
 	f.frozen.Store(head)
 	f.tail.Store(tail)
 	return nil

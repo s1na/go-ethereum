@@ -130,6 +130,11 @@ type AncientWriter interface {
 	// will be removed all together.
 	TruncateTail(n uint64) (uint64, error)
 
+	// TruncateTailBlocks discards all blocks and receipts below the given number from the
+	// ancient store. Headers are left as-is. This is intended to be used with the chain
+	// freezer specifically.
+	TruncateTailBlocks(tailBlock uint64) (uint64, error)
+
 	// Sync flushes all in-memory ancient store data to disk.
 	Sync() error
 }

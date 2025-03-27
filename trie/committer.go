@@ -57,26 +57,32 @@ func (c *committer) commit(path []byte, n node, parallel bool) node {
 	// Commit children, then parent, and remove the dirty flag.
 	switch cn := n.(type) {
 	case *shortNode:
+		// Commit child
+		collapsed := cn.copy()
+
 		// If the child is fullNode, recursively commit,
 		// otherwise it can only be hashNode or valueNode.
 		if _, ok := cn.Val.(*fullNode); ok {
-			cn.Val = c.commit(append(path, cn.Key...), cn.Val, false)
+			collapsed.Val = c.commit(append(path, cn.Key...), cn.Val, false)
 		}
 		// The key needs to be copied, since we're adding it to the
 		// modified nodeset.
-		cn.Key = hexToCompact(cn.Key)
-		hashedNode := c.store(path, cn)
+		collapsed.Key = hexToCompact(cn.Key)
+		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn
 		}
-		return cn
+		return collapsed
 	case *fullNode:
-		c.commitChildren(path, cn, parallel)
-		hashedNode := c.store(path, cn)
+		hashedKids := c.commitChildren(path, cn, parallel)
+		collapsed := cn.copy()
+		collapsed.Children = hashedKids
+
+		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn
 		}
-		return cn
+		return collapsed
 	case hashNode:
 		return cn
 	default:
@@ -86,10 +92,11 @@ func (c *committer) commit(path []byte, n node, parallel bool) node {
 }
 
 // commitChildren commits the children of the given fullnode
-func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) {
+func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) [17]node {
 	var (
-		wg      sync.WaitGroup
-		nodesMu sync.Mutex
+		wg       sync.WaitGroup
+		nodesMu  sync.Mutex
+		children [17]node
 	)
 	for i := 0; i < 16; i++ {
 		child := n.Children[i]
@@ -99,21 +106,22 @@ func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) {
 		// If it's the hashed child, save the hash value directly.
 		// Note: it's impossible that the child in range [0, 15]
 		// is a valueNode.
-		if _, ok := child.(hashNode); ok {
+		if hn, ok := child.(hashNode); ok {
+			children[i] = hn
 			continue
 		}
 		// Commit the child recursively and store the "hashed" value.
 		// Note the returned node can be some embedded nodes, so it's
 		// possible the type is not hashNode.
 		if !parallel {
-			n.Children[i] = c.commit(append(path, byte(i)), child, false)
+			children[i] = c.commit(append(path, byte(i)), child, false)
 		} else {
 			wg.Add(1)
 			go func(index int) {
 				p := append(path, byte(index))
 				childSet := trienode.NewNodeSet(c.nodes.Owner)
 				childCommitter := newCommitter(childSet, c.tracer, c.collectLeaf)
-				n.Children[index] = childCommitter.commit(p, child, false)
+				children[index] = childCommitter.commit(p, child, false)
 				nodesMu.Lock()
 				c.nodes.MergeSet(childSet)
 				nodesMu.Unlock()
@@ -124,6 +132,11 @@ func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) {
 	if parallel {
 		wg.Wait()
 	}
+	// For the 17th child, it's possible the type is valuenode.
+	if n.Children[16] != nil {
+		children[16] = n.Children[16]
+	}
+	return children
 }
 
 // store hashes the node n and adds it to the modified nodeset. If leaf collection

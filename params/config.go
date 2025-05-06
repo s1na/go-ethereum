@@ -434,6 +434,10 @@ type ChainConfig struct {
 	Ethash             *EthashConfig       `json:"ethash,omitempty"`
 	Clique             *CliqueConfig       `json:"clique,omitempty"`
 	BlobScheduleConfig *BlobScheduleConfig `json:"blobSchedule,omitempty"`
+
+	EIP1559ElasticityMultiplier     *big.Int `json:"eip1559ElasticityMultiplier,omitempty"`        // EIP-1559 elasticity multiplier
+	EIP1559BaseFeeChangeDenominator *big.Int `json:"eip1559BaseFeeMaxChangeDenominator,omitempty"` // EIP-1559 max change denominator
+	EIP1559BaseFeeInitialValue      *big.Int `json:"eip1559BaseFeeInitialValue,omitempty"`         // EIP-1559 initial base fee value
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -882,12 +886,26 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 
 // BaseFeeChangeDenominator bounds the amount the base fee can change between blocks.
 func (c *ChainConfig) BaseFeeChangeDenominator() uint64 {
+	if c.EIP1559BaseFeeChangeDenominator != nil {
+		return c.EIP1559BaseFeeChangeDenominator.Uint64()
+	}
 	return DefaultBaseFeeChangeDenominator
 }
 
 // ElasticityMultiplier bounds the maximum gas limit an EIP-1559 block may have.
 func (c *ChainConfig) ElasticityMultiplier() uint64 {
+	if c.EIP1559ElasticityMultiplier != nil {
+		return c.EIP1559ElasticityMultiplier.Uint64()
+	}
 	return DefaultElasticityMultiplier
+}
+
+// BaseFeeInitialValue returns the initial value of the base fee for EIP-1559 blocks.
+func (c *ChainConfig) BaseFeeInitialValue() uint64 {
+	if c.EIP1559BaseFeeInitialValue != nil {
+		return c.EIP1559BaseFeeInitialValue.Uint64()
+	}
+	return InitialBaseFee
 }
 
 // LatestFork returns the latest time-based fork that would be active for the given time.

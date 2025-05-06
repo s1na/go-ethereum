@@ -488,7 +488,7 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 		if g.BaseFee != nil {
 			head.BaseFee = g.BaseFee
 		} else {
-			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
+			head.BaseFee = new(big.Int).SetUint64(g.Config.BaseFeeInitialValue())
 		}
 	}
 	var (
@@ -653,7 +653,7 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 	genesis := &Genesis{
 		Config:     &config,
 		GasLimit:   gasLimit,
-		BaseFee:    big.NewInt(params.InitialBaseFee),
+		BaseFee:    new(big.Int).SetUint64(config.BaseFeeInitialValue()),
 		Difficulty: big.NewInt(0),
 		Alloc: map[common.Address]types.Account{
 			common.BytesToAddress([]byte{0x01}): {Balance: big.NewInt(1)}, // ECRecover

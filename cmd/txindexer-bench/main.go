@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	datadir  = flag.String("datadir", "", "Path to the mainnet datadir")
-	threads  = flag.Int("threads", 100, "Number of concurrent threads")
-	duration = flag.Duration("duration", 10*time.Second, "Test duration")
+	datadir       = flag.String("datadir", "", "Path to the mainnet datadir")
+	threads       = flag.Int("threads", 100, "Number of concurrent threads")
+	duration      = flag.Duration("duration", 10*time.Second, "Test duration")
+	writeInterval = flag.Duration("write-interval", 100*time.Millisecond, "Interval between writes")
 )
 
 func main() {
@@ -41,6 +42,13 @@ func main() {
 	}
 	defer db.Close()
 
+	// Read the current tx index tail value
+	currentTail := rawdb.ReadTxIndexTail(db)
+	if currentTail == nil {
+		log.Fatal("No tx index tail found in database")
+	}
+	fmt.Printf("Current tx index tail: %d\n", *currentTail)
+
 	// Create channels for results
 	results := make(chan time.Duration, *threads*1000)
 	var wg sync.WaitGroup
@@ -48,6 +56,21 @@ func main() {
 	// Start the test
 	start := time.Now()
 	end := start.Add(*duration)
+
+	// Start background writer
+	writeDone := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(*writeInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				rawdb.WriteTxIndexTail(db, *currentTail)
+			case <-writeDone:
+				return
+			}
+		}
+	}()
 
 	// Launch worker goroutines
 	for i := 0; i < *threads; i++ {
@@ -66,6 +89,7 @@ func main() {
 	go func() {
 		wg.Wait()
 		close(results)
+		close(writeDone)
 	}()
 
 	// Collect results

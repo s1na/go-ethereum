@@ -23,12 +23,14 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console/prompt"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
@@ -207,6 +209,40 @@ var (
 		utils.MetricsInfluxDBBucketFlag,
 		utils.MetricsInfluxDBOrganizationFlag,
 	}
+
+	// txIndexerBenchFlags defines the flags for the txindexer-bench command.
+	// Ideally, these would be in cmd/utils/flags.go but defined here for now.
+	txIndexerThreadsFlag = &cli.IntFlag{
+		Name:  "threads",
+		Usage: "Number of concurrent threads",
+		Value: 100,
+	}
+	txIndexerDurationFlag = &cli.DurationFlag{
+		Name:  "duration",
+		Usage: "Test duration",
+		Value: 10 * time.Second,
+	}
+	txIndexerWriteIntervalFlag = &cli.DurationFlag{
+		Name:  "write-interval",
+		Usage: "Interval between writes",
+		Value: 100 * time.Millisecond,
+	}
+
+	txIndexerBenchCommand = &cli.Command{
+		Action:    txIndexerBench,
+		Name:      "txindexer-bench",
+		Usage:     "Benchmark txindexer performance",
+		ArgsUsage: "",
+		Flags: []cli.Flag{
+			utils.DataDirFlag, // Reusing existing DataDirFlag
+			txIndexerThreadsFlag,
+			txIndexerDurationFlag,
+			txIndexerWriteIntervalFlag,
+		},
+		Description: `
+The txindexer-bench command benchmarks the performance of the transaction indexer
+by concurrently reading and writing the transaction index tail.`,
+	}
 )
 
 var app = flags.NewApp("the go-ethereum command line interface")
@@ -247,6 +283,7 @@ func init() {
 		snapshotCommand,
 		// See verkle.go
 		verkleCommand,
+		txIndexerBenchCommand,
 	}
 	if logTestCommand != nil {
 		app.Commands = append(app.Commands, logTestCommand)
@@ -425,4 +462,143 @@ func startNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 			}
 		}()
 	}
+}
+
+func txIndexerBench(ctx *cli.Context) error {
+	// Create node using makeConfigNode
+	stack, cfg := makeConfigNode(ctx)
+	defer stack.Close()
+
+	// Open the database using utils.MakeChainDatabase
+	db := utils.MakeChainDatabase(ctx, stack, false /* readonly */)
+	if db == nil { // MakeChainDatabase calls utils.Fatalf on error, but good to check.
+		return fmt.Errorf("failed to open database")
+	}
+	defer db.Close()
+
+	// Read the current tx index tail value
+	currentTail := rawdb.ReadTxIndexTail(db)
+	if currentTail == nil {
+		return fmt.Errorf("no tx index tail found in database")
+	}
+	log.Info("Current tx index tail", "value", *currentTail)
+
+	// Create channels for results
+	threads := ctx.Int(txIndexerThreadsFlag.Name)
+	if threads <= 0 {
+		threads = 1 // Ensure at least one thread
+	}
+	results := make(chan time.Duration, threads*1000)
+	var wg sync.WaitGroup
+
+	// Start the test
+	start := time.Now()
+	testDuration := ctx.Duration(txIndexerDurationFlag.Name)
+	end := start.Add(testDuration)
+
+	// Start background writer
+	writeInterval := ctx.Duration(txIndexerWriteIntervalFlag.Name)
+	writeDone := make(chan struct{})
+	if writeInterval > 0 {
+		go func() {
+			ticker := time.NewTicker(writeInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					// For the purpose of this benchmark, we keep writing the initial tail
+					// to simulate write load without altering the benchmark's target state.
+					rawdb.WriteTxIndexTail(db, *currentTail)
+				case <-writeDone:
+					return
+				}
+			}
+		}()
+	}
+
+	// Launch worker goroutines
+	for i := 0; i < threads; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for time.Now().Before(end) {
+				readStart := time.Now()
+				rawdb.ReadTxIndexTail(db)
+				results <- time.Since(readStart)
+			}
+		}()
+	}
+
+	// Start a goroutine to close results channel when all workers are done
+	go func() {
+		wg.Wait()
+		close(results)
+		if writeInterval > 0 {
+			close(writeDone)
+		}
+	}()
+
+	// Collect results
+	var (
+		total     time.Duration
+		count     int64
+		min       = time.Hour
+		max       time.Duration
+		latencies []time.Duration
+	)
+
+	for duration := range results {
+		total += duration
+		count++
+		if duration < min {
+			min = duration
+		}
+		if duration > max {
+			max = duration
+		}
+		latencies = append(latencies, duration)
+	}
+
+	// Calculate percentiles
+	if count == 0 {
+		log.Info("No reads performed during the test.")
+		return nil
+	}
+	sort.Slice(latencies, func(i, j int) bool {
+		return latencies[i] < latencies[j]
+	})
+
+	p50Idx := len(latencies) * 50 / 100
+	p95Idx := len(latencies) * 95 / 100
+	p99Idx := len(latencies) * 99 / 100
+
+	// Ensure indices are within bounds, especially for small counts
+	if p50Idx >= len(latencies) {
+		p50Idx = len(latencies) - 1
+	}
+	if p95Idx >= len(latencies) {
+		p95Idx = len(latencies) - 1
+	}
+	if p99Idx >= len(latencies) {
+		p99Idx = len(latencies) - 1
+	}
+
+	p50 := time.Duration(0)
+	p95 := time.Duration(0)
+	p99 := time.Duration(0)
+
+	if len(latencies) > 0 {
+		p50 = latencies[p50Idx]
+		p95 = latencies[p95Idx]
+		p99 = latencies[p99Idx]
+	}
+
+	// Print results
+	log.Info("Test completed", "duration", time.Since(start))
+	log.Info("Read statistics", "total_reads", count, "avg_latency", total/time.Duration(count), "min_latency", min, "max_latency", max, "p50_latency", p50, "p95_latency", p95, "p99_latency", p99)
+
+	// Access cfg to avoid unused variable error, can be removed if cfg is used later.
+	_ = cfg
+
+	return nil
 }

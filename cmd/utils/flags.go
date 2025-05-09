@@ -961,6 +961,27 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	ThreadsFlag = &cli.IntFlag{
+		Name:     "threads",
+		Usage:    "Number of concurrent threads for benchmark",
+		Category: flags.TestingCategory,
+		Value:    100,
+	}
+
+	DurationFlag = &cli.DurationFlag{
+		Name:     "duration",
+		Usage:    "Test duration for benchmark",
+		Category: flags.TestingCategory,
+		Value:    10 * time.Second,
+	}
+
+	WriteIntervalFlag = &cli.DurationFlag{
+		Name:     "write-interval",
+		Usage:    "Interval between writes for benchmark",
+		Category: flags.TestingCategory,
+		Value:    100 * time.Millisecond,
+	}
 )
 
 var (

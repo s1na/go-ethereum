@@ -21,6 +21,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"os"
@@ -142,6 +143,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 		GasLimit:      gasLimit,
 		BaseFee:       baseFee,
 		ExcessBlobGas: &excessBlobGas,
+		Difficulty:    common.Big0,
 	}
 }
 
@@ -166,31 +168,42 @@ func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
 	return bc.statedb, nil
 }
 
-// makeAddressReserver is a utility method to sanity check that accounts are
+// reserver is a utility struct to sanity check that accounts are
 // properly reserved by the blobpool (no duplicate reserves or unreserves).
-func makeAddressReserver() txpool.AddressReserver {
-	var (
-		reserved = make(map[common.Address]struct{})
-		lock     sync.Mutex
-	)
-	return func(addr common.Address, reserve bool) error {
-		lock.Lock()
-		defer lock.Unlock()
+type reserver struct {
+	accounts map[common.Address]struct{}
+	lock     sync.RWMutex
+}
 
-		_, exists := reserved[addr]
-		if reserve {
-			if exists {
-				panic("already reserved")
-			}
-			reserved[addr] = struct{}{}
-			return nil
-		}
-		if !exists {
-			panic("not reserved")
-		}
-		delete(reserved, addr)
-		return nil
+func newReserver() txpool.Reserver {
+	return &reserver{accounts: make(map[common.Address]struct{})}
+}
+
+func (r *reserver) Hold(addr common.Address) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	if _, exists := r.accounts[addr]; exists {
+		panic("already reserved")
 	}
+	r.accounts[addr] = struct{}{}
+	return nil
+}
+
+func (r *reserver) Release(addr common.Address) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	if _, exists := r.accounts[addr]; !exists {
+		panic("not reserved")
+	}
+	delete(r.accounts, addr)
+	return nil
+}
+
+func (r *reserver) Has(address common.Address) bool {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+	_, exists := r.accounts[address]
+	return exists
 }
 
 // makeTx is a utility method to construct a random blob transaction and sign it
@@ -374,7 +387,7 @@ func verifyPoolInternals(t *testing.T, pool *BlobPool) {
 	var stored uint64
 	for _, txs := range pool.index {
 		for _, tx := range txs {
-			stored += uint64(tx.size)
+			stored += uint64(tx.storageSize)
 		}
 	}
 	if pool.stored != stored {
@@ -451,8 +464,7 @@ func TestOpenDrops(t *testing.T) {
 	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
 	// Create a temporary folder for the persistent backend
-	storage, _ := os.MkdirTemp("", "blobpool-")
-	defer os.RemoveAll(storage)
+	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
 	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(testMaxBlobsPerBlock), nil)
@@ -698,8 +710,8 @@ func TestOpenDrops(t *testing.T) {
 		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
 		statedb: statedb,
 	}
-	pool := New(Config{Datadir: storage}, chain)
-	if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 	defer pool.Close()
@@ -774,8 +786,7 @@ func TestOpenIndex(t *testing.T) {
 	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
 	// Create a temporary folder for the persistent backend
-	storage, _ := os.MkdirTemp("", "blobpool-")
-	defer os.RemoveAll(storage)
+	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
 	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(testMaxBlobsPerBlock), nil)
@@ -817,8 +828,8 @@ func TestOpenIndex(t *testing.T) {
 		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
 		statedb: statedb,
 	}
-	pool := New(Config{Datadir: storage}, chain)
-	if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 	defer pool.Close()
@@ -863,8 +874,7 @@ func TestOpenHeap(t *testing.T) {
 	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
 	// Create a temporary folder for the persistent backend
-	storage, _ := os.MkdirTemp("", "blobpool-")
-	defer os.RemoveAll(storage)
+	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
 	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(testMaxBlobsPerBlock), nil)
@@ -919,8 +929,8 @@ func TestOpenHeap(t *testing.T) {
 		blobfee: uint256.NewInt(105),
 		statedb: statedb,
 	}
-	pool := New(Config{Datadir: storage}, chain)
-	if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 	defer pool.Close()
@@ -950,8 +960,7 @@ func TestOpenCap(t *testing.T) {
 	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
 	// Create a temporary folder for the persistent backend
-	storage, _ := os.MkdirTemp("", "blobpool-")
-	defer os.RemoveAll(storage)
+	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
 	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(testMaxBlobsPerBlock), nil)
@@ -999,8 +1008,8 @@ func TestOpenCap(t *testing.T) {
 			blobfee: uint256.NewInt(105),
 			statedb: statedb,
 		}
-		pool := New(Config{Datadir: storage, Datacap: datacap}, chain)
-		if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
+		pool := New(Config{Datadir: storage, Datacap: datacap}, chain, nil)
+		if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 			t.Fatalf("failed to create blob pool: %v", err)
 		}
 		// Verify that enough transactions have been dropped to get the pool's size
@@ -1040,8 +1049,7 @@ func TestChangingSlotterSize(t *testing.T) {
 	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
 	// Create a temporary folder for the persistent backend
-	storage, _ := os.MkdirTemp("", "blobpool-")
-	defer os.RemoveAll(storage)
+	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
 	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(6), nil)
@@ -1101,8 +1109,8 @@ func TestChangingSlotterSize(t *testing.T) {
 			blobfee: uint256.NewInt(105),
 			statedb: statedb,
 		}
-		pool := New(Config{Datadir: storage}, chain)
-		if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
+		pool := New(Config{Datadir: storage}, chain, nil)
+		if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 			t.Fatalf("failed to create blob pool: %v", err)
 		}
 
@@ -1476,7 +1484,7 @@ func TestAdd(t *testing.T) {
 				{ // New account, no previous txs, nonce 0, but blob fee cap too low
 					from: "alice",
 					tx:   makeUnsignedTx(0, 1, 1, 0),
-					err:  txpool.ErrUnderpriced,
+					err:  txpool.ErrTxGasPriceTooLow,
 				},
 				{ // Same as above but blob fee cap equals minimum, should be accepted
 					from: "alice",
@@ -1507,8 +1515,7 @@ func TestAdd(t *testing.T) {
 	}
 	for i, tt := range tests {
 		// Create a temporary folder for the persistent backend
-		storage, _ := os.MkdirTemp("", "blobpool-")
-		defer os.RemoveAll(storage) // late defer, still ok
+		storage := filepath.Join(t.TempDir(), fmt.Sprintf("test-%d", i))
 
 		os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
 		store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(testMaxBlobsPerBlock), nil)
@@ -1545,8 +1552,8 @@ func TestAdd(t *testing.T) {
 			blobfee: uint256.NewInt(105),
 			statedb: statedb,
 		}
-		pool := New(Config{Datadir: storage}, chain)
-		if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
+		pool := New(Config{Datadir: storage}, chain, nil)
+		if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 			t.Fatalf("test %d: failed to create blob pool: %v", i, err)
 		}
 		verifyPoolInternals(t, pool)
@@ -1557,6 +1564,16 @@ func TestAdd(t *testing.T) {
 			if err := pool.add(signed); !errors.Is(err, add.err) {
 				t.Errorf("test %d, tx %d: adding transaction error mismatch: have %v, want %v", i, j, err, add.err)
 			}
+			if add.err == nil {
+				size, exist := pool.lookup.sizeOfTx(signed.Hash())
+				if !exist {
+					t.Errorf("test %d, tx %d: failed to lookup transaction's size", i, j)
+				}
+				if size != signed.Size() {
+					t.Errorf("test %d, tx %d: transaction's size mismatches: have %v, want %v",
+						i, j, size, signed.Size())
+				}
+			}
 			verifyPoolInternals(t, pool)
 		}
 		verifyPoolInternals(t, pool)
@@ -1565,8 +1582,9 @@ func TestAdd(t *testing.T) {
 		if tt.block != nil {
 			// Fake a header for the new set of transactions
 			header := &types.Header{
-				Number:  big.NewInt(int64(chain.CurrentBlock().Number.Uint64() + 1)),
-				BaseFee: chain.CurrentBlock().BaseFee, // invalid, but nothing checks it, yolo
+				Number:     big.NewInt(int64(chain.CurrentBlock().Number.Uint64() + 1)),
+				Difficulty: common.Big0,
+				BaseFee:    chain.CurrentBlock().BaseFee, // invalid, but nothing checks it, yolo
 			}
 			// Inject the fake block into the chain
 			txs := make([]*types.Transaction, len(tt.block))
@@ -1631,10 +1649,10 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 			blobfee: uint256.NewInt(blobfee),
 			statedb: statedb,
 		}
-		pool = New(Config{Datadir: ""}, chain)
+		pool = New(Config{Datadir: ""}, chain, nil)
 	)
 
-	if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 		b.Fatalf("failed to create blob pool: %v", err)
 	}
 	// Make the pool not use disk (just drop everything). This test never reads

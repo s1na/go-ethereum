@@ -64,9 +64,12 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 	engine := beacon.New(ethash.NewFaker())
 	if merged {
 		config.TerminalTotalDifficulty = common.Big0
+		config.MergeNetsplitBlock = common.Big0
 	} else {
-		engine.TestingTTDBlock(uint64(n))
+		// When !merged, the tests expect the next block after the generated chain to be in PoS.
+		config.MergeNetsplitBlock = big.NewInt(int64(n + 1))
 	}
+
 	genesis := &core.Genesis{
 		Config: &config,
 		Alloc: types.GenesisAlloc{
@@ -443,6 +446,9 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 	if _, err := ethservice.BlockChain().InsertChain(blocks); err != nil {
 		n.Close()
 		t.Fatal("can't import test blocks:", err)
+	}
+	if err := ethservice.TxPool().Sync(); err != nil {
+		t.Fatal("failed to sync txpool after initial blockchain import:", err)
 	}
 
 	ethservice.SetSynced()

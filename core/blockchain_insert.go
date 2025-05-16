@@ -60,12 +60,20 @@ func (st *insertStats) report(chain []*types.Block, index int, snapDiffItems, sn
 		}
 		end := chain[index]
 
+		var accessItemsPerTx float64
+		if txs > 0 {
+			accessItemsPerTx = float64(st.accessItems) / float64(txs)
+		}
+		var accessListPerTx float64
+		if txs > 0 {
+			accessListPerTx = float64(st.accessList) / float64(txs)
+		}
 		// Assemble the log context and send it to the logger
 		context := []interface{}{
 			"number", end.Number(), "hash", end.Hash(),
 			"blocks", st.processed, "txs", txs, "mgas", float64(st.usedGas) / 1000000,
 			"accessItems", st.accessItems, "accessList", st.accessList,
-			"accessItems/tx", float64(st.accessItems / txs), "accessList/tx", float64(st.accessList / txs),
+			"accessItems/tx", accessItemsPerTx, "accessList/tx", accessListPerTx,
 			"elapsed", common.PrettyDuration(elapsed), "mgasps", mgasps,
 		}
 		if timestamp := time.Unix(int64(end.Time()), 0); time.Since(timestamp) > time.Minute {

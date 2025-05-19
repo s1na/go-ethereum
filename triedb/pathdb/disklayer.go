@@ -115,15 +115,12 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 	dirtyNodeMissMeter.Mark(1)
 
 	// Try to retrieve the trie node from the clean memory cache
-	h := newHasher()
-	defer h.release()
-
 	key := nodeCacheKey(owner, path)
 	if dl.nodes != nil {
 		if blob := dl.nodes.Get(nil, key); len(blob) > 0 {
 			cleanNodeHitMeter.Mark(1)
 			cleanNodeReadMeter.Mark(int64(len(blob)))
-			return blob, h.hash(blob), &nodeLoc{loc: locCleanCache, depth: depth}, nil
+			return blob, crypto.Keccak256Hash(blob), &nodeLoc{loc: locCleanCache, depth: depth}, nil
 		}
 		cleanNodeMissMeter.Mark(1)
 	}
@@ -138,7 +135,7 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		dl.nodes.Set(key, blob)
 		cleanNodeWriteMeter.Mark(int64(len(blob)))
 	}
-	return blob, h.hash(blob), &nodeLoc{loc: locDiskLayer, depth: depth}, nil
+	return blob, crypto.Keccak256Hash(blob), &nodeLoc{loc: locDiskLayer, depth: depth}, nil
 }
 
 // account directly retrieves the account RLP associated with a particular
@@ -231,6 +228,8 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 		oldest   uint64
 	)
 	if dl.db.freezer != nil {
+		// Bail out with an error if writing the state history fails.
+		// This can happen, for example, if the device is full.
 		err := writeHistory(dl.db.freezer, bottom)
 		if err != nil {
 			return nil, err
@@ -295,31 +294,17 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 	if dl.id == 0 {
 		return nil, fmt.Errorf("%w: zero state id", errStateUnrecoverable)
 	}
-	var (
-		buff     = crypto.NewKeccakState()
-		hashes   = make(map[common.Address]common.Hash)
-		accounts = make(map[common.Hash][]byte)
-		storages = make(map[common.Hash]map[common.Hash][]byte)
-	)
-	for addr, blob := range h.accounts {
-		hash := crypto.HashData(buff, addr.Bytes())
-		hashes[addr] = hash
-		accounts[hash] = blob
-	}
-	for addr, storage := range h.storages {
-		hash, ok := hashes[addr]
-		if !ok {
-			panic(fmt.Errorf("storage history with no account %x", addr))
-		}
-		storages[hash] = storage
-	}
 	// Apply the reverse state changes upon the current state. This must
 	// be done before holding the lock in order to access state in "this"
 	// layer.
-	nodes, err := apply(dl.db, h.meta.parent, h.meta.root, h.accounts, h.storages)
+	nodes, err := apply(dl.db, h.meta.parent, h.meta.root, h.meta.version != stateHistoryV0, h.accounts, h.storages)
 	if err != nil {
 		return nil, err
 	}
+	// Derive the state modification set from the history, keyed by the hash
+	// of the account address and the storage key.
+	accounts, storages := h.stateSet()
+
 	// Mark the diskLayer as stale before applying any mutations on top.
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
@@ -370,23 +355,4 @@ func (dl *diskLayer) resetCache() {
 	if dl.nodes != nil {
 		dl.nodes.Reset()
 	}
-}
-
-// hasher is used to compute the sha256 hash of the provided data.
-type hasher struct{ sha crypto.KeccakState }
-
-var hasherPool = sync.Pool{
-	New: func() interface{} { return &hasher{sha: crypto.NewKeccakState()} },
-}
-
-func newHasher() *hasher {
-	return hasherPool.Get().(*hasher)
-}
-
-func (h *hasher) hash(data []byte) common.Hash {
-	return crypto.HashData(h.sha, data)
-}
-
-func (h *hasher) release() {
-	hasherPool.Put(h)
 }

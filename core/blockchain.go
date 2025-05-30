@@ -1415,7 +1415,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			}
 			if !skipPresenceCheck {
 				// Ignore if the entire data is already known
-				if bc.HasBlock(block.Hash(), block.NumberU64()) {
+				if bc.HasFastBlock(block.Hash(), block.NumberU64()) {
 					stats.ignored++
 					continue
 				} else {

@@ -932,6 +932,8 @@ func scanReceipts(ctx *cli.Context) error {
 
 	var (
 		emptyReceipts  []uint64 // Block numbers with empty receipts
+		emptyAncients  []uint64 // Ancient blocks with empty receipts
+		emptyKV        []uint64 // KV blocks with empty receipts
 		totalScanned   uint64   // Total blocks scanned
 		ancientScanned uint64   // Ancient blocks scanned
 		kvScanned      uint64   // KV blocks scanned
@@ -973,9 +975,11 @@ func scanReceipts(ctx *cli.Context) error {
 				// If we can't read the receipt, it might be missing or corrupted
 				log.Warn("Failed to read ancient receipt", "block", i, "error", err)
 				emptyReceipts = append(emptyReceipts, i)
+				emptyAncients = append(emptyAncients, i)
 			} else if len(data) == 0 {
 				// Empty receipt data
 				emptyReceipts = append(emptyReceipts, i)
+				emptyAncients = append(emptyAncients, i)
 			}
 			ancientScanned++
 			totalScanned++
@@ -1032,6 +1036,7 @@ func scanReceipts(ctx *cli.Context) error {
 				if len(data) == 0 {
 					// Empty receipt data
 					emptyReceipts = append(emptyReceipts, blockNum)
+					emptyKV = append(emptyKV, blockNum)
 				}
 				kvScanned++
 				totalScanned++
@@ -1045,6 +1050,8 @@ func scanReceipts(ctx *cli.Context) error {
 		"ancient_blocks_scanned", ancientScanned,
 		"kv_blocks_scanned", kvScanned,
 		"empty_receipts_found", len(emptyReceipts),
+		"empty_receipts_ancient", len(emptyAncients),
+		"empty_receipts_kv", len(emptyKV),
 		"elapsed", elapsed)
 
 	// Report findings
@@ -1082,8 +1089,8 @@ func scanReceipts(ctx *cli.Context) error {
 			fmt.Printf("  %s\n", strings.Join(ranges, ", "))
 		}
 
-		fmt.Printf("\nScanned %d total blocks (%d ancient, %d KV) in %v.\n",
-			totalScanned, ancientScanned, kvScanned, elapsed)
+		fmt.Printf("\nScanned %d total blocks (%d ancient, %d KV) in %v. Empty receipts: %d ancient, %d KV.\n",
+			totalScanned, ancientScanned, kvScanned, elapsed, len(emptyAncients), len(emptyKV))
 	}
 
 	return nil

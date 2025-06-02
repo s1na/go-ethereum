@@ -1055,6 +1055,7 @@ func scanReceipts(ctx *cli.Context) error {
 
 		// Group consecutive blocks for easier reading
 		if len(emptyReceipts) > 0 {
+			var ranges []string
 			start := emptyReceipts[0]
 			end := emptyReceipts[0]
 
@@ -1063,20 +1064,22 @@ func scanReceipts(ctx *cli.Context) error {
 					end = emptyReceipts[i]
 				} else {
 					if start == end {
-						fmt.Printf("  Block %d\n", start)
+						ranges = append(ranges, fmt.Sprintf("%d", start))
 					} else {
-						fmt.Printf("  Blocks %d-%d\n", start, end)
+						ranges = append(ranges, fmt.Sprintf("%d-%d", start, end))
 					}
 					start = emptyReceipts[i]
 					end = emptyReceipts[i]
 				}
 			}
-			// Print the last range
+			// Add the last range
 			if start == end {
-				fmt.Printf("  Block %d\n", start)
+				ranges = append(ranges, fmt.Sprintf("%d", start))
 			} else {
-				fmt.Printf("  Blocks %d-%d\n", start, end)
+				ranges = append(ranges, fmt.Sprintf("%d-%d", start, end))
 			}
+
+			fmt.Printf("  %s\n", strings.Join(ranges, ", "))
 		}
 
 		fmt.Printf("\nScanned %d total blocks (%d ancient, %d KV) in %v.\n",

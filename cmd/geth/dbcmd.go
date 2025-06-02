@@ -83,6 +83,7 @@ Remove blockchain and state databases`,
 			dbMetadataCmd,
 			dbCheckStateContentCmd,
 			dbInspectHistoryCmd,
+			dbScanReceiptsCmd,
 		},
 	}
 	dbInspectCmd = &cli.Command{
@@ -102,6 +103,16 @@ Remove blockchain and state databases`,
 		Description: `This command iterates the entire database for 32-byte keys, looking for rlp-encoded trie nodes.
 For each trie node encountered, it checks that the key corresponds to the keccak256(value). If this is not true, this indicates
 a data corruption.`,
+	}
+	dbScanReceiptsCmd = &cli.Command{
+		Action:    scanReceipts,
+		Name:      "scan-receipts",
+		Usage:     "Scan for empty receipt data in both KV and ancient databases",
+		ArgsUsage: "",
+		Flags:     slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
+		Description: `This command scans for empty receipts in both the key-value database and ancient freezer storage.
+It will report any blocks that have empty (zero-length) receipt data, which may indicate database corruption.
+The scan covers all blocks from the oldest in the freezer to the newest in the KV database.`,
 	}
 	dbStatCmd = &cli.Command{
 		Action: dbStats,
@@ -906,4 +917,171 @@ func inspectHistory(ctx *cli.Context) error {
 		return inspectAccount(triedb, start, end, address, ctx.Bool("raw"))
 	}
 	return inspectStorage(triedb, start, end, address, slot, ctx.Bool("raw"))
+}
+
+// scanReceipts scans both the KV database and ancient freezer for empty receipts.
+// This function helps identify database corruption where receipt data has zero length.
+func scanReceipts(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	defer db.Close()
+
+	log.Info("Starting receipt scan for empty receipt data")
+
+	var (
+		emptyReceipts  []uint64 // Block numbers with empty receipts
+		totalScanned   uint64   // Total blocks scanned
+		ancientScanned uint64   // Ancient blocks scanned
+		kvScanned      uint64   // KV blocks scanned
+		startTime      = time.Now()
+		lastLogTime    = time.Now()
+		logInterval    = 10 * time.Second
+	)
+
+	// First, scan the ancient/freezer database
+	log.Info("Scanning ancient database for empty receipts")
+	err := db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+		ancients, err := reader.Ancients()
+		if err != nil {
+			return fmt.Errorf("failed to get ancient count: %v", err)
+		}
+
+		tail, err := reader.Tail()
+		if err != nil {
+			return fmt.Errorf("failed to get ancient tail: %v", err)
+		}
+
+		if ancients == 0 {
+			log.Info("No ancient data found")
+			return nil
+		}
+
+		log.Info("Ancient database info", "tail", tail, "head", ancients-1, "count", ancients-tail)
+
+		// Scan ancient receipts
+		for i := tail; i < ancients; i++ {
+			// Check if we should log progress
+			if time.Since(lastLogTime) > logInterval {
+				log.Info("Scanning ancient receipts", "block", i, "progress", fmt.Sprintf("%.2f%%", float64(i-tail)/float64(ancients-tail)*100))
+				lastLogTime = time.Now()
+			}
+
+			data, err := reader.Ancient(rawdb.ChainFreezerReceiptTable, i)
+			if err != nil {
+				// If we can't read the receipt, it might be missing or corrupted
+				log.Warn("Failed to read ancient receipt", "block", i, "error", err)
+				emptyReceipts = append(emptyReceipts, i)
+			} else if len(data) == 0 {
+				// Empty receipt data
+				emptyReceipts = append(emptyReceipts, i)
+			}
+			ancientScanned++
+			totalScanned++
+		}
+		return nil
+	})
+	if err != nil {
+		log.Error("Failed to scan ancient database", "error", err)
+		return err
+	}
+
+	log.Info("Ancient scan complete", "blocks_scanned", ancientScanned, "empty_receipts", len(emptyReceipts))
+
+	// Now scan the KV database for receipts not in ancients
+	log.Info("Scanning KV database for empty receipts")
+
+	// Get the latest block number to know the range to scan
+	headHash := rawdb.ReadHeadBlockHash(db)
+	if headHash == (common.Hash{}) {
+		log.Info("No head block found in KV database")
+	} else {
+		headNumber := rawdb.ReadHeaderNumber(db, headHash)
+		if headNumber == nil {
+			log.Warn("Could not get head block number")
+		} else {
+			// Get the ancient count to know where KV data starts
+			ancientCount, err := db.Ancients()
+			if err != nil {
+				log.Warn("Could not get ancient count for KV scan", "error", err)
+				ancientCount = 0
+			}
+
+			log.Info("KV database scan range", "start_block", ancientCount, "end_block", *headNumber)
+
+			// Scan from the end of ancients to the head block
+			for blockNum := ancientCount; blockNum <= *headNumber; blockNum++ {
+				if time.Since(lastLogTime) > logInterval {
+					if *headNumber > ancientCount {
+						progress := float64(blockNum-ancientCount) / float64(*headNumber-ancientCount) * 100
+						log.Info("Scanning KV receipts", "block", blockNum, "progress", fmt.Sprintf("%.2f%%", progress))
+					}
+					lastLogTime = time.Now()
+				}
+
+				// Get canonical hash for this block number
+				hash := rawdb.ReadCanonicalHash(db, blockNum)
+				if hash == (common.Hash{}) {
+					// No canonical hash, skip
+					continue
+				}
+
+				// Read receipt data directly
+				data := rawdb.ReadReceiptsRLP(db, hash, blockNum)
+				if len(data) == 0 {
+					// Empty receipt data
+					emptyReceipts = append(emptyReceipts, blockNum)
+				}
+				kvScanned++
+				totalScanned++
+			}
+		}
+	}
+
+	elapsed := time.Since(startTime)
+	log.Info("Receipt scan complete",
+		"total_blocks_scanned", totalScanned,
+		"ancient_blocks_scanned", ancientScanned,
+		"kv_blocks_scanned", kvScanned,
+		"empty_receipts_found", len(emptyReceipts),
+		"elapsed", elapsed)
+
+	// Report findings
+	if len(emptyReceipts) == 0 {
+		fmt.Printf("✓ No empty receipts found. Scanned %d blocks in %v.\n", totalScanned, elapsed)
+	} else {
+		fmt.Printf("⚠ Found %d blocks with empty receipts:\n", len(emptyReceipts))
+
+		// Group consecutive blocks for easier reading
+		if len(emptyReceipts) > 0 {
+			start := emptyReceipts[0]
+			end := emptyReceipts[0]
+
+			for i := 1; i < len(emptyReceipts); i++ {
+				if emptyReceipts[i] == end+1 {
+					end = emptyReceipts[i]
+				} else {
+					if start == end {
+						fmt.Printf("  Block %d\n", start)
+					} else {
+						fmt.Printf("  Blocks %d-%d\n", start, end)
+					}
+					start = emptyReceipts[i]
+					end = emptyReceipts[i]
+				}
+			}
+			// Print the last range
+			if start == end {
+				fmt.Printf("  Block %d\n", start)
+			} else {
+				fmt.Printf("  Blocks %d-%d\n", start, end)
+			}
+		}
+
+		fmt.Printf("\nScanned %d total blocks (%d ancient, %d KV) in %v.\n",
+			totalScanned, ancientScanned, kvScanned, elapsed)
+	}
+
+	return nil
 }

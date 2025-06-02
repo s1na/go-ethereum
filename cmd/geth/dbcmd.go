@@ -111,8 +111,9 @@ a data corruption.`,
 		ArgsUsage: "",
 		Flags:     slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Description: `This command scans for empty receipts in both the key-value database and ancient freezer storage.
-It will report any blocks that have empty (zero-length) receipt data, which may indicate database corruption.
-The scan covers all blocks from the oldest in the freezer to the newest in the KV database.`,
+It distinguishes between corrupted empty receipts (zero-length data) and valid empty receipts (RLP-encoded as 0xc0).
+The scan covers all blocks from the oldest in the freezer to the newest in the KV database and reports
+both types separately to help identify database corruption vs legitimate empty receipt lists.`,
 	}
 	dbStatCmd = &cli.Command{
 		Action: dbStats,
@@ -931,15 +932,19 @@ func scanReceipts(ctx *cli.Context) error {
 	log.Info("Starting receipt scan for empty receipt data")
 
 	var (
-		emptyReceipts  []uint64 // Block numbers with empty receipts
-		emptyAncients  []uint64 // Ancient blocks with empty receipts
-		emptyKV        []uint64 // KV blocks with empty receipts
-		totalScanned   uint64   // Total blocks scanned
-		ancientScanned uint64   // Ancient blocks scanned
-		kvScanned      uint64   // KV blocks scanned
-		startTime      = time.Now()
-		lastLogTime    = time.Now()
-		logInterval    = 10 * time.Second
+		emptyReceipts     []uint64 // Block numbers with empty receipts (both types)
+		corruptedEmpty    []uint64 // Block numbers with corrupted empty receipts (zero-length)
+		validEmpty        []uint64 // Block numbers with valid empty receipts (RLP 0xc0)
+		corruptedAncients []uint64 // Ancient blocks with corrupted empty receipts
+		validAncients     []uint64 // Ancient blocks with valid empty receipts
+		corruptedKV       []uint64 // KV blocks with corrupted empty receipts
+		validKV           []uint64 // KV blocks with valid empty receipts
+		totalScanned      uint64   // Total blocks scanned
+		ancientScanned    uint64   // Ancient blocks scanned
+		kvScanned         uint64   // KV blocks scanned
+		startTime         = time.Now()
+		lastLogTime       = time.Now()
+		logInterval       = 10 * time.Second
 	)
 
 	// First, scan the ancient/freezer database
@@ -975,11 +980,18 @@ func scanReceipts(ctx *cli.Context) error {
 				// If we can't read the receipt, it might be missing or corrupted
 				log.Warn("Failed to read ancient receipt", "block", i, "error", err)
 				emptyReceipts = append(emptyReceipts, i)
-				emptyAncients = append(emptyAncients, i)
+				corruptedEmpty = append(corruptedEmpty, i)
+				corruptedAncients = append(corruptedAncients, i)
 			} else if len(data) == 0 {
-				// Empty receipt data
+				// Corrupted: zero-length receipt data
 				emptyReceipts = append(emptyReceipts, i)
-				emptyAncients = append(emptyAncients, i)
+				corruptedEmpty = append(corruptedEmpty, i)
+				corruptedAncients = append(corruptedAncients, i)
+			} else if len(data) == 1 && data[0] == 0xc0 {
+				// Valid: properly RLP-encoded empty receipt list
+				emptyReceipts = append(emptyReceipts, i)
+				validEmpty = append(validEmpty, i)
+				validAncients = append(validAncients, i)
 			}
 			ancientScanned++
 			totalScanned++
@@ -1034,9 +1046,15 @@ func scanReceipts(ctx *cli.Context) error {
 				// Read receipt data directly
 				data := rawdb.ReadReceiptsRLP(db, hash, blockNum)
 				if len(data) == 0 {
-					// Empty receipt data
+					// Corrupted: zero-length receipt data
 					emptyReceipts = append(emptyReceipts, blockNum)
-					emptyKV = append(emptyKV, blockNum)
+					corruptedEmpty = append(corruptedEmpty, blockNum)
+					corruptedKV = append(corruptedKV, blockNum)
+				} else if len(data) == 1 && data[0] == 0xc0 {
+					// Valid: properly RLP-encoded empty receipt list
+					emptyReceipts = append(emptyReceipts, blockNum)
+					validEmpty = append(validEmpty, blockNum)
+					validKV = append(validKV, blockNum)
 				}
 				kvScanned++
 				totalScanned++
@@ -1049,34 +1067,39 @@ func scanReceipts(ctx *cli.Context) error {
 		"total_blocks_scanned", totalScanned,
 		"ancient_blocks_scanned", ancientScanned,
 		"kv_blocks_scanned", kvScanned,
-		"empty_receipts_found", len(emptyReceipts),
-		"empty_receipts_ancient", len(emptyAncients),
-		"empty_receipts_kv", len(emptyKV),
+		"total_empty_receipts", len(emptyReceipts),
+		"corrupted_empty_receipts", len(corruptedEmpty),
+		"valid_empty_receipts", len(validEmpty),
+		"corrupted_ancient", len(corruptedAncients),
+		"valid_ancient", len(validAncients),
+		"corrupted_kv", len(corruptedKV),
+		"valid_kv", len(validKV),
 		"elapsed", elapsed)
 
 	// Report findings
 	if len(emptyReceipts) == 0 {
 		fmt.Printf("✓ No empty receipts found. Scanned %d blocks in %v.\n", totalScanned, elapsed)
 	} else {
-		fmt.Printf("⚠ Found %d blocks with empty receipts:\n", len(emptyReceipts))
-
-		// Group consecutive blocks for easier reading
-		if len(emptyReceipts) > 0 {
+		// Helper function to format block ranges
+		formatRanges := func(blocks []uint64) string {
+			if len(blocks) == 0 {
+				return "none"
+			}
 			var ranges []string
-			start := emptyReceipts[0]
-			end := emptyReceipts[0]
+			start := blocks[0]
+			end := blocks[0]
 
-			for i := 1; i < len(emptyReceipts); i++ {
-				if emptyReceipts[i] == end+1 {
-					end = emptyReceipts[i]
+			for i := 1; i < len(blocks); i++ {
+				if blocks[i] == end+1 {
+					end = blocks[i]
 				} else {
 					if start == end {
 						ranges = append(ranges, fmt.Sprintf("%d", start))
 					} else {
 						ranges = append(ranges, fmt.Sprintf("%d-%d", start, end))
 					}
-					start = emptyReceipts[i]
-					end = emptyReceipts[i]
+					start = blocks[i]
+					end = blocks[i]
 				}
 			}
 			// Add the last range
@@ -1085,12 +1108,25 @@ func scanReceipts(ctx *cli.Context) error {
 			} else {
 				ranges = append(ranges, fmt.Sprintf("%d-%d", start, end))
 			}
-
-			fmt.Printf("  %s\n", strings.Join(ranges, ", "))
+			return strings.Join(ranges, ", ")
 		}
 
-		fmt.Printf("\nScanned %d total blocks (%d ancient, %d KV) in %v. Empty receipts: %d ancient, %d KV.\n",
-			totalScanned, ancientScanned, kvScanned, elapsed, len(emptyAncients), len(emptyKV))
+		fmt.Printf("⚠ Found empty receipts in %d blocks:\n", len(emptyReceipts))
+
+		if len(corruptedEmpty) > 0 {
+			fmt.Printf("\n🔴 CORRUPTED empty receipts (%d blocks) - zero-length data:\n", len(corruptedEmpty))
+			fmt.Printf("  %s\n", formatRanges(corruptedEmpty))
+		}
+
+		if len(validEmpty) > 0 {
+			fmt.Printf("\n🟡 VALID empty receipts (%d blocks) - RLP-encoded 0xc0:\n", len(validEmpty))
+			fmt.Printf("  %s\n", formatRanges(validEmpty))
+		}
+
+		fmt.Printf("\nScanned %d total blocks (%d ancient, %d KV) in %v.\n", totalScanned, ancientScanned, kvScanned, elapsed)
+		fmt.Printf("Empty receipts breakdown: %d corrupted (%d ancient, %d KV), %d valid (%d ancient, %d KV)\n",
+			len(corruptedEmpty), len(corruptedAncients), len(corruptedKV),
+			len(validEmpty), len(validAncients), len(validKV))
 	}
 
 	return nil

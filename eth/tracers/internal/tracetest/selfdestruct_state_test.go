@@ -275,8 +275,6 @@ func TestSelfdestructStateTracer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}
-
-			// Get trace results
 			results := tracer.Accounts()
 
 			// Verify results
@@ -305,28 +303,23 @@ func TestSelfdestructStateTracer(t *testing.T) {
 				}
 			}
 
-			// Special verification for caller: should have received the selfdestruct balance minus gas costs
+			// Calculate expected caller balance: initial - gas cost + selfdestruct transfer
+			gasCost := new(big.Int).Mul(new(big.Int).SetUint64(usedGas), tx.GasPrice())
+			// initial + transfer
+			expectedCallerBalance := new(big.Int).Add(big.NewInt(params.Ether), big.NewInt(100))
+			// - gas cost
+			expectedCallerBalance.Sub(expectedCallerBalance, gasCost)
+			// Verify caller balance matches expected (initial + selfdestruct transfer - gas cost)
 			if callerState, ok := results[caller]; ok {
-				// Caller should have nonce = 1 (sent 1 tx)
+				if callerState.Balance.Cmp(expectedCallerBalance) != 0 {
+					t.Errorf("caller balance mismatch: have %s, want %s (gas used: %d)",
+						callerState.Balance, expectedCallerBalance, usedGas)
+				}
 				if callerState.Nonce != 1 {
 					t.Errorf("caller nonce mismatch: have %d, want 1", callerState.Nonce)
 				}
-				// Caller should exist
 				if !callerState.Exists {
 					t.Errorf("caller should exist")
-				}
-				// Caller balance should be less than initial (1 ether) + selfdestruct amount (100) due to gas
-				expectedMax := new(big.Int).Add(big.NewInt(params.Ether), big.NewInt(100))
-				if callerState.Balance.Cmp(expectedMax) >= 0 {
-					t.Errorf("caller balance too high (no gas paid?): have %s, expected less than %s",
-						callerState.Balance, expectedMax)
-				}
-				// Caller balance should be at least initial + selfdestruct - reasonable gas limit
-				expectedMin := new(big.Int).Add(big.NewInt(params.Ether), big.NewInt(100))
-				expectedMin.Sub(expectedMin, new(big.Int).Mul(big.NewInt(100000), big.NewInt(params.InitialBaseFee*2)))
-				if callerState.Balance.Cmp(expectedMin) < 0 {
-					t.Errorf("caller balance too low: have %s, expected at least %s",
-						callerState.Balance, expectedMin)
 				}
 			}
 		})

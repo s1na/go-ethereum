@@ -173,6 +173,40 @@ func TestSelfdestructStateTracer(t *testing.T) {
 			byte(vm.CALLER),       // Push caller address
 			byte(vm.SELFDESTRUCT), // Selfdestruct
 		}
+
+		// Factory contract that creates a contract and calls it to selfdestruct
+		factory = common.HexToAddress("0x00000000000000000000000000000000000000ff")
+
+		// Factory code (compiled from Yul):
+		/*
+			object "Factory" {
+				code {
+					datacopy(0, dataoffset("Runtime"), datasize("Runtime"))
+					return(0, datasize("Runtime"))
+				}
+				object "Runtime" {
+					code {
+						// Store init code for child (0x6133ff6000526002601ef3 = init code that returns 0x33ff)
+						mstore(0, 0x6133ff6000526002601ef3000000000000000000000000000000000000000000)
+
+						// CREATE child contract with 11 bytes of init code starting at byte 0
+						let child := create(0, 0, 11)
+
+						// CALL child contract (triggers selfdestruct)
+						pop(call(gas(), child, 0, 0, 0, 0, 0))
+
+						stop()
+					}
+				}
+			}
+		*/
+		// Compiled with: solc --strict-assembly --evm-version paris factory.yul --bin
+	// (Using paris to avoid PUSH0 opcode which is not available pre-Shanghai)
+		// Runtime bytecode (part after 0xfe in output):
+		factoryCode = common.Hex2Bytes("6133ff6000526a6133ff6000526002601ef360a81b600052600080808080600b8180f05af100")
+
+		// The address where the factory will create the contract (factory starts with nonce 0 in genesis)
+		createdContractAddr = crypto.CreateAddress(factory, 0)
 	)
 
 	tests := []struct {
@@ -229,22 +263,79 @@ func TestSelfdestructStateTracer(t *testing.T) {
 				// We check this separately in the test
 			},
 		},
+		{
+			name: "pre-EIP-6780: contract created and selfdestructed in same tx",
+			genesis: &core.Genesis{
+				Config: params.AllEthashProtocolChanges,
+				Alloc: types.GenesisAlloc{
+					caller:  {Balance: big.NewInt(params.Ether)},
+					factory: {Code: factoryCode},
+				},
+			},
+			useBeacon: false,
+			expectedResults: map[common.Address]accountState{
+				createdContractAddr: {
+					Balance: big.NewInt(0),
+					Nonce:   0,
+					Code:    []byte{},
+					Exists:  false, // Contract destroyed
+				},
+			},
+		},
+		{
+			name: "post-EIP-6780: contract created and selfdestructed in same tx (SHOULD destroy)",
+			genesis: &core.Genesis{
+				Config: params.AllDevChainProtocolChanges,
+				Alloc: types.GenesisAlloc{
+					caller:  {Balance: big.NewInt(params.Ether)},
+					factory: {Code: factoryCode},
+				},
+			},
+			useBeacon: true,
+			expectedResults: map[common.Address]accountState{
+				createdContractAddr: {
+					Balance: big.NewInt(0),
+					Nonce:   0,
+					Code:    []byte{},
+					Exists:  false, // Contract destroyed (EIP-6780 exception: created in same tx)
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Create transaction that calls the selfdestruct contract
 			signer := types.HomesteadSigner{}
-			tx, err := types.SignTx(types.NewTx(&types.LegacyTx{
-				Nonce:    0,
-				To:       &contract,
-				Value:    big.NewInt(0),
-				Gas:      100000,
-				GasPrice: big.NewInt(params.InitialBaseFee * 2),
-				Data:     nil,
-			}), signer, key)
+			var tx *types.Transaction
+			var err error
+
+			// Determine if this is a factory test or direct contract call test
+			_, hasFactory := tt.genesis.Alloc[factory]
+			isCreateAndDestroy := hasFactory
+
+			if isCreateAndDestroy {
+				// Call factory to create and destroy contract in same tx
+				tx, err = types.SignTx(types.NewTx(&types.LegacyTx{
+					Nonce:    0,
+					To:       &factory,
+					Value:    big.NewInt(0),
+					Gas:      200000,
+					GasPrice: big.NewInt(params.InitialBaseFee * 2),
+					Data:     nil,
+				}), signer, key)
+			} else {
+				// Call existing contract
+				tx, err = types.SignTx(types.NewTx(&types.LegacyTx{
+					Nonce:    0,
+					To:       &contract,
+					Value:    big.NewInt(0),
+					Gas:      100000,
+					GasPrice: big.NewInt(params.InitialBaseFee * 2),
+					Data:     nil,
+				}), signer, key)
+			}
 			if err != nil {
 				t.Fatalf("failed to sign transaction: %v", err)
 			}
@@ -257,7 +348,7 @@ func TestSelfdestructStateTracer(t *testing.T) {
 			tracer := newSelfdestructStateTracer()
 
 			// Wrap state with hooks
-			logState := state.NewHookedState(statedb, tracer.Hooks())
+			hookedState := state.NewHookedState(statedb, tracer.Hooks())
 
 			// Prepare message
 			msg, err := core.TransactionToMessage(tx, signer, nil)
@@ -269,13 +360,21 @@ func TestSelfdestructStateTracer(t *testing.T) {
 			context := core.NewEVMBlockContext(block.Header(), blockchain, nil)
 
 			// Execute transaction with EVM (handles OnTxStart, ApplyMessage, Finalise, OnTxEnd)
-			evm := vm.NewEVM(context, logState, tt.genesis.Config, vm.Config{Tracer: tracer.Hooks()})
+			evm := vm.NewEVM(context, hookedState, tt.genesis.Config, vm.Config{Tracer: tracer.Hooks()})
 			usedGas := uint64(0)
 			_, err = core.ApplyTransactionWithEVM(msg, new(core.GasPool).AddGas(tx.Gas()), statedb, block.Number(), block.Hash(), block.Time(), tx, &usedGas, evm)
 			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}
 			results := tracer.Accounts()
+
+			// Debug: print all addresses in results
+			if isCreateAndDestroy {
+				t.Logf("Addresses in tracer results:")
+				for addr := range results {
+					t.Logf("  - %s", addr.Hex())
+				}
+			}
 
 			// Verify results
 			for addr, expected := range tt.expectedResults {
@@ -303,13 +402,18 @@ func TestSelfdestructStateTracer(t *testing.T) {
 				}
 			}
 
-			// Calculate expected caller balance: initial - gas cost + selfdestruct transfer
+			// Verify caller balance
 			gasCost := new(big.Int).Mul(new(big.Int).SetUint64(usedGas), tx.GasPrice())
-			// initial + transfer
-			expectedCallerBalance := new(big.Int).Add(big.NewInt(params.Ether), big.NewInt(100))
-			// - gas cost
-			expectedCallerBalance.Sub(expectedCallerBalance, gasCost)
-			// Verify caller balance matches expected (initial + selfdestruct transfer - gas cost)
+			var expectedCallerBalance *big.Int
+			if isCreateAndDestroy {
+				// Create-and-destroy: initial - gas cost (contract selfdestructed to caller with 0 balance)
+				expectedCallerBalance = new(big.Int).Sub(big.NewInt(params.Ether), gasCost)
+			} else {
+				// Existing contract: initial + transfer - gas cost
+				expectedCallerBalance = new(big.Int).Add(big.NewInt(params.Ether), big.NewInt(100))
+				expectedCallerBalance.Sub(expectedCallerBalance, gasCost)
+			}
+
 			if callerState, ok := results[caller]; ok {
 				if callerState.Balance.Cmp(expectedCallerBalance) != 0 {
 					t.Errorf("caller balance mismatch: have %s, want %s (gas used: %d)",

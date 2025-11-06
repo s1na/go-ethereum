@@ -117,6 +117,49 @@ func (t *selfdestructStateTracer) Accounts() map[common.Address]*accountState {
 	return t.accounts
 }
 
+// setupTestBlockchain creates a blockchain with the given genesis and transaction,
+// returns the blockchain, the first block, and a statedb at genesis for testing
+func setupTestBlockchain(t *testing.T, genesis *core.Genesis, tx *types.Transaction, useBeacon bool) (*core.BlockChain, *types.Block, *state.StateDB) {
+	// Choose engine based on test requirements
+	var engine consensus.Engine
+	if useBeacon {
+		engine = beacon.New(ethash.NewFaker())
+	} else {
+		engine = ethash.NewFaker()
+	}
+
+	// Generate chain with genesis and block containing the transaction
+	_, blocks, _ := core.GenerateChainWithGenesis(genesis, engine, 1, func(i int, b *core.BlockGen) {
+		b.AddTx(tx)
+	})
+
+	// Create blockchain
+	db := rawdb.NewMemoryDatabase()
+	blockchain, err := core.NewBlockChain(db, genesis, engine, nil)
+	if err != nil {
+		t.Fatalf("failed to create blockchain: %v", err)
+	}
+
+	// Import the block
+	if _, err := blockchain.InsertChain(blocks); err != nil {
+		t.Fatalf("failed to insert chain: %v", err)
+	}
+
+	// Get the genesis block
+	genesisBlock := blockchain.GetBlockByNumber(0)
+	if genesisBlock == nil {
+		t.Fatalf("failed to get genesis block")
+	}
+
+	// Get genesis state
+	statedb, err := blockchain.StateAt(genesisBlock.Root())
+	if err != nil {
+		t.Fatalf("failed to get state: %v", err)
+	}
+
+	return blockchain, blocks[0], statedb
+}
+
 func TestSelfdestructStateTracer(t *testing.T) {
 	t.Parallel()
 
@@ -199,54 +242,19 @@ func TestSelfdestructStateTracer(t *testing.T) {
 				To:       &contract,
 				Value:    big.NewInt(0),
 				Gas:      100000,
-				GasPrice: big.NewInt(params.InitialBaseFee * 2), // High enough for London fork
+				GasPrice: big.NewInt(params.InitialBaseFee * 2),
 				Data:     nil,
 			}), signer, key)
 			if err != nil {
 				t.Fatalf("failed to sign transaction: %v", err)
 			}
 
-			// Choose engine based on test requirements
-			var engine consensus.Engine
-			if tt.useBeacon {
-				engine = beacon.New(ethash.NewFaker())
-			} else {
-				engine = ethash.NewFaker()
-			}
-
-			// Generate chain with genesis and block containing the transaction
-			_, blocks, _ := core.GenerateChainWithGenesis(tt.genesis, engine, 1, func(i int, b *core.BlockGen) {
-				b.AddTx(tx)
-			})
-
-			// Create blockchain (this will commit genesis)
-			db := rawdb.NewMemoryDatabase()
-			blockchain, err := core.NewBlockChain(db, tt.genesis, engine, nil)
-			if err != nil {
-				t.Fatalf("failed to create blockchain: %v", err)
-			}
+			// Setup blockchain with transaction
+			blockchain, block, statedb := setupTestBlockchain(t, tt.genesis, tx, tt.useBeacon)
 			defer blockchain.Stop()
-
-			// Import the block
-			if _, err := blockchain.InsertChain(blocks); err != nil {
-				t.Fatalf("failed to insert chain: %v", err)
-			}
 
 			// Create tracer
 			tracer := newSelfdestructStateTracer()
-
-			// Get the genesis block from the blockchain to get initial state
-			genesis := blockchain.GetBlockByNumber(0)
-			if genesis == nil {
-				t.Fatalf("failed to get genesis block")
-			}
-
-			// Get the block and execute transaction with tracer
-			block := blocks[0]
-			statedb, err := blockchain.StateAt(genesis.Root())
-			if err != nil {
-				t.Fatalf("failed to get state: %v", err)
-			}
 
 			// Wrap state with hooks
 			logState := state.NewHookedState(statedb, tracer.Hooks())
@@ -260,18 +268,13 @@ func TestSelfdestructStateTracer(t *testing.T) {
 			// Create block context
 			context := core.NewEVMBlockContext(block.Header(), blockchain, nil)
 
-			// Execute transaction
+			// Execute transaction with EVM (handles OnTxStart, ApplyMessage, Finalise, OnTxEnd)
 			evm := vm.NewEVM(context, logState, tt.genesis.Config, vm.Config{Tracer: tracer.Hooks()})
-			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
-			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+			usedGas := uint64(0)
+			_, err = core.ApplyTransactionWithEVM(msg, new(core.GasPool).AddGas(tx.Gas()), statedb, block.Number(), block.Hash(), block.Time(), tx, &usedGas, evm)
 			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}
-
-			// Finalize state - this triggers the selfdestruct hooks
-			logState.Finalise(true)
-
-			tracer.OnTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, nil)
 
 			// Get trace results
 			results := tracer.Accounts()

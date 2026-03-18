@@ -83,10 +83,72 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 	log.Info("Initialized database from freezer", "blocks", frozen, "elapsed", common.PrettyDuration(time.Since(start)))
 }
 
+type numberRlp struct {
+	number uint64
+	rlp    rlp.RawValue
+}
+
 type blockTxHashes struct {
 	number uint64
 	hashes []common.Hash
 	err    error
+}
+
+// iterateBodies yields block body RLP for the given range on a channel. For
+// forward iteration over frozen blocks, it reads in bulk using AncientRange.
+// For reverse iteration or non-frozen blocks, it reads one block at a time.
+func iterateBodies(db ethdb.Database, from, to uint64, reverse bool, interrupt chan struct{}) chan *numberRlp {
+	count := to - from
+	if cpus := uint64(runtime.NumCPU()); count > cpus*2 {
+		count = cpus * 2
+	}
+	ch := make(chan *numberRlp, count)
+
+	go func() {
+		defer close(ch)
+
+		send := func(n uint64, data rlp.RawValue) bool {
+			select {
+			case ch <- &numberRlp{n, data}:
+				return true
+			case <-interrupt:
+				return false
+			}
+		}
+		if !reverse {
+			n := from
+			// Use AncientRange for bulk reads from the freezer.
+			frozen, _ := db.Ancients()
+			for n < frozen && n < to {
+				count := min(10_000, frozen-n, to-n)
+				bodies, err := db.AncientRange(ChainFreezerBodiesTable, n, count, 128*1024*1024)
+				if err != nil {
+					log.Warn("Failed to read ancient bodies in bulk", "start", n, "count", count, "err", err)
+					break // fall through to per-block reads
+				}
+				for j, body := range bodies {
+					if !send(n+uint64(j), body) {
+						return
+					}
+				}
+				n += uint64(len(bodies))
+			}
+			// Read remaining non-frozen blocks one at a time.
+			for n < to {
+				if !send(n, ReadCanonicalBodyRLP(db, n, nil)) {
+					return
+				}
+				n++
+			}
+		} else {
+			for n := to - 1; n != from-1; n-- {
+				if !send(n, ReadCanonicalBodyRLP(db, n, nil)) {
+					return
+				}
+			}
+		}
+	}()
+	return ch
 }
 
 // iterateTransactions iterates over all transactions in the (canon) block
@@ -94,11 +156,6 @@ type blockTxHashes struct {
 // received from interrupt channel, the iteration will be aborted and result
 // channel will be closed.
 func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool, interrupt chan struct{}) chan *blockTxHashes {
-	// One thread sequentially reads data from db
-	type numberRlp struct {
-		number uint64
-		rlp    rlp.RawValue
-	}
 	if to == from {
 		return nil
 	}
@@ -107,31 +164,9 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 		threads = uint64(cpus)
 	}
 	var (
-		rlpCh    = make(chan *numberRlp, threads*2)     // we send raw rlp over this channel
-		hashesCh = make(chan *blockTxHashes, threads*2) // send hashes over hashesCh
+		rlpCh    = iterateBodies(db, from, to, reverse, interrupt)
+		hashesCh = make(chan *blockTxHashes, threads*2)
 	)
-	// lookup runs in one instance
-	lookup := func() {
-		n, end := from, to
-		if reverse {
-			n, end = to-1, from-1
-		}
-		defer close(rlpCh)
-		for n != end {
-			data := ReadCanonicalBodyRLP(db, n, nil)
-			// Feed the block to the aggregator, or abort on interrupt
-			select {
-			case rlpCh <- &numberRlp{n, data}:
-			case <-interrupt:
-				return
-			}
-			if reverse {
-				n--
-			} else {
-				n++
-			}
-		}
-	}
 	// process runs in parallel
 	var nThreadsAlive atomic.Int32
 	nThreadsAlive.Store(int32(threads))
@@ -169,7 +204,6 @@ func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool
 			}
 		}
 	}
-	go lookup() // start the sequential db accessor
 	for i := 0; i < int(threads); i++ {
 		go process()
 	}

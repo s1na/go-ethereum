@@ -26,6 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func TestChainIterator(t *testing.T) {
@@ -279,5 +281,72 @@ func TestPruneTransactionIndex(t *testing.T) {
 				t.Fatalf("wrong TxLookup entry after pruning: %x -> %v", tx.Hash(), num)
 			}
 		}
+	}
+}
+
+// newTestDatabaseWithFreezer creates a database with an in-memory freezer for testing.
+func newTestDatabaseWithFreezer() ethdb.Database {
+	frdb, _ := newChainFreezer("", "", "", false)
+	return &freezerdb{
+		KeyValueStore: memorydb.New(),
+		chainFreezer:  frdb,
+	}
+}
+
+// TestIterateBodies verifies that iterateBodies uses AncientRange for frozen
+// blocks and falls back to per-block reads for non-frozen blocks.
+func TestIterateBodies(t *testing.T) {
+	db := newTestDatabaseWithFreezer()
+	defer db.Close()
+
+	to := common.BytesToAddress([]byte{0x11})
+
+	// Create blocks with transactions.
+	var blocks []*types.Block
+	block := types.NewBlock(&types.Header{Number: big.NewInt(0)}, nil, nil, newTestHasher())
+	blocks = append(blocks, block)
+	for i := uint64(1); i <= 5; i++ {
+		tx := types.NewTx(&types.LegacyTx{
+			Nonce:    i,
+			GasPrice: big.NewInt(11111),
+			Gas:      1111,
+			To:       &to,
+			Value:    big.NewInt(111),
+		})
+		block := types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, &types.Body{Transactions: types.Transactions{tx}}, nil, newTestHasher())
+		blocks = append(blocks, block)
+	}
+	// Write blocks 0-3 to the freezer and blocks 4-5 to the KV store only.
+	// This lets us test that iterateBodies reads from both sources.
+	receipts := make([]rlp.RawValue, 4)
+	for i := range receipts {
+		receipts[i] = rlp.RawValue{}
+	}
+	if _, err := WriteAncientBlocks(db, blocks[:4], receipts); err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range blocks[4:] {
+		WriteBlock(db, b)
+		WriteCanonicalHash(db, b.Hash(), b.NumberU64())
+	}
+	// Verify forward iteration covers both frozen and non-frozen blocks.
+	var got []uint64
+	ch := iterateBodies(db, 0, 6, false, nil)
+	for item := range ch {
+		got = append(got, item.number)
+	}
+	want := []uint64{0, 1, 2, 3, 4, 5}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("forward: got %v, want %v", got, want)
+	}
+	// Verify reverse iteration.
+	got = got[:0]
+	ch = iterateBodies(db, 0, 6, true, nil)
+	for item := range ch {
+		got = append(got, item.number)
+	}
+	want = []uint64{5, 4, 3, 2, 1, 0}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("reverse: got %v, want %v", got, want)
 	}
 }

@@ -396,6 +396,20 @@ func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
 		removed atomic.Int64
 		scanned atomic.Int64
 	)
+	// Periodically log progress from the main goroutine.
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(8 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				log.Info("Pruning tx index", "scanned", scanned.Load(), "removed", removed.Load(), "elapsed", common.PrettyDuration(time.Since(start)))
+			case <-done:
+				return
+			}
+		}
+	}()
 	for i := range workers {
 		wg.Add(1)
 
@@ -448,6 +462,7 @@ func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
 		}()
 	}
 	wg.Wait()
+	close(done)
 	WriteTxIndexTail(db, pruneBlock)
 	log.Info("Pruned transaction index", "removed", removed.Load(), "scanned", scanned.Load(), "elapsed", common.PrettyDuration(time.Since(start)))
 }

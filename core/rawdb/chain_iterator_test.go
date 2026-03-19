@@ -250,9 +250,37 @@ func TestUnindexTransactionsMissingBody(t *testing.T) {
 
 func TestPruneTransactionIndex(t *testing.T) {
 	chainDB := NewMemoryDatabase()
-	blocks, _ := initDatabaseWithTransactions(chainDB)
+	to := common.BytesToAddress([]byte{0x11})
+
+	// Create 100 blocks with 8 txs each (800 total tx index entries) so that
+	// parallel workers each get a meaningful share of the keyspace.
+	const numBlocks = 100
+	const txsPerBlock = 8
+
+	var blocks []*types.Block
+	block := types.NewBlock(&types.Header{Number: big.NewInt(0)}, nil, nil, newTestHasher())
+	WriteBlock(chainDB, block)
+	WriteCanonicalHash(chainDB, block.Hash(), block.NumberU64())
+	blocks = append(blocks, block)
+
+	for i := uint64(1); i <= numBlocks; i++ {
+		var txs []*types.Transaction
+		for j := 0; j < txsPerBlock; j++ {
+			txs = append(txs, types.NewTx(&types.LegacyTx{
+				Nonce:    i*txsPerBlock + uint64(j),
+				GasPrice: big.NewInt(11111),
+				Gas:      1111,
+				To:       &to,
+				Value:    big.NewInt(111),
+			}))
+		}
+		block := types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, &types.Body{Transactions: types.Transactions(txs)}, nil, newTestHasher())
+		WriteBlock(chainDB, block)
+		WriteCanonicalHash(chainDB, block.Hash(), block.NumberU64())
+		blocks = append(blocks, block)
+	}
 	lastBlock := blocks[len(blocks)-1].NumberU64()
-	pruneBlock := lastBlock - 3
+	pruneBlock := lastBlock / 2 // prune the first half
 
 	IndexTransactions(chainDB, 0, lastBlock+1, nil, false)
 

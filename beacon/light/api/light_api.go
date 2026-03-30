@@ -390,6 +390,29 @@ func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*types
 	return checkpoint, nil
 }
 
+// FetchFinalizedCheckpoint fetches the latest finalized beacon block root from
+// the given beacon API endpoint. This can be used to obtain a recent checkpoint
+// for light client bootstrapping when the hardcoded checkpoint is too old.
+func FetchFinalizedCheckpoint(url string, customHeaders map[string]string) (common.Hash, error) {
+	api := NewBeaconLightApi(url, customHeaders)
+	resp, err := api.httpGet("/eth/v1/beacon/headers/finalized", nil)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to fetch finalized header: %w", err)
+	}
+	var data struct {
+		Data struct {
+			Root common.Hash `json:"root"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(resp, &data); err != nil {
+		return common.Hash{}, fmt.Errorf("failed to decode response: %w", err)
+	}
+	if data.Data.Root == (common.Hash{}) {
+		return common.Hash{}, errors.New("empty finalized block root")
+	}
+	return data.Data.Root, nil
+}
+
 func (api *BeaconLightApi) GetBeaconBlock(blockRoot common.Hash) (*types.BeaconBlock, error) {
 	resp, err := api.httpGet(fmt.Sprintf("/eth/v2/beacon/blocks/0x%x", blockRoot), nil)
 	if err != nil {

@@ -35,6 +35,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	blightapi "github.com/ethereum/go-ethereum/beacon/light/api"
 	bparams "github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
@@ -389,6 +390,11 @@ var (
 	BeaconCheckpointFileFlag = &cli.StringFlag{
 		Name:     "beacon.checkpoint.file",
 		Usage:    "Beacon chain weak subjectivity checkpoint import/export file",
+		Category: flags.BeaconCategory,
+	}
+	BeaconCheckpointApiFlag = &cli.StringFlag{
+		Name:     "beacon.checkpoint.api",
+		Usage:    "Beacon API URL to fetch the latest finalized checkpoint from",
 		Category: flags.BeaconCategory,
 	}
 	BlsyncApiFlag = &cli.StringFlag{
@@ -2106,7 +2112,7 @@ func MakeBeaconLightConfig(ctx *cli.Context) bparams.ClientConfig {
 		if !ctx.IsSet(BeaconGenesisTimeFlag.Name) {
 			Fatalf("Custom beacon chain config is specified but genesis time is missing")
 		}
-		if !ctx.IsSet(BeaconCheckpointFlag.Name) && !ctx.IsSet(BeaconCheckpointFileFlag.Name) {
+		if !ctx.IsSet(BeaconCheckpointFlag.Name) && !ctx.IsSet(BeaconCheckpointFileFlag.Name) && !ctx.IsSet(BeaconCheckpointApiFlag.Name) {
 			Fatalf("Custom beacon chain config is specified but checkpoint is missing")
 		}
 		config.ChainConfig = bparams.ChainConfig{
@@ -2142,6 +2148,14 @@ func MakeBeaconLightConfig(ctx *cli.Context) bparams.ClientConfig {
 		if _, err := config.SetCheckpointFile(ctx.String(BeaconCheckpointFileFlag.Name)); err != nil {
 			Fatalf("Could not load beacon checkpoint file '%s': %v", ctx.String(BeaconCheckpointFileFlag.Name), err)
 		}
+	}
+	if ctx.IsSet(BeaconCheckpointApiFlag.Name) {
+		checkpoint, err := blightapi.FetchFinalizedCheckpoint(ctx.String(BeaconCheckpointApiFlag.Name), nil)
+		if err != nil {
+			Fatalf("Failed to fetch checkpoint from API: %v", err)
+		}
+		config.Checkpoint = checkpoint
+		log.Info("Fetched beacon checkpoint from API", "url", ctx.String(BeaconCheckpointApiFlag.Name), "hash", checkpoint)
 	}
 	if ctx.IsSet(BeaconCheckpointFlag.Name) {
 		hex := ctx.String(BeaconCheckpointFlag.Name)

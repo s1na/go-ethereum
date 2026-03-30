@@ -2144,12 +2144,14 @@ func MakeBeaconLightConfig(ctx *cli.Context) bparams.ClientConfig {
 	// If both checkpoint block hash and checkpoint file are specified then the
 	// client is initialized with the specified block hash and new checkpoints
 	// are saved to the specified file.
+	var loadedCheckpointFile bool
 	if ctx.IsSet(BeaconCheckpointFileFlag.Name) {
-		if _, err := config.SetCheckpointFile(ctx.String(BeaconCheckpointFileFlag.Name)); err != nil {
+		var err error
+		if loadedCheckpointFile, err = config.SetCheckpointFile(ctx.String(BeaconCheckpointFileFlag.Name)); err != nil {
 			Fatalf("Could not load beacon checkpoint file '%s': %v", ctx.String(BeaconCheckpointFileFlag.Name), err)
 		}
 	}
-	if ctx.IsSet(BeaconCheckpointApiFlag.Name) {
+	if ctx.IsSet(BeaconCheckpointApiFlag.Name) && !ctx.IsSet(BeaconCheckpointFlag.Name) && !loadedCheckpointFile {
 		checkpoint, err := blightapi.FetchFinalizedCheckpoint(ctx.String(BeaconCheckpointApiFlag.Name), nil)
 		if err != nil {
 			Fatalf("Failed to fetch checkpoint from API: %v", err)

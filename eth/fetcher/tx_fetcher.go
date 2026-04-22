@@ -991,8 +991,14 @@ func (f *TxFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}, 
 		if len(f.announces[peer]) == 0 {
 			return // continue in the for-each
 		}
+		// hashes is allocated lazily on the first hash to collect. Many
+		// peer-iterations produce no new hashes (all announces are already
+		// being fetched), so a pre-allocated [0:256]common.Hash slice per
+		// peer-call is the dominant allocation in this function (see
+		// profile: ~13 GB/hr). Lazy alloc eliminates the zero-hash calls
+		// entirely and keeps the fast path unchanged for non-empty results.
 		var (
-			hashes = make([]common.Hash, 0, maxTxRetrievals)
+			hashes []common.Hash
 			bytes  uint64
 		)
 		f.forEachAnnounce(f.announces[peer], func(hash common.Hash, meta txMetadata) bool {
@@ -1009,6 +1015,11 @@ func (f *TxFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}, 
 			f.alternates[hash] = f.announced[hash]
 			delete(f.announced, hash)
 
+			// Allocate on first use only; size for the common worst case so
+			// the slice never needs to grow.
+			if hashes == nil {
+				hashes = make([]common.Hash, 0, maxTxRetrievals)
+			}
 			// Accumulate the hash and stop if the limit was reached
 			hashes = append(hashes, hash)
 			if len(hashes) >= maxTxRetrievals {

@@ -19,7 +19,9 @@ package core
 import (
 	"errors"
 	"fmt"
+	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -146,23 +148,42 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	if stateless {
 		return nil
 	}
-	// The receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, Rn]]))
-	receiptSha := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))
+	// Compute the receipt trie root and state root in parallel since they
+	// are completely independent. The state root (IntermediateRoot) is the
+	// heavier operation, so we run it on the current goroutine while the
+	// receipt and requests hashes are computed concurrently.
+	var (
+		receiptSha  common.Hash
+		requestsErr error
+	)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// The receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, Rn]]))
+		receiptSha = types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))
+		// Validate the parsed requests match the expected header value.
+		if header.RequestsHash != nil {
+			reqhash := types.CalcRequestsHash(res.Requests)
+			if reqhash != *header.RequestsHash {
+				requestsErr = fmt.Errorf("invalid requests hash (remote: %x local: %x)", *header.RequestsHash, reqhash)
+			}
+		} else if res.Requests != nil {
+			requestsErr = errors.New("block has requests before prague fork")
+		}
+	}()
+	// Validate the state root against the received state root and throw
+	// an error if they don't match.
+	root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number))
+	wg.Wait()
+
 	if receiptSha != header.ReceiptHash {
 		return fmt.Errorf("invalid receipt root hash (remote: %x local: %x)", header.ReceiptHash, receiptSha)
 	}
-	// Validate the parsed requests match the expected header value.
-	if header.RequestsHash != nil {
-		reqhash := types.CalcRequestsHash(res.Requests)
-		if reqhash != *header.RequestsHash {
-			return fmt.Errorf("invalid requests hash (remote: %x local: %x)", *header.RequestsHash, reqhash)
-		}
-	} else if res.Requests != nil {
-		return errors.New("block has requests before prague fork")
+	if requestsErr != nil {
+		return requestsErr
 	}
-	// Validate the state root against the received state root and throw
-	// an error if they don't match.
-	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
+	if header.Root != root {
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
 	}
 	return nil

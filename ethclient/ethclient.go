@@ -288,6 +288,21 @@ func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *
 	return json.tx, json.BlockNumber == nil, nil
 }
 
+// TransactionHashBySenderAndNonce returns the hash of a confirmed or pooled
+// transaction sent by the given account with the given nonce. Returns
+// ethereum.NotFound if no such transaction is known to the remote node.
+func (ec *Client) TransactionHashBySenderAndNonce(ctx context.Context, sender common.Address, nonce uint64) (common.Hash, error) {
+	var hash *common.Hash
+	err := ec.c.CallContext(ctx, &hash, "eth_getTransactionBySenderAndNonce", sender, hexutil.Uint64(nonce))
+	if err != nil {
+		return common.Hash{}, err
+	}
+	if hash == nil {
+		return common.Hash{}, ethereum.NotFound
+	}
+	return *hash, nil
+}
+
 // TransactionSender returns the sender address of the given transaction. The transaction
 // must be known to the remote node and included in the blockchain at the given block and
 // index. The sender is the one derived by the protocol at the time of inclusion.

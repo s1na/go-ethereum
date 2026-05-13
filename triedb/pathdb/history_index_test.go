@@ -208,6 +208,94 @@ func testIndexWriterWithLimit(t *testing.T, bitmapSize int) {
 	}
 }
 
+func TestIndexReaderOrdinalAccess(t *testing.T) {
+	testIndexReaderOrdinalAccess(t, 0)
+	testIndexReaderOrdinalAccess(t, 2)
+	testIndexReaderOrdinalAccess(t, 34)
+}
+
+func testIndexReaderOrdinalAccess(t *testing.T, bitmapSize int) {
+	// Build a long enough sequence to span multiple restart sections and
+	// multiple index blocks. 10_000 entries with ~50-byte extensions easily
+	// crosses both the restartLen (256) and indexBlockMaxSize (4096) limits.
+	var elements []uint64
+	for i := 0; i < 10_000; i++ {
+		elements = append(elements, uint64(i+1))
+	}
+	db := rawdb.NewMemoryDatabase()
+	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}), 0, bitmapSize)
+	for _, v := range elements {
+		if err := iw.append(v, randomExt(bitmapSize, 5)); err != nil {
+			t.Fatalf("Failed to append %d: %v", v, err)
+		}
+	}
+	batch := db.NewBatch()
+	iw.finish(batch)
+	batch.Write()
+
+	r, err := newIndexReader(db, newAccountIdent(common.Hash{0xa}), bitmapSize)
+	if err != nil {
+		t.Fatalf("Failed to construct index reader: %v", err)
+	}
+	if got, want := r.count(), len(elements); got != want {
+		t.Fatalf("count mismatch: got %d, want %d", got, want)
+	}
+	for i, want := range elements {
+		got, err := r.at(i)
+		if err != nil {
+			t.Fatalf("at(%d) returned error: %v", i, err)
+		}
+		if got != want {
+			t.Fatalf("at(%d) = %d, want %d", i, got, want)
+		}
+	}
+	// Random spot-check after sequential access exercises the cached reader path.
+	for i := 0; i < 50; i++ {
+		pos := rand.Intn(len(elements))
+		got, err := r.at(pos)
+		if err != nil {
+			t.Fatalf("at(%d) returned error: %v", pos, err)
+		}
+		if got != elements[pos] {
+			t.Fatalf("at(%d) = %d, want %d", pos, got, elements[pos])
+		}
+	}
+}
+
+func TestIndexReaderOrdinalSparse(t *testing.T) {
+	// Mix non-contiguous ids to verify delta decoding inside restart sections.
+	elements := []uint64{
+		1, 5, 10, 11, 20, 100, 250, 251, 252, 1000,
+	}
+	db := rawdb.NewMemoryDatabase()
+	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xb}), 0, 0)
+	for _, v := range elements {
+		if err := iw.append(v, nil); err != nil {
+			t.Fatalf("Failed to append %d: %v", v, err)
+		}
+	}
+	batch := db.NewBatch()
+	iw.finish(batch)
+	batch.Write()
+
+	r, err := newIndexReader(db, newAccountIdent(common.Hash{0xb}), 0)
+	if err != nil {
+		t.Fatalf("Failed to construct index reader: %v", err)
+	}
+	if got, want := r.count(), len(elements); got != want {
+		t.Fatalf("count mismatch: got %d, want %d", got, want)
+	}
+	for i, want := range elements {
+		got, err := r.at(i)
+		if err != nil {
+			t.Fatalf("at(%d) returned error: %v", i, err)
+		}
+		if got != want {
+			t.Fatalf("at(%d) = %d, want %d", i, got, want)
+		}
+	}
+}
+
 func TestIndexDeleterBasic(t *testing.T) {
 	testIndexDeleterBasic(t, 0)
 	testIndexDeleterBasic(t, 2)

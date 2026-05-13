@@ -1009,6 +1009,27 @@ func (pool *LegacyPool) get(hash common.Hash) *types.Transaction {
 	return pool.all.Get(hash)
 }
 
+// GetTxBySenderAndNonce returns a transaction with the given sender and nonce
+// if one is contained in the pool (either pending or queued), or nil
+// otherwise. The pool's read lock is held for the duration of the lookup to
+// keep the per-sender map and txSortedMap consistent with each other.
+func (pool *LegacyPool) GetTxBySenderAndNonce(sender common.Address, nonce uint64) *types.Transaction {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+
+	if list, ok := pool.pending[sender]; ok {
+		if tx := list.txs.Get(nonce); tx != nil {
+			return tx
+		}
+	}
+	if list, ok := pool.queue.get(sender); ok {
+		if tx := list.txs.Get(nonce); tx != nil {
+			return tx
+		}
+	}
+	return nil
+}
+
 // GetRLP returns a RLP-encoded transaction if it is contained in the pool.
 func (pool *LegacyPool) GetRLP(hash common.Hash) []byte {
 	tx := pool.all.Get(hash)

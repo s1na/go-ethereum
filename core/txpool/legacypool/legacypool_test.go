@@ -651,6 +651,92 @@ func TestMissingNonce(t *testing.T) {
 	}
 }
 
+// TestGetTxBySenderAndNonce_PendingAndQueued asserts that lookups find txs
+// in both the pending and queue side of the pool, and that a (sender,
+// nonce) miss returns nil.
+func TestGetTxBySenderAndNonce_PendingAndQueued(t *testing.T) {
+	t.Parallel()
+
+	pool, key := setupPool()
+	defer pool.Close()
+
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	testAddBalance(pool, addr, big.NewInt(1000000000000000))
+
+	// Nonce 0 is at-or-above pool's nonce floor: this tx goes to pending.
+	tx0 := transaction(0, 100000, key)
+	if _, err := pool.add(tx0); err != nil {
+		t.Fatalf("add pending tx: %v", err)
+	}
+	// Nonce 5 has a gap: this tx goes to the queue.
+	tx5 := transaction(5, 100000, key)
+	if _, err := pool.add(tx5); err != nil {
+		t.Fatalf("add queued tx: %v", err)
+	}
+
+	if got := pool.GetTxBySenderAndNonce(addr, 0); got == nil || got.Hash() != tx0.Hash() {
+		t.Fatalf("pending lookup miss, got %v want %x", got, tx0.Hash())
+	}
+	if got := pool.GetTxBySenderAndNonce(addr, 5); got == nil || got.Hash() != tx5.Hash() {
+		t.Fatalf("queued lookup miss, got %v want %x", got, tx5.Hash())
+	}
+	if got := pool.GetTxBySenderAndNonce(addr, 99); got != nil {
+		t.Fatalf("nonce miss expected, got %x", got.Hash())
+	}
+	// Unknown sender: nil.
+	other, _ := crypto.GenerateKey()
+	otherAddr := crypto.PubkeyToAddress(other.PublicKey)
+	if got := pool.GetTxBySenderAndNonce(otherAddr, 0); got != nil {
+		t.Fatalf("unknown-sender lookup expected nil, got %x", got.Hash())
+	}
+}
+
+// TestGetTxBySenderAndNonce_Race exercises GetTxBySenderAndNonce against a
+// concurrent writer to flush out missing locks. The test exists primarily
+// for `go test -race` to catch the unlocked-map-read class of bug.
+func TestGetTxBySenderAndNonce_Race(t *testing.T) {
+	t.Parallel()
+
+	pool, key := setupPool()
+	defer pool.Close()
+
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	testAddBalance(pool, addr, big.NewInt(1000000000000000000))
+
+	const nonces = 200
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+
+	// Reader: hammers the lookup across the full nonce range.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-done:
+				return
+			default:
+			}
+			for n := uint64(0); n < nonces; n++ {
+				_ = pool.GetTxBySenderAndNonce(addr, n)
+			}
+		}
+	}()
+
+	// Writer: adds txs at increasing nonces via the public, locked Add. Once
+	// finished, signal the reader to stop.
+	for n := uint64(0); n < nonces; n++ {
+		errs := pool.Add([]*types.Transaction{transaction(n, 100000, key)}, true)
+		if len(errs) > 0 && errs[0] != nil {
+			close(done)
+			wg.Wait()
+			t.Fatalf("add nonce=%d: %v", n, errs[0])
+		}
+	}
+	close(done)
+	wg.Wait()
+}
+
 func TestNonceRecovery(t *testing.T) {
 	t.Parallel()
 

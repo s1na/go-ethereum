@@ -131,6 +131,10 @@ type SubPool interface {
 	// Get returns a transaction if it is contained in the pool, or nil otherwise.
 	Get(hash common.Hash) *types.Transaction
 
+	// GetTxBySenderAndNonce returns a transaction with the given sender and
+	// nonce if one is contained in the pool, or nil otherwise.
+	GetTxBySenderAndNonce(sender common.Address, nonce uint64) *types.Transaction
+
 	// GetRLP returns a RLP-encoded transaction if it is contained in the pool.
 	GetRLP(hash common.Hash) []byte
 

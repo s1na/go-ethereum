@@ -904,6 +904,69 @@ func TestOpenIndex(t *testing.T) {
 	verifyPoolInternals(t, pool)
 }
 
+// TestGetTxBySenderAndNonce verifies that lookups against the blob pool
+// return the expected transaction (or nil) without deadlocking. The
+// implementation must not re-acquire its own RWMutex from a code path that
+// already holds it, as sync.RWMutex is not reentrant; this test exists in
+// part as a deadlock regression check (run with -timeout).
+func TestGetTxBySenderAndNonce(t *testing.T) {
+	storage := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(testMaxBlobsPerBlock), nil)
+
+	key, _ := crypto.GenerateKey()
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+
+	// Seed three transactions at nonces 0, 1, 2.
+	for nonce := uint64(0); nonce < 3; nonce++ {
+		tx := makeTx(nonce, 1, 10, 1, key)
+		blob := encodeForPool(tx)
+		if _, err := store.Put(blob); err != nil {
+			t.Fatalf("store.Put: %v", err)
+		}
+	}
+	store.Close()
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(0, true, false)
+
+	chain := &testBlockChain{
+		config:  params.MainnetChainConfig,
+		basefee: uint256.NewInt(params.InitialBaseFee),
+		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	defer pool.Close()
+
+	// Hits.
+	for nonce := uint64(0); nonce < 3; nonce++ {
+		tx := pool.GetTxBySenderAndNonce(addr, nonce)
+		if tx == nil {
+			t.Fatalf("nonce %d: lookup returned nil", nonce)
+		}
+		if tx.Nonce() != nonce {
+			t.Fatalf("nonce %d: lookup returned tx with nonce %d", nonce, tx.Nonce())
+		}
+	}
+	// Miss past the end of the index.
+	if tx := pool.GetTxBySenderAndNonce(addr, 99); tx != nil {
+		t.Fatalf("expected nil for unknown nonce, got %x", tx.Hash())
+	}
+	// Miss for an unknown sender.
+	otherKey, _ := crypto.GenerateKey()
+	otherAddr := crypto.PubkeyToAddress(otherKey.PublicKey)
+	if tx := pool.GetTxBySenderAndNonce(otherAddr, 0); tx != nil {
+		t.Fatalf("expected nil for unknown sender, got %x", tx.Hash())
+	}
+}
+
 // Tests that after indexing all the loaded transactions from disk, a price heap
 // is correctly constructed based on the head basefee and blobfee.
 func TestOpenHeap(t *testing.T) {

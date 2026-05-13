@@ -286,6 +286,19 @@ func (p *TxPool) Get(hash common.Hash) *types.Transaction {
 	return nil
 }
 
+// GetTxBySenderAndNonce returns a transaction with the given sender and nonce
+// if one is contained in any subpool, or nil otherwise. Only one transaction
+// can be valid for a (sender, nonce) pair at a time across subpools, so the
+// first non-nil result is returned.
+func (p *TxPool) GetTxBySenderAndNonce(sender common.Address, nonce uint64) *types.Transaction {
+	for _, subpool := range p.subpools {
+		if tx := subpool.GetTxBySenderAndNonce(sender, nonce); tx != nil {
+			return tx
+		}
+	}
+	return nil
+}
+
 // GetRLP returns a RLP-encoded transaction if it is contained in the pool.
 func (p *TxPool) GetRLP(hash common.Hash) []byte {
 	for _, subpool := range p.subpools {

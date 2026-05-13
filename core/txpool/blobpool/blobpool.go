@@ -1570,6 +1570,50 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 	return ptx.ToTx()
 }
 
+// GetTxBySenderAndNonce returns a transaction with the given sender and nonce
+// if one is contained in the pool, or nil otherwise.
+//
+// p.lock is acquired only to look up the storage id under the index; the blob
+// is pulled from the store after releasing the read lock so the second lock
+// acquisition in p.Get (which deadlocks when a writer is queued, since
+// sync.RWMutex is not reentrant) is avoided.
+func (p *BlobPool) GetTxBySenderAndNonce(sender common.Address, nonce uint64) *types.Transaction {
+	p.lock.RLock()
+	metas, ok := p.index[sender]
+	var id uint64
+	var found bool
+	if ok {
+		// The per-sender slice is sorted by nonce. A linear scan over a
+		// typical sender's few queued blob txs is faster than a binary
+		// search and keeps the lock window minimal.
+		for _, m := range metas {
+			if m.nonce == nonce {
+				id = m.id
+				found = true
+				break
+			}
+			if m.nonce > nonce {
+				break
+			}
+		}
+	}
+	p.lock.RUnlock()
+	if !found {
+		return nil
+	}
+	data, err := p.store.Get(id)
+	if err != nil {
+		log.Error("Tracked blob transaction missing from store", "sender", sender, "nonce", nonce, "id", id, "err", err)
+		return nil
+	}
+	var ptx blobTxForPool
+	if err := rlp.DecodeBytes(data, &ptx); err != nil {
+		log.Error("Blobs corrupted for traced transaction", "sender", sender, "nonce", nonce, "id", id, "err", err)
+		return nil
+	}
+	return ptx.ToTx()
+}
+
 // GetRLP returns a RLP-encoded transaction for network if it is contained in the pool.
 // It converts the pool's internal type to the RLP format used by the eth protocol:
 // e.g. type_byte || [..., version, [blobs], [comms], [proofs]]

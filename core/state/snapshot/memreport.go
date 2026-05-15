@@ -25,6 +25,7 @@ import (
 // disk-layer clean cache size to the central memory reporter.
 func registerMemoryReport(t *Tree) {
 	memreport.Register("snapshot/diff", func() memreport.Sample {
+		// Diff layer overhead is not sized from --cache.
 		diffs, _ := t.Size()
 		return memreport.Sample{Bytes: uint64(diffs)}
 	})
@@ -33,7 +34,9 @@ func registerMemoryReport(t *Tree) {
 		if dl == nil {
 			return memreport.Sample{}
 		}
-		return fastcacheBytes(dl.cache)
+		s := fastcacheBytes(dl.cache)
+		s.InCache = true // funded by SnapshotCache
+		return s
 	})
 }
 

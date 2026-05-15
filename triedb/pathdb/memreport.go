@@ -26,15 +26,22 @@ import (
 // they stay correct across layer rebases and tree caps.
 func registerMemoryReport(db *Database) {
 	memreport.Register("triedb/pathdb/clean/nodes", func() memreport.Sample {
-		return fastcacheBytes(db.tree.bottom().nodes)
+		s := fastcacheBytes(db.tree.bottom().nodes)
+		s.InCache = true // funded by TrieCleanCache
+		return s
 	})
 	memreport.Register("triedb/pathdb/clean/states", func() memreport.Sample {
-		return fastcacheBytes(db.tree.bottom().states)
+		s := fastcacheBytes(db.tree.bottom().states)
+		s.InCache = true // funded by SnapshotCache
+		return s
 	})
 	memreport.Register("triedb/pathdb/buffer", func() memreport.Sample {
-		return memreport.Sample{Bytes: db.tree.bottom().buffer.size()}
+		// Funded by TrieDirtyCache.
+		return memreport.Sample{Bytes: db.tree.bottom().buffer.size(), InCache: true}
 	})
 	memreport.Register("triedb/pathdb/diff", func() memreport.Sample {
+		// Diff layer overhead is not sized from --cache; it grows
+		// with reorg depth and import rate.
 		diffs, _ := db.Size()
 		return memreport.Sample{Bytes: uint64(diffs)}
 	})

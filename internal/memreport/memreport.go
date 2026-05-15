@@ -47,6 +47,12 @@ type Sample struct {
 	// flag to separate them from on-heap totals when computing the
 	// unaccounted residual.
 	OffHeap bool
+
+	// InCache marks subsystems whose bytes are sized from the --cache
+	// budget (DatabaseCache, TrieCleanCache, TrieDirtyCache,
+	// SnapshotCache). Summed, these reveal how much of the configured
+	// cache budget is in use.
+	InCache bool
 }
 
 // Source returns the current Sample for one subsystem.
@@ -84,6 +90,7 @@ type Subsystem struct {
 	Bytes     uint64 `json:"bytes"`
 	Estimated bool   `json:"estimated,omitempty"`
 	OffHeap   bool   `json:"offHeap"`
+	InCache   bool   `json:"inCache,omitempty"`
 }
 
 // RuntimeStats are read from runtime/metrics each Snapshot.
@@ -112,6 +119,7 @@ type Report struct {
 	TotalTracked uint64       `json:"totalTracked"`
 	TotalOnHeap  uint64       `json:"totalOnHeap"`
 	TotalOffHeap uint64       `json:"totalOffHeap"`
+	TotalInCache uint64       `json:"totalInCache,omitempty"`
 	CacheBudget  uint64       `json:"cacheBudget,omitempty"`
 	Unaccounted  uint64       `json:"unaccounted,omitempty"`
 }
@@ -157,6 +165,9 @@ func Snapshot() Report {
 			r.TotalOffHeap += s.Bytes
 		} else {
 			r.TotalOnHeap += s.Bytes
+		}
+		if s.InCache {
+			r.TotalInCache += s.Bytes
 		}
 	}
 	r.CacheBudget = cacheBudget.Load()
@@ -228,6 +239,7 @@ func (s *sourceRegistry) collect() []Subsystem {
 			Bytes:     sample.Bytes,
 			Estimated: sample.Estimated,
 			OffHeap:   sample.OffHeap,
+			InCache:   sample.InCache,
 		})
 	}
 	s.mu.RUnlock()

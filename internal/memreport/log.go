@@ -87,12 +87,19 @@ func logOnce() {
 		"off-heap", common.StorageSize(r.TotalOffHeap),
 	)
 	if r.CacheBudget > 0 {
-		args = append(args, "cache", common.StorageSize(r.CacheBudget))
+		// cache-fill is the fraction of the --cache budget currently
+		// occupied by subsystems sized from it (DatabaseCache,
+		// TrieCleanCache, TrieDirtyCache, SnapshotCache). Operators
+		// raise --cache when fill stays near 100% and consider
+		// lowering it when fill stays well below.
+		//
+		// rss/cache is the multiplier between observed RSS and the
+		// configured budget. Typical values are 1.5x to 2.5x; the
+		// gap covers Go runtime overhead, networking, mempool, and
+		// other allocations outside --cache.
+		args = append(args, "cache", common.StorageSize(r.CacheBudget),
+			"cache-fill", fmt.Sprintf("%.0f%%", 100*float64(r.TotalInCache)/float64(r.CacheBudget)))
 		if r.Process.RSS > 0 {
-			// Multiplier of observed RSS over the operator's --cache
-			// setting. A value of 1.50x means the node is using 50%
-			// more RAM than the configured cache budget; operators
-			// use this to tune --cache down to fit a memory limit.
 			args = append(args, "rss/cache",
 				fmt.Sprintf("%.2fx", float64(r.Process.RSS)/float64(r.CacheBudget)))
 		}

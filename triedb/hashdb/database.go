@@ -144,11 +144,11 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 		}
 		var stats fastcache.Stats
 		db.cleans.UpdateStats(&stats)
-		return memreport.Sample{Bytes: stats.BytesSize, OffHeap: true}
+		return memreport.Sample{Bytes: stats.BytesSize, OffHeap: true, InCache: true}
 	})
 	memreport.Register("triedb/hashdb/dirty", func() memreport.Sample {
 		_, dirty := db.Size()
-		return memreport.Sample{Bytes: uint64(dirty)}
+		return memreport.Sample{Bytes: uint64(dirty), InCache: true}
 	})
 	return db
 }

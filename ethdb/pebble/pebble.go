@@ -358,12 +358,15 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		// Pebble's block cache uses C.calloc via cgo (manual.New); the
 		// resulting bytes are mmap'd by glibc and live outside the Go
 		// heap. Memtables, in contrast, are make([]byte) allocations
-		// and stay on-heap.
-		return memreport.Sample{Bytes: uint64(size), OffHeap: true}
+		// and stay on-heap. Both are funded by DatabaseCache.
+		return memreport.Sample{Bytes: uint64(size), OffHeap: true, InCache: true}
 	})
 	memreport.Register("ethdb/pebble/memtable", func() memreport.Sample {
 		stats := db.db.Metrics()
-		return memreport.Sample{Bytes: stats.MemTable.Size + stats.MemTable.ZombieSize}
+		return memreport.Sample{
+			Bytes:   stats.MemTable.Size + stats.MemTable.ZombieSize,
+			InCache: true,
+		}
 	})
 
 	// Start up the metrics gathering and return

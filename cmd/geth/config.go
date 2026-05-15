@@ -25,6 +25,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -39,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/flags"
+	"github.com/ethereum/go-ethereum/internal/memreport"
 	"github.com/ethereum/go-ethereum/internal/telemetry/tracesetup"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
@@ -242,6 +244,10 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 
 	// Start metrics export if enabled.
 	utils.SetupMetrics(&cfg.Metrics)
+
+	// Register the periodic memory report so per-subsystem occupancy is
+	// logged alongside the rest of the node's runtime telemetry.
+	stack.RegisterLifecycle(&memreport.Lifecycle{Interval: 60 * time.Second})
 
 	// Setup OpenTelemetry reporting if enabled.
 	if err := tracesetup.SetupTelemetry(cfg.Node.OpenTelemetry, stack); err != nil {

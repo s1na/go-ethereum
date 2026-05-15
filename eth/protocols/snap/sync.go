@@ -514,6 +514,12 @@ type Syncer struct {
 // NewSyncer creates a new snapshot syncer to download the Ethereum state over the
 // snap protocol.
 func NewSyncer(db ethdb.KeyValueStore, scheme string) *Syncer {
+	s := newSyncerImpl(db, scheme)
+	registerMemoryReport(s)
+	return s
+}
+
+func newSyncerImpl(db ethdb.KeyValueStore, scheme string) *Syncer {
 	return &Syncer{
 		db:     db,
 		scheme: scheme,

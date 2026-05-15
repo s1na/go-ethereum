@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/internal/memreport"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/hashicorp/go-bexpr"
 )
@@ -78,6 +79,12 @@ func (*HandlerT) GcStats() *debug.GCStats {
 	s := new(debug.GCStats)
 	debug.ReadGCStats(s)
 	return s
+}
+
+// MemoryReport returns a snapshot of per-subsystem memory occupancy along
+// with Go runtime and process-level statistics.
+func (*HandlerT) MemoryReport() memreport.Report {
+	return memreport.Snapshot()
 }
 
 // CpuProfile turns on CPU profiling for nsec seconds and writes

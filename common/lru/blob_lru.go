@@ -82,3 +82,10 @@ func (c *SizeConstrainedCache[K, V]) Get(key K) (V, bool) {
 
 	return c.lru.Get(key)
 }
+
+// Size returns the cumulative byte size of currently cached values.
+func (c *SizeConstrainedCache[K, V]) Size() uint64 {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	return c.size
+}

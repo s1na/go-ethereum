@@ -80,6 +80,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 		procInterrupt: procInterrupt,
 		engine:        engine,
 	}
+	registerHeaderMemoryReport(hc)
 	hc.genesisHeader = hc.GetHeaderByNumber(0)
 	if hc.genesisHeader == nil {
 		return nil, ErrNoGenesis

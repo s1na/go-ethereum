@@ -429,6 +429,8 @@ func (h *handler) Start(maxPeers int) {
 	// start peer handler tracker
 	h.wg.Add(1)
 	go h.protoTracker()
+
+	registerHandlerMemoryReport(h)
 }
 
 func (h *handler) Stop() {

@@ -87,11 +87,13 @@ type FilterSystem struct {
 // NewFilterSystem creates a filter system.
 func NewFilterSystem(backend Backend, config Config) *FilterSystem {
 	config = config.withDefaults()
-	return &FilterSystem{
+	fs := &FilterSystem{
 		backend:   backend,
 		logsCache: lru.NewCache[common.Hash, *logCacheElem](config.LogCacheSize),
 		cfg:       &config,
 	}
+	registerMemoryReport(fs)
+	return fs
 }
 
 type logCacheElem struct {

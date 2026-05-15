@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/memreport"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -132,11 +133,24 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	if config.CleanCacheSize > 0 {
 		cleans = fastcache.New(config.CleanCacheSize)
 	}
-	return &Database{
+	db := &Database{
 		diskdb:  diskdb,
 		cleans:  cleans,
 		dirties: make(map[common.Hash]*cachedNode),
 	}
+	memreport.Register("triedb/hashdb/clean", func() memreport.Sample {
+		if db.cleans == nil {
+			return memreport.Sample{}
+		}
+		var stats fastcache.Stats
+		db.cleans.UpdateStats(&stats)
+		return memreport.Sample{Bytes: stats.BytesSize, OffHeap: true}
+	})
+	memreport.Register("triedb/hashdb/dirty", func() memreport.Sample {
+		_, dirty := db.Size()
+		return memreport.Sample{Bytes: uint64(dirty)}
+	})
+	return db
 }
 
 // insert inserts a trie node into the memory database. All nodes inserted by

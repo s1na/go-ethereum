@@ -200,6 +200,8 @@ func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, roo
 		triedb: triedb,
 		layers: make(map[common.Hash]snapshot),
 	}
+	registerMemoryReport(snap)
+
 	// Attempt to load a previously persisted snapshot and rebuild one if failed
 	head, disabled, err := loadSnapshot(diskdb, triedb, root, config.CacheSize, config.Recovery, config.NoBuild)
 	if disabled {

@@ -155,6 +155,10 @@ type transport interface {
 	// the tests. Closing the actual network connection doesn't do
 	// anything in those tests because MsgPipe doesn't use it.
 	close(err error)
+
+	// bufferCapacity returns the current allocated capacity of the
+	// transport's read and write buffers in bytes.
+	bufferCapacity() (read, write int)
 }
 
 func (c *conn) String() string {
@@ -409,6 +413,7 @@ func (srv *Server) Start() (err error) {
 		return err
 	}
 	srv.setupDialScheduler()
+	srv.registerMemoryReport()
 
 	srv.loopWG.Add(1)
 	go srv.run()

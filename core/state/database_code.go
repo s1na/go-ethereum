@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/memreport"
 )
 
 const (
@@ -44,10 +45,14 @@ type codeCache struct {
 
 // newCodeCache initializes the contract code cache with the predefined capacity.
 func newCodeCache() *codeCache {
-	return &codeCache{
+	c := &codeCache{
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
 	}
+	memreport.Register("state/code", func() memreport.Sample {
+		return memreport.Sample{Bytes: c.codeCache.Size()}
+	})
+	return c
 }
 
 // Get returns the contract code associated with the provided code hash.

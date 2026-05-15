@@ -395,7 +395,7 @@ func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bo
 	config = (&config).sanitize()
 
 	// Create the transaction pool with its initial settings
-	return &BlobPool{
+	pool := &BlobPool{
 		config:         config,
 		hasPendingAuth: hasPendingAuth,
 		signer:         types.LatestSigner(chain.Config()),
@@ -406,6 +406,8 @@ func New(config Config, chain BlockChain, hasPendingAuth func(common.Address) bo
 		gapped:         make(map[common.Address][]*types.Transaction),
 		gappedSource:   make(map[common.Hash]common.Address),
 	}
+	registerMemoryReport(pool)
+	return pool
 }
 
 // Filter returns whether the given transaction can be consumed by the blob pool.

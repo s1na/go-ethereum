@@ -56,6 +56,13 @@ func newRLPX(conn net.Conn, dialDest *ecdsa.PublicKey) transport {
 	return &rlpxTransport{conn: rlpx.NewConn(conn, dialDest)}
 }
 
+func (t *rlpxTransport) bufferCapacity() (read, write int) {
+	if t.conn == nil {
+		return 0, 0
+	}
+	return t.conn.BufferCapacity()
+}
+
 func (t *rlpxTransport) ReadMsg() (Msg, error) {
 	t.rmu.Lock()
 	defer t.rmu.Unlock()

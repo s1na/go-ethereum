@@ -142,6 +142,12 @@ func (p *Peer) KnownTransaction(hash common.Hash) bool {
 	return p.knownTxs.Contains(hash)
 }
 
+// KnownTxsLen returns the number of transaction hashes currently
+// tracked as known by this peer.
+func (p *Peer) KnownTxsLen() int {
+	return p.knownTxs.Cardinality()
+}
+
 // MarkTransaction marks a transaction as known for the peer, ensuring that it
 // will never be propagated to this particular peer.
 func (p *Peer) MarkTransaction(hash common.Hash) {

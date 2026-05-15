@@ -287,7 +287,7 @@ func New(config Config, chain BlockChain) *LegacyPool {
 		initDoneCh:      make(chan struct{}),
 	}
 	pool.priced = newPricedList(pool.all)
-
+	registerMemoryReport(pool)
 	return pool
 }
 

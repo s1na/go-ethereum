@@ -30,6 +30,7 @@ import (
 	"github.com/cockroachdb/pebble/bloom"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/memreport"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 )
@@ -346,6 +347,24 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	db.liveCompGauge = metrics.GetOrRegisterGauge(namespace+"compact/live/count", nil)
 	db.liveCompSizeGauge = metrics.GetOrRegisterGauge(namespace+"compact/live/size", nil)
 	db.liveIterGauge = metrics.GetOrRegisterGauge(namespace+"iter/count", nil)
+
+	// Register memory readers for the central memory reporter.
+	memreport.Register("ethdb/pebble/blockcache", func() memreport.Sample {
+		stats := db.db.Metrics()
+		size := stats.BlockCache.Size
+		if size < 0 {
+			return memreport.Sample{}
+		}
+		// Pebble's block cache uses C.calloc via cgo (manual.New); the
+		// resulting bytes are mmap'd by glibc and live outside the Go
+		// heap. Memtables, in contrast, are make([]byte) allocations
+		// and stay on-heap.
+		return memreport.Sample{Bytes: uint64(size), OffHeap: true}
+	})
+	memreport.Register("ethdb/pebble/memtable", func() memreport.Sample {
+		stats := db.db.Metrics()
+		return memreport.Sample{Bytes: stats.MemTable.Size + stats.MemTable.ZombieSize}
+	})
 
 	// Start up the metrics gathering and return
 	go db.meter(metricsGatheringInterval, namespace)

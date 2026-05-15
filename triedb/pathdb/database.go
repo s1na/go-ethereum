@@ -168,6 +168,8 @@ func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
 	// and in-memory layer journal.
 	db.tree = newLayerTree(db.loadLayers())
 
+	registerMemoryReport(db)
+
 	// Repair the history, which might not be aligned with the persistent
 	// state in the key-value store due to an unclean shutdown.
 	states, trienodes, err := repairHistory(db.diskdb, isUBT, db.config.ReadOnly, db.tree.bottom().stateID(), db.config.TrienodeHistory >= 0)

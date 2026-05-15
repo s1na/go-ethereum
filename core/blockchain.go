@@ -419,6 +419,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 		logger:             cfg.VmConfig.Tracer,
 		slowBlockThreshold: cfg.SlowBlockThreshold,
 	}
+	registerChainMemoryReport(bc)
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
 	if err != nil {
 		return nil, err

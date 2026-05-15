@@ -342,6 +342,18 @@ func (c *Conn) InitWithSecrets(sec Secrets) {
 	}
 }
 
+// BufferCapacity returns the current allocated capacity of the read and
+// write buffers, in bytes. The buffers grow to fit the largest frame
+// seen on the connection and never shrink, so this also reports the
+// per-connection slack. Returns zeros if the handshake has not yet
+// completed.
+func (c *Conn) BufferCapacity() (read, write int) {
+	if c.session == nil {
+		return 0, 0
+	}
+	return cap(c.session.rbuf.data), cap(c.session.wbuf.data)
+}
+
 // Close closes the underlying network connection.
 func (c *Conn) Close() error {
 	return c.conn.Close()

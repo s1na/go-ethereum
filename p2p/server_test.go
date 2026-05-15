@@ -485,6 +485,8 @@ func (c *setupTransport) doProtoHandshake(our *protoHandshake) (*protoHandshake,
 	}
 	return &c.phs, nil
 }
+func (c *setupTransport) bufferCapacity() (read, write int) { return 0, 0 }
+
 func (c *setupTransport) close(err error) {
 	c.calls += "close,"
 	c.closeErr = err

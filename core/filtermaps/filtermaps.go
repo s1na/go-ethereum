@@ -268,6 +268,7 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, historyCutoff, f
 		lvPointerCache:      lru.NewCache[uint64, uint64](cachedLvPointers),
 		renderSnapshots:     lru.NewCache[uint64, *renderedMap](cachedRenderSnapshots),
 	}
+	registerMemoryReport(f)
 	f.checkRevertRange() // revert maps that are inconsistent with the current chain view
 
 	if f.indexedRange.hasIndexedBlocks() {

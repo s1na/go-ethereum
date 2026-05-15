@@ -27,6 +27,7 @@ import (
 	"runtime/metrics"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -82,7 +83,7 @@ type Subsystem struct {
 	Name      string `json:"name"`
 	Bytes     uint64 `json:"bytes"`
 	Estimated bool   `json:"estimated,omitempty"`
-	OffHeap   bool   `json:"offHeap,omitempty"`
+	OffHeap   bool   `json:"offHeap"`
 }
 
 // RuntimeStats are read from runtime/metrics each Snapshot.
@@ -111,7 +112,20 @@ type Report struct {
 	TotalTracked uint64       `json:"totalTracked"`
 	TotalOnHeap  uint64       `json:"totalOnHeap"`
 	TotalOffHeap uint64       `json:"totalOffHeap"`
+	CacheBudget  uint64       `json:"cacheBudget,omitempty"`
 	Unaccounted  uint64       `json:"unaccounted,omitempty"`
+}
+
+// cacheBudget holds the --cache budget in bytes, as configured by the
+// operator at startup. It is exposed in the Report and the periodic
+// log line so operators can correlate the configured cache budget with
+// observed RSS while tuning --cache.
+var cacheBudget atomic.Uint64
+
+// SetCacheBudget records the operator's --cache value (in bytes) so it
+// can be reported alongside RSS. Pass 0 if no budget is known.
+func SetCacheBudget(bytes uint64) {
+	cacheBudget.Store(bytes)
 }
 
 // Snapshot returns a current Report.
@@ -145,6 +159,7 @@ func Snapshot() Report {
 			r.TotalOnHeap += s.Bytes
 		}
 	}
+	r.CacheBudget = cacheBudget.Load()
 	goManaged := r.Runtime.HeapSys + r.Runtime.Stack + r.Runtime.OtherClasses
 	if r.Process.RSS > goManaged+r.TotalOffHeap {
 		r.Unaccounted = r.Process.RSS - goManaged - r.TotalOffHeap

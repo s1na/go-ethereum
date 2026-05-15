@@ -17,6 +17,7 @@
 package memreport
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -76,7 +77,7 @@ func LogLoop(interval time.Duration) (stop func()) {
 
 func logOnce() {
 	r := Snapshot()
-	args := make([]interface{}, 0, 8+2*len(r.Subsystems))
+	args := make([]interface{}, 0, 10+2*len(r.Subsystems))
 	if r.Process.RSS > 0 {
 		args = append(args, "rss", common.StorageSize(r.Process.RSS))
 	}
@@ -85,6 +86,17 @@ func logOnce() {
 		"on-heap", common.StorageSize(r.TotalOnHeap),
 		"off-heap", common.StorageSize(r.TotalOffHeap),
 	)
+	if r.CacheBudget > 0 {
+		args = append(args, "cache", common.StorageSize(r.CacheBudget))
+		if r.Process.RSS > 0 {
+			// Multiplier of observed RSS over the operator's --cache
+			// setting. A value of 1.50x means the node is using 50%
+			// more RAM than the configured cache budget; operators
+			// use this to tune --cache down to fit a memory limit.
+			args = append(args, "rss/cache",
+				fmt.Sprintf("%.2fx", float64(r.Process.RSS)/float64(r.CacheBudget)))
+		}
+	}
 	if r.Unaccounted > 0 {
 		args = append(args, "unaccounted", common.StorageSize(r.Unaccounted))
 	}

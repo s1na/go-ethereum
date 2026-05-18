@@ -81,6 +81,16 @@ func (db *Database) AccountHistoryIndex(addr common.Address) (HistoryIndexReader
 	return &accountHistoryIndexReader{reader: r}, nil
 }
 
+// MaxDiffLayers returns the maximum number of in-memory diff layers the
+// database keeps on top of the disk layer. Blocks within this many of
+// canonical head have not yet been flushed to the state-history freezer
+// and are therefore not represented in the per-account state-history
+// index; callers that need to cover the unindexed tail (e.g., for
+// sender-nonce lookup) should size their scan window from this value.
+func (db *Database) MaxDiffLayers() int {
+	return maxDiffLayers
+}
+
 // HistoryTail returns the smallest state-history id currently retained in the
 // freezer. Ids less than or equal to this value have been pruned and are not
 // queryable. Returns ErrStateHistoryNotIndexed if the freezer is unavailable.

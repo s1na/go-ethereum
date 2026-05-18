@@ -27,13 +27,10 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
 
-// maxRecentBlocksScan bounds the canonical-block scan used to cover the
-// gap between the latest indexed state history and the canonical head. In
-// steady state this gap is the pathdb diff-layer depth (default 128). A
-// larger cap is allowed to absorb transient indexer lag; well beyond that
-// we prefer to surface an error rather than spend unbounded CPU on a
-// single RPC call.
-const maxRecentBlocksScan = 512
+// recentBlocksScanSlack is added on top of the pathdb diff-layer depth
+// when sizing the canonical-block scan window. It absorbs the lag between
+// the disk-layer flush and the indexer catching up.
+const recentBlocksScanSlack = 64
 
 // Sender-nonce lookup errors. These are surfaced through the JSON-RPC layer
 // so clients can distinguish "unsupported backend" from "data outside the
@@ -200,25 +197,38 @@ func (b *EthAPIBackend) scanIndexedBlock(idx pathdb.HistoryIndexReader, pos int,
 	return b.findTxInBlock(blockNum, sender, nonce), nil
 }
 
-// scanRecentBlocks linearly scans the most recent canonical blocks for a
-// matching (sender, nonce) tx. The window covers the pathdb diff-layer
-// flush boundary plus generous slack for indexer lag (see
-// maxRecentBlocksScan); the answering block can only be inside this window
-// when binary-search over the on-disk state-history index has missed.
+// scanRecentBlocks walks the most recent canonical blocks in reverse
+// (head -> older) looking for a matching (sender, nonce) tx. This is the
+// fallback for the unindexed tail of the state-history freezer: the
+// pathdb diff-layer window plus a small slack for indexer lag.
 //
-// The starting point is intentionally head-relative rather than
-// sender-relative: a dormant sender's "last indexed modification" can be
-// arbitrarily far behind head, but its unindexed mods can only live in
-// the recent flush window.
+// Reverse iteration matters because answering blocks tend to cluster
+// near head (a sender whose tx falls into this branch typically just
+// mined it); the common case terminates in a few block reads instead of
+// sweeping the entire window.
+//
+// The window is sized from pathdb's diff-layer cap rather than a fixed
+// constant so it tracks pathdb's actual configuration (defaults to 128;
+// tests sometimes shrink it). The starting point is head-relative rather
+// than sender-relative because a dormant sender's last indexed mod can
+// be arbitrarily old but its unindexed mods can only live in this
+// window.
 func (b *EthAPIBackend) scanRecentBlocks(sender common.Address, nonce uint64) (*common.Hash, error) {
 	head := b.eth.BlockChain().CurrentBlock().Number.Uint64()
-	var startBlock uint64
-	if head > maxRecentBlocksScan {
-		startBlock = head - maxRecentBlocksScan
+	window := uint64(recentBlocksScanSlack)
+	if pdb := b.eth.BlockChain().TrieDB().PathDB(); pdb != nil {
+		window += uint64(pdb.MaxDiffLayers())
 	}
-	for bn := startBlock; bn <= head; bn++ {
+	var lo uint64
+	if head > window {
+		lo = head - window
+	}
+	for bn := head; ; bn-- {
 		if h := b.findTxInBlock(bn, sender, nonce); h != nil {
 			return h, nil
+		}
+		if bn == lo {
+			break
 		}
 	}
 	return nil, nil

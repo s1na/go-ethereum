@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -148,5 +149,62 @@ func TestGetTransactionBySenderAndNonce_HashdbUnsupported(t *testing.T) {
 	}
 	if gotHash == nil || *gotHash != tx2.Hash() {
 		t.Fatalf("Tier 1 lookup mismatch: got %v, want %x", gotHash, tx2.Hash())
+	}
+}
+
+// TestFindTxInBlock exercises the canonical-block tx-finding helper that
+// underpins the recent-block scan fallback. The helper must locate a tx by
+// (sender, nonce), tolerate nonce or signer mismatches, and return nil on
+// no-match.
+func TestFindTxInBlock(t *testing.T) {
+	engine := beacon.New(ethash.NewFaker())
+
+	var (
+		minedNonce0 *types.Transaction
+		minedNonce1 *types.Transaction
+	)
+	_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, 1, func(i int, gen *core.BlockGen) {
+		minedNonce0 = makeTx(0, nil, nil, key)
+		minedNonce1 = makeTx(1, nil, nil, key)
+		gen.AddTx(minedNonce0)
+		gen.AddTx(minedNonce1)
+	})
+
+	options := &core.BlockChainConfig{
+		TrieCleanLimit: 256,
+		TrieDirtyLimit: 256,
+		TrieTimeLimit:  5 * time.Minute,
+		StateScheme:    rawdb.HashScheme,
+		SnapshotLimit:  0,
+	}
+	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, options)
+	if err != nil {
+		t.Fatalf("NewBlockChain: %v", err)
+	}
+	defer chain.Stop()
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("InsertChain block %d: %v", n, err)
+	}
+	b := &EthAPIBackend{eth: &Ethereum{blockchain: chain}}
+	const blockNum = 1
+
+	// Hit: known sender, both nonces.
+	if h := b.findTxInBlock(blockNum, address, 0); h == nil || *h != minedNonce0.Hash() {
+		t.Fatalf("nonce=0 lookup: got %v, want %x", h, minedNonce0.Hash())
+	}
+	if h := b.findTxInBlock(blockNum, address, 1); h == nil || *h != minedNonce1.Hash() {
+		t.Fatalf("nonce=1 lookup: got %v, want %x", h, minedNonce1.Hash())
+	}
+	// Miss: known sender, wrong nonce.
+	if h := b.findTxInBlock(blockNum, address, 99); h != nil {
+		t.Fatalf("nonce=99 lookup expected nil, got %x", *h)
+	}
+	// Miss: unknown sender, valid nonce.
+	if h := b.findTxInBlock(blockNum, common.Address{0xAA}, 0); h != nil {
+		t.Fatalf("unknown-sender lookup expected nil, got %x", *h)
+	}
+	// Miss: nonexistent block.
+	if h := b.findTxInBlock(9999, address, 0); h != nil {
+		t.Fatalf("nonexistent-block lookup expected nil, got %x", *h)
 	}
 }

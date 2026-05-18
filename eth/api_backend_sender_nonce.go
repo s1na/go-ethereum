@@ -19,7 +19,6 @@ package eth
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -112,7 +111,7 @@ func (b *EthAPIBackend) GetTransactionBySenderAndNonce(ctx context.Context, send
 	// Scan the canonical-head window to find it; surface unavailable on
 	// miss because Tier 2 said the tx IS mined.
 	if n == 0 {
-		if h, err := b.scanRecentBlocks(sender, nonce, 0); err != nil {
+		if h, err := b.scanRecentBlocks(sender, nonce); err != nil {
 			return nil, err
 		} else if h != nil {
 			return h, nil
@@ -182,7 +181,7 @@ func (b *EthAPIBackend) GetTransactionBySenderAndNonce(ctx context.Context, send
 	if h != nil {
 		return h, nil
 	}
-	return b.scanRecentBlocks(sender, nonce, n-1, idx)
+	return b.scanRecentBlocks(sender, nonce)
 }
 
 // scanIndexedBlock resolves position `pos` in the sender's account history
@@ -201,42 +200,21 @@ func (b *EthAPIBackend) scanIndexedBlock(idx pathdb.HistoryIndexReader, pos int,
 	return b.findTxInBlock(blockNum, sender, nonce), nil
 }
 
-// scanRecentBlocks linearly scans canonical blocks from just after the
-// sender's last indexed modification up to head, looking for a matching
-// (sender, nonce) tx. If the sender has no indexed history yet
-// (lastIndexedPos < 0), the scan starts maxRecentBlocksScan back from
-// head.
+// scanRecentBlocks linearly scans the most recent canonical blocks for a
+// matching (sender, nonce) tx. The window covers the pathdb diff-layer
+// flush boundary plus generous slack for indexer lag (see
+// maxRecentBlocksScan); the answering block can only be inside this window
+// when binary-search over the on-disk state-history index has missed.
 //
-// idx may be nil when lastIndexedPos < 0; otherwise idx is consulted to
-// derive the starting block number.
-func (b *EthAPIBackend) scanRecentBlocks(sender common.Address, nonce uint64, lastIndexedPos int, idxOpt ...pathdb.HistoryIndexReader) (*common.Hash, error) {
-	pdb := b.eth.BlockChain().TrieDB().PathDB()
+// The starting point is intentionally head-relative rather than
+// sender-relative: a dormant sender's "last indexed modification" can be
+// arbitrarily far behind head, but its unindexed mods can only live in
+// the recent flush window.
+func (b *EthAPIBackend) scanRecentBlocks(sender common.Address, nonce uint64) (*common.Hash, error) {
 	head := b.eth.BlockChain().CurrentBlock().Number.Uint64()
-
 	var startBlock uint64
-	if lastIndexedPos < 0 || len(idxOpt) == 0 {
-		// No indexed history for this sender; scan the diff-layer window.
-		if head > maxRecentBlocksScan {
-			startBlock = head - maxRecentBlocksScan
-		}
-	} else {
-		idx := idxOpt[0]
-		hid, err := idx.At(lastIndexedPos)
-		if err != nil {
-			return nil, err
-		}
-		lastBlk, err := pdb.BlockNumberAt(hid)
-		if err != nil {
-			return nil, err
-		}
-		startBlock = lastBlk + 1
-	}
-
-	if startBlock > head {
-		return nil, nil
-	}
-	if span := head - startBlock + 1; span > maxRecentBlocksScan {
-		return nil, fmt.Errorf("state history index is lagging head by %d blocks; retry shortly", span)
+	if head > maxRecentBlocksScan {
+		startBlock = head - maxRecentBlocksScan
 	}
 	for bn := startBlock; bn <= head; bn++ {
 		if h := b.findTxInBlock(bn, sender, nonce); h != nil {

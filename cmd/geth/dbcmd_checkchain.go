@@ -360,11 +360,14 @@ func checkUncleanShutdown(db ethdb.Database, rep *reporter) {
 	// Skeleton sync status: more than one subchain indicates a previous beacon
 	// sync didn't link cleanly. This is exactly the pattern we saw in the
 	// real-world `Cleaning spurious beacon sync leftovers` incidents.
+	//
+	// Note the on-disk format is JSON, not RLP — see saveSyncStatus in
+	// eth/downloader/skeleton.go.
 	if raw := rawdb.ReadSkeletonSyncStatus(db); len(raw) > 0 {
 		// Decode using a structure compatible with eth/downloader's
 		// skeletonProgress without depending on that package.
 		var prog skeletonProgressLite
-		if err := rlp.DecodeBytes(raw, &prog); err != nil {
+		if err := json.Unmarshal(raw, &prog); err != nil {
 			rep.add(finding{
 				Severity: sevWarn, Section: "unclean_shutdown", Type: "skeleton_decode_failed",
 				Subject: "could not decode skeleton sync status",
@@ -544,39 +547,25 @@ func checkFreezerBoundary(db ethdb.Database, rep *reporter) {
 		return
 	}
 
+	// If the freezer has caught up to the chain head, there is no block at
+	// `frozen` yet — the freezer is waiting for the chain to advance. The
+	// KV-side boundary probe would false-positive in this case, so we skip
+	// it. Determined by looking up the head header's number.
+	headHash := rawdb.ReadHeadHeaderHash(db)
+	headNum, headKnown := rawdb.ReadHeaderNumber(db, headHash)
+	if headKnown && frozen > headNum {
+		rep.add(finding{
+			Severity: sevInfo, Section: "freezer", Type: "caught_up",
+			Subject: fmt.Sprintf("frozen #%d > head #%d (freezer is current; KV-side boundary probe skipped)",
+				frozen, headNum),
+		})
+		// Still verify the ancient-side invariants at frozen-1 before we exit.
+		checkFreezerAncientHead(db, frozen, rep)
+		return
+	}
+
 	// 1. Verify the four chain tables agree at the head boundary.
-	//    Each table should return data at frozen-1 and be out-of-bounds at frozen.
-	tables := []string{
-		rawdb.ChainFreezerHashTable,
-		rawdb.ChainFreezerHeaderTable,
-		rawdb.ChainFreezerBodiesTable,
-		rawdb.ChainFreezerReceiptTable,
-	}
-	for _, kind := range tables {
-		data, err := db.Ancient(kind, frozen-1)
-		switch {
-		case err != nil:
-			rep.add(finding{
-				Severity: sevError, Section: "freezer", Type: "table_underrun",
-				Subject: fmt.Sprintf("%s @ #%d (head-1)", kind, frozen-1),
-				Detail:  "read failed at the last-frozen position: " + err.Error(),
-			})
-		case len(data) == 0 && kind != rawdb.ChainFreezerBodiesTable && kind != rawdb.ChainFreezerReceiptTable:
-			// An empty hash/header at head-1 is unexpected; empty body/receipts
-			// is fine (empty block).
-			rep.add(finding{
-				Severity: sevError, Section: "freezer", Type: "table_empty_at_head",
-				Subject: fmt.Sprintf("%s @ #%d (head-1)", kind, frozen-1),
-				Detail:  "read returned zero bytes",
-			})
-		}
-		if _, err := db.Ancient(kind, frozen); err == nil {
-			rep.add(finding{
-				Severity: sevError, Section: "freezer", Type: "table_overrun",
-				Subject: fmt.Sprintf("%s has data at #%d (should be out-of-bounds)", kind, frozen),
-			})
-		}
-	}
+	checkFreezerAncientHead(db, frozen, rep)
 
 	// 2. Verify the KV store has the components the freezer expects to read on
 	//    its next iteration. The check below mirrors the read pattern used in
@@ -616,6 +605,43 @@ func checkFreezerBoundary(db ethdb.Database, rep *reporter) {
 			Subject: fmt.Sprintf("KV components at #%d..#%d present and non-empty",
 				frozen, frozen+boundaryWindowAbove),
 		})
+	}
+}
+
+// checkFreezerAncientHead verifies each of the four chain freezer tables has
+// data at frozen-1 and is out-of-bounds at frozen. Callers must have already
+// confirmed frozen > 0.
+func checkFreezerAncientHead(db ethdb.Database, frozen uint64, rep *reporter) {
+	tables := []string{
+		rawdb.ChainFreezerHashTable,
+		rawdb.ChainFreezerHeaderTable,
+		rawdb.ChainFreezerBodiesTable,
+		rawdb.ChainFreezerReceiptTable,
+	}
+	for _, kind := range tables {
+		data, err := db.Ancient(kind, frozen-1)
+		switch {
+		case err != nil:
+			rep.add(finding{
+				Severity: sevError, Section: "freezer", Type: "table_underrun",
+				Subject: fmt.Sprintf("%s @ #%d (head-1)", kind, frozen-1),
+				Detail:  "read failed at the last-frozen position: " + err.Error(),
+			})
+		case len(data) == 0 && kind != rawdb.ChainFreezerBodiesTable && kind != rawdb.ChainFreezerReceiptTable:
+			// An empty hash/header at head-1 is unexpected; empty body/receipts
+			// is fine (empty block).
+			rep.add(finding{
+				Severity: sevError, Section: "freezer", Type: "table_empty_at_head",
+				Subject: fmt.Sprintf("%s @ #%d (head-1)", kind, frozen-1),
+				Detail:  "read returned zero bytes",
+			})
+		}
+		if _, err := db.Ancient(kind, frozen); err == nil {
+			rep.add(finding{
+				Severity: sevError, Section: "freezer", Type: "table_overrun",
+				Subject: fmt.Sprintf("%s has data at #%d (should be out-of-bounds)", kind, frozen),
+			})
+		}
 	}
 }
 

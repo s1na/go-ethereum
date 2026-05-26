@@ -138,7 +138,9 @@ func TestCheckChainSkeletonMultiSubchain(t *testing.T) {
 			{Head: 24_795_537, Tail: 24_795_376, Next: common.HexToHash("0x1e27c1")},
 		},
 	}
-	enc, err := rlp.EncodeToBytes(prog)
+	// The on-disk format used by eth/downloader/skeleton.go's
+	// saveSyncStatus is JSON, not RLP.
+	enc, err := json.Marshal(prog)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,6 +273,43 @@ func TestCheckChainFreezerBoundaryEmptyReceipts(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "kv_receipts_missing") {
 		t.Fatalf("expected kv_receipts_missing finding, got:\n%s", buf.String())
+	}
+}
+
+// TestCheckChainFreezerBoundaryCaughtUp verifies that when the freezer has
+// caught up to the chain head (frozen > head, i.e. there is no block at
+// `frozen` yet), the KV-side probe is skipped instead of false-positiving.
+func TestCheckChainFreezerBoundaryCaughtUp(t *testing.T) {
+	db := newTestChainDB(t, 5)
+	// frozen = 5; head pointer says the chain top is at the last frozen
+	// block (i.e. frozen-1 == head), so there should not be a block at
+	// frozen in the KV.
+	headHash, err := db.Ancient(rawdb.ChainFreezerHashTable, 4)
+	if err != nil {
+		t.Fatalf("read frozen head hash: %v", err)
+	}
+	// Remove the synthetic boundary block written by newTestChainDB and
+	// repoint head to the last-frozen block to mimic the "caught up" state.
+	boundaryHash := rawdb.ReadCanonicalHash(db, 5)
+	rawdb.DeleteCanonicalHash(db, 5)
+	rawdb.DeleteHeader(db, boundaryHash, 5)
+	rawdb.DeleteBody(db, boundaryHash, 5)
+	rawdb.DeleteReceipts(db, boundaryHash, 5)
+	rawdb.WriteHeadHeaderHash(db, common.BytesToHash(headHash))
+	rawdb.WriteHeaderNumber(db, common.BytesToHash(headHash), 4)
+
+	var buf bytes.Buffer
+	rep := newReporter(&buf, false)
+	checkFreezerBoundary(db, rep)
+
+	if got := rep.exitCode(); got != 0 {
+		t.Fatalf("expected exit 0, got %d\noutput:\n%s", got, buf.String())
+	}
+	if !strings.Contains(buf.String(), "freezer/caught_up") {
+		t.Fatalf("expected freezer/caught_up finding, got:\n%s", buf.String())
+	}
+	if strings.Contains(buf.String(), "kv_canonical_hash_missing") {
+		t.Fatalf("caught-up state must not fire kv_canonical_hash_missing:\n%s", buf.String())
 	}
 }
 

@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/urfave/cli/v2"
 )
 
@@ -282,38 +281,36 @@ func checkUncleanShutdown(db ethdb.Database, rep *reporter) {
 	// The unclean-shutdown marker is a list of timestamps recorded each time
 	// geth starts up; the most recent one is removed on a clean shutdown.
 	// Anything remaining is therefore a prior crash / kill / power loss.
-	if raw, err := db.Get([]byte("unclean-shutdown")); err == nil && len(raw) > 0 {
-		var list crashList
-		if err := rlp.DecodeBytes(raw, &list); err != nil {
-			rep.add(finding{
-				Severity: sevWarn, Section: "unclean_shutdown", Type: "marker_decode_failed",
-				Subject: "could not decode unclean-shutdown marker",
-				Detail:  err.Error(),
-			})
-		} else if len(list.Recent) > 0 {
-			times := make([]string, 0, len(list.Recent))
-			for _, ts := range list.Recent {
-				times = append(times, time.Unix(int64(ts), 0).UTC().Format(time.RFC3339))
-			}
-			sev := sevWarn
-			subject := fmt.Sprintf("%d unclean shutdown(s) recorded", len(list.Recent))
-			if list.Discarded > 0 {
-				subject += fmt.Sprintf("; %d older entries discarded", list.Discarded)
-				sev = sevError
-			}
-			rep.add(finding{
-				Severity: sev, Section: "unclean_shutdown", Type: "marker_present",
-				Subject: subject,
-				Detail:  "most recent first: " + joinReverse(times),
-				Data: map[string]any{
-					"timestamps_unix":     list.Recent,
-					"timestamps_iso":      times,
-					"discarded":           list.Discarded,
-					"most_recent_unix":    list.Recent[len(list.Recent)-1],
-					"most_recent_iso8601": times[len(times)-1],
-				},
-			})
+	switch list, err := rawdb.ReadUncleanShutdowns(db); {
+	case err != nil:
+		rep.add(finding{
+			Severity: sevWarn, Section: "unclean_shutdown", Type: "marker_decode_failed",
+			Subject: "could not decode unclean-shutdown marker",
+			Detail:  err.Error(),
+		})
+	case list != nil && len(list.Recent) > 0:
+		times := make([]string, 0, len(list.Recent))
+		for _, ts := range list.Recent {
+			times = append(times, time.Unix(int64(ts), 0).UTC().Format(time.RFC3339))
 		}
+		sev := sevWarn
+		subject := fmt.Sprintf("%d unclean shutdown(s) recorded", len(list.Recent))
+		if list.Discarded > 0 {
+			subject += fmt.Sprintf("; %d older entries discarded", list.Discarded)
+			sev = sevError
+		}
+		rep.add(finding{
+			Severity: sev, Section: "unclean_shutdown", Type: "marker_present",
+			Subject: subject,
+			Detail:  "most recent first: " + joinReverse(times),
+			Data: map[string]any{
+				"timestamps_unix":     list.Recent,
+				"timestamps_iso":      times,
+				"discarded":           list.Discarded,
+				"most_recent_unix":    list.Recent[len(list.Recent)-1],
+				"most_recent_iso8601": times[len(times)-1],
+			},
+		})
 	}
 
 	// Last-pivot marker: if present, a snap-sync cycle recorded its pivot.
@@ -701,14 +698,7 @@ func joinSemi(items []string) string {
 	return out
 }
 
-// crashList mirrors core/rawdb's internal crashList type so we can decode the
-// unclean-shutdown marker without exporting it.
-type crashList struct {
-	Discarded uint64
-	Recent    []uint64
-}
-
-// skeletonProgressLite mirrors eth/downloader's skeletonProgress for RLP
+// skeletonProgressLite mirrors eth/downloader's skeletonProgress for JSON
 // decoding without taking a dependency on the downloader package.
 type skeletonProgressLite struct {
 	Subchains []*subchainLite

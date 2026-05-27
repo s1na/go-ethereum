@@ -95,21 +95,38 @@ func WriteGenesisStateSpec(db ethdb.KeyValueWriter, blockhash common.Hash, data 
 	}
 }
 
-// crashList is a list of unclean-shutdown-markers, for rlp-encoding to the
-// database
-type crashList struct {
-	Discarded uint64   // how many ucs have we deleted
-	Recent    []uint64 // unix timestamps of 10 latest unclean shutdowns
+// UncleanShutdowns is the set of unclean-shutdown markers recorded by the
+// shutdown tracker (internal/shutdowncheck). One timestamp is appended on
+// backend startup and popped on clean shutdown; entries left here on the next
+// start are previous crashes.
+type UncleanShutdowns struct {
+	Discarded uint64   // how many older markers have been dropped due to capacity
+	Recent    []uint64 // unix timestamps of the most recent unclean shutdowns
 }
 
 const crashesToKeep = 10
+
+// ReadUncleanShutdowns returns the unclean-shutdown markers recorded in db,
+// or nil if the marker has never been written or is empty. Errors only on
+// decode failures of a present-but-malformed value.
+func ReadUncleanShutdowns(db ethdb.KeyValueReader) (*UncleanShutdowns, error) {
+	data, err := db.Get(uncleanShutdownKey)
+	if err != nil || len(data) == 0 {
+		return nil, nil
+	}
+	u := new(UncleanShutdowns)
+	if err := rlp.DecodeBytes(data, u); err != nil {
+		return nil, err
+	}
+	return u, nil
+}
 
 // PushUncleanShutdownMarker appends a new unclean shutdown marker and returns
 // the previous data
 // - a list of timestamps
 // - a count of how many old unclean-shutdowns have been discarded
 func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error) {
-	var uncleanShutdowns crashList
+	var uncleanShutdowns UncleanShutdowns
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err == nil {
 		if err := rlp.DecodeBytes(data, &uncleanShutdowns); err != nil {
@@ -137,7 +154,7 @@ func PushUncleanShutdownMarker(db ethdb.KeyValueStore) ([]uint64, uint64, error)
 
 // PopUncleanShutdownMarker removes the last unclean shutdown marker
 func PopUncleanShutdownMarker(db ethdb.KeyValueStore) {
-	var uncleanShutdowns crashList
+	var uncleanShutdowns UncleanShutdowns
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err != nil {
 		log.Warn("Error reading unclean shutdown markers", "error", err)
@@ -155,7 +172,7 @@ func PopUncleanShutdownMarker(db ethdb.KeyValueStore) {
 
 // UpdateUncleanShutdownMarker updates the last marker's timestamp to now.
 func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore) {
-	var uncleanShutdowns crashList
+	var uncleanShutdowns UncleanShutdowns
 	// Read old data
 	if data, err := db.Get(uncleanShutdownKey); err != nil {
 		log.Warn("Error reading unclean shutdown markers", "error", err)

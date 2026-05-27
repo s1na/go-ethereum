@@ -22,13 +22,11 @@ import (
 	"math/big"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // TestCheckChainAllGood verifies that a freshly populated, consistent DB
@@ -102,15 +100,10 @@ func TestCheckChainCanonicalMismatch(t *testing.T) {
 // produces a warn finding.
 func TestCheckChainUncleanShutdownMarker(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	list := crashList{
-		Discarded: 0,
-		Recent:    []uint64{uint64(time.Now().Add(-time.Hour).Unix())},
-	}
-	enc, err := rlp.EncodeToBytes(list)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Put([]byte("unclean-shutdown"), enc); err != nil {
+	// Mirror the on-disk shape by pushing a marker via the existing accessor,
+	// which writes via rlp.EncodeToBytes of rawdb.UncleanShutdowns. Push
+	// without a matching Pop is exactly what a crashed run leaves behind.
+	if _, _, err := rawdb.PushUncleanShutdownMarker(db); err != nil {
 		t.Fatal(err)
 	}
 

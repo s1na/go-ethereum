@@ -19,6 +19,7 @@ package rawdb
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -34,6 +35,11 @@ const (
 	// chain progression that might permit new blocks to be frozen into immutable
 	// storage.
 	freezerRecheckInterval = time.Minute
+
+	// freezerStallThreshold is the number of consecutive failed freeze attempts
+	// after which the freezer starts reporting the failure as a persistent
+	// stall, indicating incomplete block data in the key-value store.
+	freezerStallThreshold = 60
 
 	// freezerBatchLimit is the maximum number of blocks to freeze in one batch
 	// before doing an fsync and deleting it from the key-value store.
@@ -156,6 +162,7 @@ func (f *chainFreezer) freezeThreshold(db ethdb.KeyValueReader) (uint64, error) 
 func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 	var (
 		backoff   bool
+		failures  int           // Number of consecutive failed freeze attempts
 		triggered chan struct{} // Used in tests
 		nfdb      = &nofreezedb{KeyValueStore: db}
 	)
@@ -210,10 +217,16 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		}
 		ancients, err := f.freezeRange(nfdb, first, last)
 		if err != nil {
-			log.Error("Error in block freeze operation", "err", err)
+			failures++
+			if failures >= freezerStallThreshold {
+				log.Error("Chain freezer is persistently stalled, block data is incomplete in the key-value store; the key-value store needs to be resynced", "err", err, "attempts", failures)
+			} else {
+				log.Error("Error in block freeze operation", "err", err)
+			}
 			backoff = true
 			continue
 		}
+		failures = 0
 		// Batch of blocks have been frozen, flush them before wiping from key-value store
 		if err := f.SyncAncient(); err != nil {
 			log.Crit("Failed to flush frozen tables", "err", err)
@@ -306,12 +319,32 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []common.Hash, err error) {
 	hashes = make([]common.Hash, 0, limit-number+1)
 
+	// Resolve the hash of the parent of the first block to freeze. It anchors
+	// the recovery of missing canonical mappings within the range. Note it is
+	// resolved before opening the ancient write operation, as reading from the
+	// ancient store mid-modification is not allowed.
+	var parent common.Hash
+	if number > 0 {
+		if data, err := f.Ancient(ChainFreezerHashTable, number-1); err == nil && len(data) == common.HashLength {
+			parent = common.BytesToHash(data)
+		}
+	}
 	_, err = f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for ; number <= limit; number++ {
 			// Retrieve all the components of the canonical block.
 			hash := ReadCanonicalHash(nfdb, number)
 			if hash == (common.Hash{}) {
-				return fmt.Errorf("canonical hash missing, can't freeze block %d", number)
+				// The canonical mapping can be lost if a block import was
+				// interrupted between the block-data write and the head update,
+				// and a subsequent snap sync skipped the re-import (the data is
+				// already present by hash). Attempt to recover the mapping from
+				// the block data before declaring the chain broken.
+				hash = f.recoverCanonicalHash(nfdb, number, parent)
+				if hash == (common.Hash{}) {
+					return fmt.Errorf("canonical hash missing, can't freeze block %d", number)
+				}
+				WriteCanonicalHash(nfdb, hash, number)
+				log.Warn("Recovered missing canonical mapping", "number", number, "hash", hash)
 			}
 			header := ReadHeaderRLP(nfdb, hash, number)
 			if len(header) == 0 {
@@ -352,10 +385,52 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 				return fmt.Errorf("can't write bals to Freezer: %v", err)
 			}
 			hashes = append(hashes, hash)
+			parent = hash
 		}
 		return nil
 	})
 	return hashes, err
+}
+
+// recoverCanonicalHash attempts to restore a missing number-to-hash canonical
+// mapping by locating a unique, fully-populated block stored by hash at the
+// given height whose parent linkage matches the supplied parent hash. Such
+// holes can be left behind by an import that was interrupted between the
+// block-data write and the head update and never repaired afterwards. A zero
+// hash is returned if no unambiguous candidate exists.
+func (f *chainFreezer) recoverCanonicalHash(nfdb *nofreezedb, number uint64, parent common.Hash) common.Hash {
+	if number == 0 || parent == (common.Hash{}) {
+		return common.Hash{}
+	}
+	var candidates []common.Hash
+	for _, hash := range ReadAllHashes(nfdb, number) {
+		header := ReadHeader(nfdb, hash, number)
+		if header == nil || header.ParentHash != parent {
+			continue
+		}
+		// Only fully-populated blocks are eligible, the freezer requires all
+		// the components anyway.
+		if !HasBody(nfdb, hash, number) || !HasReceipts(nfdb, hash, number) {
+			continue
+		}
+		candidates = append(candidates, hash)
+	}
+	switch len(candidates) {
+	case 0:
+		return common.Hash{}
+	case 1:
+		return candidates[0]
+	}
+	// Multiple linkable candidates, disambiguate via the canonical child.
+	child := ReadCanonicalHash(nfdb, number+1)
+	if child == (common.Hash{}) {
+		return common.Hash{}
+	}
+	childHeader := ReadHeader(nfdb, child, number+1)
+	if childHeader == nil || !slices.Contains(candidates, childHeader.ParentHash) {
+		return common.Hash{}
+	}
+	return childHeader.ParentHash
 }
 
 // Ancient retrieves an ancient binary blob from the append-only immutable files.

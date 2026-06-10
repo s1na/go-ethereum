@@ -1540,7 +1540,15 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			}
 			if !skipPresenceCheck {
 				// Ignore if the entire data is already known
-				if bc.HasBlock(block.Hash(), block.NumberU64()) {
+				if bc.HasFastBlock(block.Hash(), block.NumberU64()) {
+					// The block data is complete, but the canonical mapping
+					// might still be missing, e.g. if a previous import was
+					// interrupted between the block-data write and the head
+					// update. Restore it, otherwise the hole becomes permanent
+					// and stalls the freezer once it reaches this height.
+					if rawdb.ReadCanonicalHash(bc.db, block.NumberU64()) != block.Hash() {
+						rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
+					}
 					stats.ignored++
 					continue
 				} else {
